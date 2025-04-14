@@ -1,0 +1,47 @@
+{
+  "name": "@glamsystems/glam-cli",
+  "version": "0.1.16",
+  "description": "CLI for interacting with the GLAM Protocol",
+  "main": "./main.js",
+  "bin": {
+    "glam-cli": "./main.js"
+  },
+  "homepage": "https://www.glam.systems",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:glamsystems/glam-cli.git"
+  },
+  "keywords": [
+    "glam",
+    "cli",
+    "solana"
+  ],
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=20.18.0"
+  },
+  "dependencies": {
+    "@glamsystems/glam-sdk": "0.1.16",
+    "commander": "^11.1.0",
+    "inquirer": "^8.2.6",
+    "@switchboard-xyz/common": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/inquirer": "^8.2.10",
+    "typescript": "^5.0.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "anchor-bankrun": "^0.4.0",
+      "solana-bankrun": "^0.4.0",
+      "@coral-xyz/anchor": "^0.31.0",
+      "@solana/web3.js": "^1.98.0",
+      "@solana/spl-token": "^0.4.6",
+      "@solana/spl-stake-pool": "^1.1.5",
+      "typescript": "^5.5.3"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
