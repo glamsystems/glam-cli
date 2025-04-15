@@ -1190,6 +1190,17 @@ meteora
       process.exit(1);
     }
   });
+meteora
+  .command("price <position>")
+  .description("Price a Meteora DLMM position")
+  .action(async (position) => {
+    if (!cliConfig.glam_state) {
+      console.error("GLAM state not found in config file");
+      process.exit(1);
+    }
+
+    await glamClient.meteoraDlmm.pricePosition(position);
+  });
 
 const drift = program.command("drift").description("Drift operations");
 drift
