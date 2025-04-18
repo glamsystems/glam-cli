@@ -8,6 +8,7 @@ import {
   GlamPermissions,
   QuoteParams,
   MintModel,
+  PriceDenom,
 } from "@glamsystems/glam-sdk";
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import { Command } from "commander";
@@ -1216,6 +1217,7 @@ drift
       const txSig = await glamClient.drift.priceDrift(
         cliConfig.glam_state,
         marketConfigs,
+        PriceDenom.USD,
       );
       console.log(`Pricing tx: ${txSig}`);
     } catch (e) {
