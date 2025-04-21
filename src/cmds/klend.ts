@@ -140,7 +140,7 @@ export function installKlendCommands(
           parseFloat(amount) * 10 ** decimals,
           txOptions,
         );
-        console.log(`Repaid ${amount} ${asset} to Kamino:`, txSig);
+        console.log(`Withdraw ${amount} ${asset} from Kamino:`, txSig);
       } catch (e) {
         console.error(parseTxError(e));
         throw e;

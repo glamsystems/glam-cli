@@ -87,14 +87,8 @@ export function installIntegrationCommands(
       });
 
       try {
-        const txSig = await glamClient.program.methods
-          .updateState(updated)
-          .accounts({ glamState: statePda })
-          .rpc();
-        console.log("txSig:", txSig);
-        console.log(
-          `${integration} enabled on ${stateModel} (${statePda.toBase58()})`,
-        );
+        const txSig = await glamClient.state.updateState(statePda, updated);
+        console.log(`${integration} enabled: ${txSig}`);
       } catch (e) {
         console.error(parseTxError(e));
         process.exit(1);
@@ -127,14 +121,8 @@ export function installIntegrationCommands(
       });
 
       try {
-        const txSig = await glamClient.program.methods
-          .updateState(updated)
-          .accounts({ glamState: statePda })
-          .rpc();
-        console.log("txSig:", txSig);
-        console.log(
-          `${integration} disabled on ${stateModel.name} (${statePda.toBase58()})`,
-        );
+        const txSig = await glamClient.state.updateState(statePda, updated);
+        console.log(`${integration} disabled: ${txSig}`);
       } catch (e) {
         console.error(parseTxError(e));
         process.exit(1);
