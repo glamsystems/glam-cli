@@ -1,11 +1,15 @@
 import { AnchorError } from "@coral-xyz/anchor";
 import { PriorityLevel } from "@glamsystems/glam-sdk";
-import { TransactionExpiredBlockheightExceededError } from "@solana/web3.js";
+import {
+  PublicKey,
+  TransactionExpiredBlockheightExceededError,
+} from "@solana/web3.js";
 import fs from "fs";
+import inquirer from "inquirer";
 import os from "os";
 import path from "path";
 
-export type CliConfig = {
+export class CliConfig {
   cluster: string;
   json_rpc_url: string;
   tx_rpc_url: string;
@@ -16,7 +20,89 @@ export type CliConfig = {
     helius_api_key?: string;
   };
   glam_state?: string;
-};
+
+  private static instance: CliConfig | null = null;
+
+  constructor(config: Partial<CliConfig> = {}) {
+    this.cluster = config.cluster || "";
+    this.json_rpc_url = config.json_rpc_url || "";
+    this.tx_rpc_url = config.tx_rpc_url || "";
+    this.keypair_path = config.keypair_path || "";
+    this.priority_fee = config.priority_fee;
+    this.glam_state = config.glam_state;
+  }
+
+  get glamState(): PublicKey {
+    if (!this.glam_state) {
+      throw new Error("GLAM state not set");
+    }
+
+    return new PublicKey(this.glam_state);
+  }
+
+  set glamState(state: PublicKey) {
+    const configPath = getConfigPath();
+    const config = fs.readFileSync(configPath, "utf8");
+    const updated = { ...JSON.parse(config), glam_state: state.toBase58() };
+    fs.writeFileSync(configPath, JSON.stringify(updated, null, 2), "utf8");
+
+    CliConfig.reset();
+    CliConfig.get();
+  }
+
+  static get(): CliConfig {
+    if (!this.instance) {
+      this.instance = CliConfig.load();
+    }
+    return this.instance;
+  }
+
+  static reset() {
+    this.instance = null;
+  }
+
+  private static load(): CliConfig {
+    const configPath = getConfigPath();
+    try {
+      const config = fs.readFileSync(configPath, "utf8");
+      const parsedConfig = JSON.parse(config);
+      const cliConfig = new CliConfig(parsedConfig);
+
+      if (!cliConfig.json_rpc_url) {
+        throw new Error("Missing json_rpc_url in config.json");
+      }
+
+      if (!cliConfig.keypair_path) {
+        throw new Error("Missing keypair_path in config.json");
+      }
+
+      if (
+        !["mainnet-beta", "devnet", "localnet"].includes(
+          cliConfig.cluster.toLowerCase(),
+        )
+      ) {
+        throw new Error(
+          `Unsupported cluster: ${cliConfig.cluster}, must be mainnet-beta, devnet or localnet`,
+        );
+      }
+
+      if (cliConfig.tx_rpc_url) {
+        process.env.TX_RPC = cliConfig.tx_rpc_url;
+      }
+
+      process.env.ANCHOR_PROVIDER_URL = cliConfig.json_rpc_url;
+      process.env.ANCHOR_WALLET = cliConfig.keypair_path;
+
+      return cliConfig;
+    } catch (err) {
+      console.error(
+        `Could not load glam cli config at ${configPath}:`,
+        err.message,
+      );
+      throw err;
+    }
+  }
+}
 
 const getConfigPath = () => {
   // By default config.json is under ~/.config/glam/
@@ -27,51 +113,6 @@ const getConfigPath = () => {
     "config.json",
   );
   return configPath;
-};
-
-export const loadingConfig = () => {
-  const configPath = getConfigPath();
-  let cliConfig: CliConfig;
-  try {
-    const config = fs.readFileSync(configPath, "utf8");
-    cliConfig = JSON.parse(config) as CliConfig;
-  } catch (err) {
-    console.error(`Could not load glam config at ${configPath}:`, err.message);
-  }
-
-  if (!cliConfig.json_rpc_url) {
-    throw new Error("Missing json_rpc_url in config.json");
-  }
-
-  if (!cliConfig.keypair_path) {
-    throw new Error("Missing keypair_path in config.json");
-  }
-
-  if (
-    !["mainnet-beta", "devnet", "localnet"].includes(
-      cliConfig.cluster.toLowerCase(),
-    )
-  ) {
-    throw new Error(
-      `Unsupported cluster: ${cliConfig.cluster}, must be mainnet-beta, devnet or localnet`,
-    );
-  }
-
-  if (cliConfig.tx_rpc_url) {
-    process.env.TX_RPC = cliConfig.tx_rpc_url;
-  }
-
-  process.env.ANCHOR_PROVIDER_URL = cliConfig.json_rpc_url;
-  process.env.ANCHOR_WALLET = cliConfig.keypair_path;
-
-  return cliConfig;
-};
-
-export const setStateToConfig = (statePda: string) => {
-  const configPath = getConfigPath();
-  const config = fs.readFileSync(configPath, "utf8");
-  const updated = { ...JSON.parse(config), glam_state: statePda };
-  fs.writeFileSync(configPath, JSON.stringify(updated, null, 2), "utf8");
 };
 
 export const parseTxError = (error: any) => {
@@ -85,3 +126,18 @@ export const parseTxError = (error: any) => {
 
   return error?.message || "Unknown error";
 };
+
+export async function confirmOperation(message: string) {
+  const confirmation = await inquirer.prompt([
+    {
+      type: "confirm",
+      name: "proceed",
+      message,
+      default: false,
+    },
+  ]);
+  if (!confirmation.proceed) {
+    console.log("Aborted.");
+    process.exit(0);
+  }
+}
