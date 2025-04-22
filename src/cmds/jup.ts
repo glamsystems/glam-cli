@@ -114,7 +114,10 @@ export function installJupCommands(
           proposal,
           Number(side),
         );
-        console.log("castVote:", txId);
+        console.log(
+          `Cast vote on proposal ${proposal.toBase58()} with side ${side}:`,
+          txId,
+        );
       } catch (e) {
         console.error(parseTxError(e));
         throw e;

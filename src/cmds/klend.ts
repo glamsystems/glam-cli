@@ -16,7 +16,7 @@ export function installKlendCommands(
 ) {
   klend
     .command("init")
-    .description("Initialize Kamino Lending account")
+    .description("Initialize Kamino user")
     .action(async () => {
       const glamState = cliConfig.glamState;
       try {
@@ -25,7 +25,7 @@ export function installKlendCommands(
           null,
           txOptions,
         );
-        console.log(`Initialized Kamino Lending:`, txSig);
+        console.log(`Initialized Kamino user:`, txSig);
       } catch (e) {
         console.error(parseTxError(e));
         throw e;
@@ -72,7 +72,7 @@ export function installKlendCommands(
       try {
         const vTx = await glamClient.intoVersionedTransaction(tx, txOptions);
         const txSig = await glamClient.sendAndConfirm(vTx);
-        console.log(`Refreshed Kamino obligation:`, txSig);
+        console.log(`Refreshed Kamino obligation for pricing:`, txSig);
       } catch (e) {
         console.error(parseTxError(e));
         throw e;
@@ -83,7 +83,7 @@ export function installKlendCommands(
         vault,
       );
       console.log(
-        "Obligations:",
+        "Priced Kamino obligations:",
         obligations.map((o) => o.toBase58()),
       );
     });
@@ -112,7 +112,7 @@ export function installKlendCommands(
           parseFloat(amount) * 10 ** decimals,
           txOptions,
         );
-        console.log(`Deposit ${amount} SOL to Kamino from vault:`, txSig);
+        console.log(`Deposit ${amount} ${asset} to Kamino from vault:`, txSig);
       } catch (e) {
         console.error(parseTxError(e));
         throw e;
@@ -127,7 +127,7 @@ export function installKlendCommands(
       const statePda = cliConfig.glamState;
 
       options?.yes ||
-        (await confirmOperation(`Confirm repay of ${amount} ${asset}?`));
+        (await confirmOperation(`Confirm withdrawing ${amount} ${asset}?`));
 
       const decimals = ASSETS_MAINNET.get(asset)?.decimals;
       if (!decimals) {
