@@ -66,7 +66,7 @@ export function installKlendCommands(
       const tx = new Transaction();
       const refreshIxs = await glamClient.kaminoLending.getRefreshIxs(
         obligation,
-        new PublicKey(market),
+        false,
       );
       tx.add(...refreshIxs);
       try {
@@ -82,7 +82,10 @@ export function installKlendCommands(
         glamClient.provider.connection,
         vault,
       );
-      console.log("Obligations:", obligations);
+      console.log(
+        "Obligations:",
+        obligations.map((o) => o.toBase58()),
+      );
     });
 
   klend

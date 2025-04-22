@@ -40,10 +40,10 @@ export class CliConfig {
     return new PublicKey(this.glam_state);
   }
 
-  set glamState(state: PublicKey) {
+  set glamState(state: PublicKey | null) {
     const configPath = getConfigPath();
     const config = fs.readFileSync(configPath, "utf8");
-    const updated = { ...JSON.parse(config), glam_state: state.toBase58() };
+    const updated = { ...JSON.parse(config), glam_state: state?.toBase58() };
     fs.writeFileSync(configPath, JSON.stringify(updated, null, 2), "utf8");
 
     CliConfig.reset();
