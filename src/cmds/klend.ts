@@ -211,4 +211,19 @@ export function installKlendCommands(
         throw e;
       }
     });
+
+  klend
+    .command("harvest")
+    .description("Harvest Kamino farms rewards")
+    .action(async () => {
+      const statePda = cliConfig.glamState;
+
+      try {
+        const txSig = await glamClient.kaminoFarm.harvest(statePda, txOptions);
+        console.log(`Harvested farm rewards:`, txSig);
+      } catch (e) {
+        console.error(parseTxError(e));
+        throw e;
+      }
+    });
 }
