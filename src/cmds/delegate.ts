@@ -4,6 +4,20 @@ import { Command } from "commander";
 import { CliConfig, parseTxError } from "../utils";
 import { PublicKey } from "@solana/web3.js";
 
+const allowedPermissions = GlamPermissions.map(
+  (p: string) => p.slice(0, 1).toLowerCase() + p.slice(1),
+);
+const validate = (permissions: string[]) => {
+  permissions.forEach((p) => {
+    if (!allowedPermissions.includes(p)) {
+      console.error(
+        `Invalid permission: ${p}. Value must be among: ${allowedPermissions.join(", ")}`,
+      );
+      process.exit(1);
+    }
+  });
+};
+
 export function installDelegateCommands(
   delegate: Command,
   glamClient: GlamClient,
@@ -12,7 +26,7 @@ export function installDelegateCommands(
 ) {
   delegate
     .command("list")
-    .description("List delegates and permissions")
+    .description("List delegates and their permissions")
     .action(async () => {
       const statePda = cliConfig.glamState;
 
@@ -30,9 +44,6 @@ export function installDelegateCommands(
       }
     });
 
-  const allowedPermissions = GlamPermissions.map(
-    (p) => p.slice(0, 1).toLowerCase() + p.slice(1),
-  );
   delegate
     .command("set")
     .argument("<pubkey>", "Delegate pubkey")
@@ -40,10 +51,13 @@ export function installDelegateCommands(
       "<permissions...>",
       `A space-separated list of permissions to grant. Allowed values: ${allowedPermissions.join(", ")}.`,
     )
-    .description("Set delegate permissions")
+    .description(
+      "(Deprecated. Use `delegate grant` instead.) Set delegate permissions",
+    )
     .action(async (pubkey, permissions) => {
-      const statePda = cliConfig.glamState;
-
+      console.warn(
+        "This command is deprecated and will be removed in the future. Use `delegate grant` instead.",
+      );
       if (!permissions.every((p) => allowedPermissions.includes(p))) {
         console.error(
           `Invalid permissions: ${permissions}. Values must be among: ${allowedPermissions.join(", ")}`,
@@ -52,17 +66,117 @@ export function installDelegateCommands(
       }
 
       try {
-        const txSig = await glamClient.state.upsertDelegateAcls(statePda, [
-          {
-            pubkey: new PublicKey(pubkey),
-            permissions: permissions.map((p) => ({
-              [p]: {},
-            })),
-            expiresAt: new BN(0),
-          },
-        ]);
-        console.log("txSig:", txSig);
-        console.log(`Granted ${pubkey} permissions ${permissions}`);
+        const txSig = await glamClient.state.upsertDelegateAcls(
+          cliConfig.glamState,
+          [
+            {
+              pubkey: new PublicKey(pubkey),
+              permissions: permissions.map((p) => ({
+                [p]: {},
+              })),
+              expiresAt: new BN(0),
+            },
+          ],
+          txOptions,
+        );
+        console.log(`Granted ${pubkey} permissions ${permissions}: ${txSig}`);
+      } catch (e) {
+        console.error(parseTxError(e));
+        process.exit(1);
+      }
+    });
+
+  delegate
+    .command("grant")
+    .argument("<pubkey>", "Delegate pubkey")
+    .argument(
+      "<permissions...>",
+      `A space-separated list of permissions to grant. Allowed values: ${allowedPermissions.join(", ")}.`,
+    )
+    .description("Grant delegate new permissions")
+    .action(async (pubkey, permissions: string[]) => {
+      validate(permissions);
+
+      const stateModel = await glamClient.fetchState(cliConfig.glamState);
+      const acl = stateModel.delegateAcls.find(
+        (acl) => acl.pubkey.toBase58() === pubkey,
+      );
+
+      // if acl doesn't exist, it's a new delegate to add, and we add `wSol` automatically
+      const existingPermissionKeys = new Set(
+        acl ? acl.permissions.map((p) => Object.keys(p)[0]) : ["wSol"],
+      );
+      const newPermissionKeys = permissions.filter(
+        (p) => !existingPermissionKeys.has(p),
+      );
+      if (newPermissionKeys.length === 0) {
+        console.log(
+          `Delegate ${pubkey} already has permissions: ${permissions.join(", ")}`,
+        );
+        return;
+      }
+      const updatedPermissions = Array.from(
+        new Set([...existingPermissionKeys, ...newPermissionKeys]),
+      ).map((p) => ({ [p]: {} }));
+
+      try {
+        const txSig = await glamClient.state.upsertDelegateAcls(
+          cliConfig.glamState,
+          [
+            {
+              pubkey: new PublicKey(pubkey),
+              permissions: updatedPermissions,
+              expiresAt: new BN(0),
+            },
+          ],
+          txOptions,
+        );
+        console.log(`Granted ${pubkey} permissions ${permissions}: ${txSig}`);
+      } catch (e) {
+        console.error(parseTxError(e));
+        process.exit(1);
+      }
+    });
+
+  delegate
+    .command("revoke")
+    .argument("<pubkey>", "Delegate pubkey")
+    .argument(
+      "<permissions...>",
+      `A space-separated list of permissions to revoke. Allowed values: ${allowedPermissions.join(", ")}.`,
+    )
+    .description("Revoke delegate permissions")
+    .action(async (pubkey, permissions) => {
+      validate(permissions);
+
+      const stateModel = await glamClient.fetchState(cliConfig.glamState);
+      const acl = stateModel.delegateAcls.find(
+        (acl) => acl.pubkey.toBase58() === pubkey,
+      );
+      if (!acl) {
+        console.error(`Delegate ${pubkey} not found. No need to revoke.`);
+        return;
+      }
+      const existingPermissionKeys = new Set(
+        acl.permissions.map((p) => Object.keys(p)[0]),
+      );
+      const updatedPermissions = Array.from(existingPermissionKeys)
+        .filter((p) => !permissions.includes(p))
+        .map((p) => ({ [p]: {} }));
+
+      try {
+        const txSig = await glamClient.state.upsertDelegateAcls(
+          cliConfig.glamState,
+          [
+            {
+              pubkey: new PublicKey(pubkey),
+              permissions: updatedPermissions,
+              expiresAt: new BN(0),
+            },
+          ],
+          txOptions,
+        );
+        console.log(`Revoked ${pubkey} permissions ${permissions}: ${txSig}`);
       } catch (e) {
         console.error(parseTxError(e));
         process.exit(1);
@@ -71,16 +185,28 @@ export function installDelegateCommands(
 
   delegate
     .command("delete <pubkey>")
-    .description("Revoke all delegate permissions for a pubkey")
+    .description("Revoke delegate access entirely")
     .action(async (pubkey) => {
       const statePda = cliConfig.glamState;
 
+      const stateModel = await glamClient.fetchState(statePda);
+      const acl = stateModel.delegateAcls.find(
+        (acl) => acl.pubkey.toBase58() === pubkey,
+      );
+      if (!acl) {
+        console.error(`Delegate ${pubkey} not found. No need to delete.`);
+        return;
+      }
+
       try {
-        const txSig = await glamClient.state.deleteDelegateAcls(statePda, [
-          new PublicKey(pubkey),
-        ]);
-        console.log("txSig:", txSig);
-        console.log(`Revoked ${pubkey} access to ${statePda.toBase58()}`);
+        const txSig = await glamClient.state.deleteDelegateAcls(
+          statePda,
+          [new PublicKey(pubkey)],
+          txOptions,
+        );
+        console.log(
+          `Revoked ${pubkey} access to ${statePda.toBase58()}: ${txSig}`,
+        );
       } catch (e) {
         console.error(parseTxError(e));
         process.exit(1);

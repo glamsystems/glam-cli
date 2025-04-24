@@ -87,7 +87,11 @@ export function installIntegrationCommands(
       });
 
       try {
-        const txSig = await glamClient.state.updateState(statePda, updated);
+        const txSig = await glamClient.state.updateState(
+          statePda,
+          updated,
+          txOptions,
+        );
         console.log(`${integration} enabled: ${txSig}`);
       } catch (e) {
         console.error(parseTxError(e));
@@ -121,7 +125,11 @@ export function installIntegrationCommands(
       });
 
       try {
-        const txSig = await glamClient.state.updateState(statePda, updated);
+        const txSig = await glamClient.state.updateState(
+          statePda,
+          updated,
+          txOptions,
+        );
         console.log(`${integration} disabled: ${txSig}`);
       } catch (e) {
         console.error(parseTxError(e));
