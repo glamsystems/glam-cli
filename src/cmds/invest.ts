@@ -1,5 +1,6 @@
 import { BN } from "@coral-xyz/anchor";
 import {
+  fetchLookupTables,
   FundOpenfundsModel,
   GlamClient,
   MintOpenfundsModel,
@@ -12,11 +13,7 @@ import {
 } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
 import { CliConfig, confirmOperation, parseTxError } from "../utils";
-import { LAMPORTS_PER_SOL, PublicKey, Transaction } from "@solana/web3.js";
-
-const LOOKUP_TABLE = new PublicKey(
-  "284iwGtA9X9aLy3KsyV8uT2pXLARhYbiSi5SiM2g47M2",
-);
+import { LAMPORTS_PER_SOL, Transaction } from "@solana/web3.js";
 
 const stateModelForDemo = {
   mints: [
@@ -179,7 +176,17 @@ export function installInvestCommands(
     .option("-q, --queued", "Subscribe to a tokenized vault in queued mode")
     .action(async (amount, options) => {
       const glamState = cliConfig.glamState;
+      const glamVault = glamClient.getVaultPda(glamState);
+
       const amountBN = new BN(parseFloat(amount) * LAMPORTS_PER_SOL);
+
+      const lookupTables = [
+        ...(await fetchLookupTables(
+          glamClient.provider.connection,
+          glamClient.getSigner(),
+          glamVault,
+        )),
+      ];
 
       options?.yes ||
         (await confirmOperation(
@@ -195,9 +202,7 @@ export function installInvestCommands(
           !!options?.queued,
           {
             ...txOptions,
-            lookupTables: await glamClient.getAdressLookupTableAccounts([
-              LOOKUP_TABLE,
-            ]),
+            lookupTables,
             preInstructions: await glamClient.price.priceVaultIxs(
               glamState,
               PriceDenom.SOL,
@@ -219,14 +224,25 @@ export function installInvestCommands(
     .description("Price vault assets")
     .action(async () => {
       const glamState = cliConfig.glamState;
+      const glamVault = glamClient.getVaultPda(glamState);
+      const lookupTables = [
+        ...(await fetchLookupTables(
+          glamClient.provider.connection,
+          glamClient.getSigner(),
+          glamVault,
+        )),
+      ];
+
       const ixs = await glamClient.price.priceVaultIxs(
         glamState,
         PriceDenom.SOL,
       );
       const tx = new Transaction().add(...ixs);
-
       try {
-        const vTx = await glamClient.intoVersionedTransaction(tx, txOptions);
+        const vTx = await glamClient.intoVersionedTransaction(tx, {
+          ...txOptions,
+          lookupTables,
+        });
         const txSig = await glamClient.sendAndConfirm(vTx);
         console.log("Priced vault assets:", txSig);
       } catch (e) {
@@ -240,18 +256,24 @@ export function installInvestCommands(
     .description("Fulfill subscription and redemption")
     .action(async () => {
       const glamState = cliConfig.glamState;
+      const glamVault = glamClient.getVaultPda(glamState);
+      const lookupTables = [
+        ...(await fetchLookupTables(
+          glamClient.provider.connection,
+          glamClient.getSigner(),
+          glamState,
+        )),
+      ];
 
       try {
         const txSig = await glamClient.investor.fulfill(glamState, WSOL, 0, {
           ...txOptions,
-          lookupTables: await glamClient.getAdressLookupTableAccounts([
-            LOOKUP_TABLE,
-          ]),
+          lookupTables,
           preInstructions: await glamClient.price.priceVaultIxs(
             glamState,
             PriceDenom.SOL,
           ),
-          simulate: false,
+          // simulate: true,
         });
         console.log(
           `${glamClient.getSigner().toBase58()} triggered fulfillment:`,
@@ -268,14 +290,20 @@ export function installInvestCommands(
     .description("Claim subscription and receive share tokens")
     .action(async () => {
       const glamState = cliConfig.glamState;
+      const glamVault = glamClient.getVaultPda(glamState);
+      const lookupTables = [
+        ...(await fetchLookupTables(
+          glamClient.provider.connection,
+          glamClient.getSigner(),
+          glamVault,
+        )),
+      ];
 
       try {
         const glamMint = await glamClient.getMintPda(glamState);
         const txSig = await glamClient.investor.claim(glamState, glamMint, 0, {
           ...txOptions,
-          lookupTables: await glamClient.getAdressLookupTableAccounts([
-            LOOKUP_TABLE,
-          ]),
+          lookupTables,
           preInstructions: await glamClient.price.priceVaultIxs(
             glamState,
             PriceDenom.SOL,
@@ -297,6 +325,14 @@ export function installInvestCommands(
     .option("-y, --yes", "Skip confirmation prompt")
     .action(async (amount, options) => {
       const glamState = cliConfig.glamState;
+      const glamVault = glamClient.getVaultPda(glamState);
+      const lookupTables = [
+        ...(await fetchLookupTables(
+          glamClient.provider.connection,
+          glamClient.getSigner(),
+          glamVault,
+        )),
+      ];
       const amountBN = new BN(parseFloat(amount) * LAMPORTS_PER_SOL);
 
       options?.yes ||
@@ -312,9 +348,7 @@ export function installInvestCommands(
           0,
           {
             ...txOptions,
-            lookupTables: await glamClient.getAdressLookupTableAccounts([
-              LOOKUP_TABLE,
-            ]),
+            lookupTables,
             preInstructions: await glamClient.price.priceVaultIxs(
               glamState,
               PriceDenom.SOL,
@@ -336,13 +370,19 @@ export function installInvestCommands(
     .description("Claim redemption to receive SOL")
     .action(async () => {
       const glamState = cliConfig.glamState;
+      const glamVault = glamClient.getVaultPda(glamState);
+      const lookupTables = [
+        ...(await fetchLookupTables(
+          glamClient.provider.connection,
+          glamClient.getSigner(),
+          glamVault,
+        )),
+      ];
 
       try {
         const txSig = await glamClient.investor.claim(glamState, WSOL, 0, {
           ...txOptions,
-          lookupTables: await glamClient.getAdressLookupTableAccounts([
-            LOOKUP_TABLE,
-          ]),
+          lookupTables,
           preInstructions: await glamClient.price.priceVaultIxs(
             glamState,
             PriceDenom.SOL,

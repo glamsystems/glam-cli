@@ -22,6 +22,7 @@ import { installIntegrationCommands } from "./cmds/integration";
 import { installDelegateCommands } from "./cmds/delegate";
 import { installSwapCommands } from "./cmds/swap";
 import { installInvestCommands } from "./cmds/invest";
+import { installAltCommands } from "./cmds/alt";
 
 const cliConfig = CliConfig.get();
 const glamClient = new GlamClient();
@@ -436,6 +437,9 @@ const invest = program
   .command("invest")
   .description("Tokenized vault operations");
 installInvestCommands(invest, glamClient, cliConfig, txOptions);
+
+const alt = program.command("alt").description("Manage address lookup tables");
+installAltCommands(alt, glamClient, cliConfig, txOptions);
 
 //
 // Run the CLI in development mode as follows:
