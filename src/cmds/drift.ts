@@ -5,7 +5,6 @@ import {
   MarketType,
   OrderType,
   PositionDirection,
-  PriceDenom,
   TxOptions,
 } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
@@ -17,27 +16,6 @@ export function installDriftCommands(
   cliConfig: CliConfig,
   txOptions: TxOptions = {},
 ) {
-  drift
-    .command("price")
-    .description("Price drift")
-    .action(async () => {
-      try {
-        const txSig = await glamClient.drift.priceDrift(
-          cliConfig.glamState,
-          PriceDenom.USD,
-          txOptions,
-        );
-        console.log(`Pricing tx: ${txSig}`);
-      } catch (e) {
-        if (process.env.NODE_ENV === "development") {
-          console.error(e);
-        } else {
-          console.error(parseTxError(e));
-        }
-        process.exit(1);
-      }
-    });
-
   drift
     .command("init")
     .description("Initialize drift user")
@@ -358,6 +336,34 @@ export function installDriftCommands(
         console.log(
           `Margin trading ${shouldEnable ? "enabled" : "disabled"}: ${txSig}`,
         );
+      } catch (e) {
+        console.error(parseTxError(e));
+        process.exit(1);
+      }
+    });
+
+  drift
+    .command("settle <market_index>")
+    .description("Settle PnL for the specified perp market")
+    .action(async (market_index) => {
+      const marketConfigs = await glamClient.drift.fetchMarketConfigs();
+      const perpMarket = marketConfigs.perpMarkets.find(
+        (m) => m.marketIndex === parseInt(market_index),
+      );
+
+      if (!perpMarket) {
+        console.error(`Invalid market index: ${market_index}`);
+        process.exit(1);
+      }
+
+      try {
+        const txSig = await glamClient.drift.settlePnl(
+          cliConfig.glamState,
+          parseInt(market_index),
+          0,
+          txOptions,
+        );
+        console.log(`Settled PnL for perp market ${perpMarket.name}: ${txSig}`);
       } catch (e) {
         console.error(parseTxError(e));
         process.exit(1);

@@ -21,6 +21,7 @@ import { installJupCommands } from "./cmds/jup";
 import { installIntegrationCommands } from "./cmds/integration";
 import { installDelegateCommands } from "./cmds/delegate";
 import { installSwapCommands } from "./cmds/swap";
+import { installInvestCommands } from "./cmds/invest";
 
 const cliConfig = CliConfig.get();
 const glamClient = new GlamClient();
@@ -148,6 +149,36 @@ program
       console.log(`Updated GLAM owner to ${newOwnerPubkey}`);
     } catch (e) {
       console.error("Not a valid pubkey:", newOwnerPubkey);
+      process.exit(1);
+    }
+  });
+
+program
+  .command("set-enabled <enabled>")
+  .description("Set GLAM state enabled or disabled")
+  .option("-y, --yes", "Skip confirmation prompt")
+  .action(async (enabled, options) => {
+    const glamState = cliConfig.glamState;
+
+    // Convert string input to boolean
+    const enabledBool =
+      enabled === "true" || enabled === "1" || enabled === "yes";
+
+    options?.yes ||
+      (await confirmOperation(
+        `Confirm ${enabledBool ? "enabling" : "disabling"} ${glamState.toBase58()}?`,
+      ));
+
+    try {
+      const txSig = await glamClient.state.updateState(glamState, {
+        enabled: enabledBool,
+      });
+      console.log(
+        `Set GLAM state ${glamState.toBase58()} to ${enabledBool ? "enabled" : "disabled"}:`,
+        txSig,
+      );
+    } catch (e) {
+      console.error(parseTxError(e));
       process.exit(1);
     }
   });
@@ -400,6 +431,11 @@ installDriftCommands(drift, glamClient, cliConfig, txOptions);
 
 const mint = program.command("mint").description("Mint operations");
 installMintCommands(mint, glamClient, cliConfig, txOptions);
+
+const invest = program
+  .command("invest")
+  .description("Tokenized vault operations");
+installInvestCommands(invest, glamClient, cliConfig, txOptions);
 
 //
 // Run the CLI in development mode as follows:

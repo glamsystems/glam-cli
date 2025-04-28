@@ -2,6 +2,7 @@ import {
   ASSETS_MAINNET,
   fetchKaminoObligations,
   GlamClient,
+  PriceDenom,
   TxOptions,
 } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
@@ -53,39 +54,25 @@ export function installKlendCommands(
     });
 
   klend
-    .command("price <market>")
-    .description("Price Kamino obligations for the specified market")
-    .action(async (market) => {
+    .command("price")
+    .description("Price Kamino obligations")
+    .action(async () => {
       const glamState = cliConfig.glamState;
-      const vault = glamClient.getVaultPda(glamState);
-      const obligation = glamClient.kaminoLending.getObligationPda(
-        vault,
-        new PublicKey(market),
-      );
 
       const tx = new Transaction();
-      const refreshIxs = await glamClient.kaminoLending.getRefreshIxs(
-        obligation,
-        false,
+      const refreshIx = await glamClient.price.priceKaminoIx(
+        glamState,
+        PriceDenom.SOL,
       );
-      tx.add(...refreshIxs);
+      tx.add(refreshIx);
       try {
         const vTx = await glamClient.intoVersionedTransaction(tx, txOptions);
         const txSig = await glamClient.sendAndConfirm(vTx);
-        console.log(`Refreshed Kamino obligation for pricing:`, txSig);
+        console.log(`Priced Kamino obligations:`, txSig);
       } catch (e) {
         console.error(parseTxError(e));
         throw e;
       }
-
-      const obligations = await fetchKaminoObligations(
-        glamClient.provider.connection,
-        vault,
-      );
-      console.log(
-        "Priced Kamino obligations:",
-        obligations.map((o) => o.toBase58()),
-      );
     });
 
   klend
