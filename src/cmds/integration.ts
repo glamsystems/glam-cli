@@ -87,7 +87,7 @@ export function installIntegrationCommands(
       });
 
       try {
-        const txSig = await glamClient.state.updateState(
+        const txSig = await glamClient.state.update(
           statePda,
           updated,
           txOptions,
@@ -125,7 +125,7 @@ export function installIntegrationCommands(
       });
 
       try {
-        const txSig = await glamClient.state.updateState(
+        const txSig = await glamClient.state.update(
           statePda,
           updated,
           txOptions,

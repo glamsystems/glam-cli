@@ -140,7 +140,7 @@ program
     const glamState = cliConfig.glamState;
     try {
       const newOwner = new PublicKey(newOwnerPubkey);
-      await glamClient.state.updateState(glamState, {
+      await glamClient.state.update(glamState, {
         owner: {
           portfolioManagerName: null,
           pubkey: newOwner,
@@ -171,7 +171,7 @@ program
       ));
 
     try {
-      const txSig = await glamClient.state.updateState(glamState, {
+      const txSig = await glamClient.state.update(glamState, {
         enabled: enabledBool,
       });
       console.log(
