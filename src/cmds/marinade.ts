@@ -14,15 +14,8 @@ export function installMarinadeCommands(
     .command("stake <amount>")
     .description("Stake <amount> SOL and get mSOL")
     .action(async (amount, options) => {
-      const statePda = cliConfig.glam_state
-        ? new PublicKey(cliConfig.glam_state)
-        : null;
-      if (!statePda) {
-        console.error("GLAM state not found in config file");
-      }
       try {
         const txSig = await glamClient.marinade.deposit(
-          statePda,
           new BN(parseFloat(amount) * LAMPORTS_PER_SOL),
           txOptions,
         );
@@ -36,17 +29,8 @@ export function installMarinadeCommands(
     .command("list")
     .description("List all Marinade tickets")
     .action(async () => {
-      const statePda = cliConfig.glam_state
-        ? new PublicKey(cliConfig.glam_state)
-        : null;
-
-      if (!statePda) {
-        console.error("GLAM state not found in config file");
-        process.exit(1);
-      }
-
       try {
-        let stakeAccounts = await glamClient.marinade.getTickets(statePda);
+        let stakeAccounts = await glamClient.marinade.getParsedTickets();
         console.log(
           "Ticket                                      ",
           "\t",
@@ -60,7 +44,7 @@ export function installMarinadeCommands(
             "\t",
             acc.lamports,
             "\t",
-            acc.state,
+            acc.isClaimable ? "Claimable" : "Pending",
           );
         });
       } catch (e) {
@@ -72,18 +56,8 @@ export function installMarinadeCommands(
     .command("claim <tickets...>")
     .description("Claim Marinade tickets (space-separated)")
     .action(async (tickets) => {
-      const statePda = cliConfig.glam_state
-        ? new PublicKey(cliConfig.glam_state)
-        : null;
-
-      if (!statePda) {
-        console.error("GLAM state not found in config file");
-        process.exit(1);
-      }
-
       try {
         const txSig = await glamClient.marinade.claim(
-          statePda,
           tickets.map((addr: string) => new PublicKey(addr)),
         );
         console.log(`Claimed ${tickets}:`, txSig);

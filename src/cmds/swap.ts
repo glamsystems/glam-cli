@@ -1,8 +1,6 @@
 import { GlamClient, QuoteParams, TxOptions } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
 import { CliConfig, parseTxError } from "../utils";
-import { PublicKey } from "@solana/web3.js";
-import { BN } from "@coral-xyz/anchor";
 
 export function installSwapCommands(
   program: Command,
@@ -17,8 +15,6 @@ export function installSwapCommands(
     .option("-s, --slippage-bps <bps>", "Specify slippage bps")
     .option("-d, --only-direct-routes", "Direct routes only")
     .action(async (from, to, amount, options) => {
-      const statePda = cliConfig.glamState;
-
       const { maxAccounts, slippageBps, onlyDirectRoutes } = options;
 
       const response = await fetch(
@@ -62,7 +58,6 @@ export function installSwapCommands(
       console.log("Quote params:", quoteParams);
       try {
         const txSig = await glamClient.jupiterSwap.swap(
-          statePda,
           { quoteParams },
           txOptions,
         );

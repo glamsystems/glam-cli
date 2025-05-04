@@ -14,22 +14,12 @@ export function installJupCommands(
     .command("stake <amount>")
     .description("Stake JUP tokens")
     .action(async (amount) => {
-      const statePda = cliConfig.glam_state
-        ? new PublicKey(cliConfig.glam_state)
-        : null;
-
-      if (!statePda) {
-        console.error("GLAM state not found in config file");
-        process.exit(1);
-      }
-
       try {
         const txSig = await glamClient.jupiterVote.stakeJup(
-          statePda,
           new BN(amount * 10 ** 6), // decimals 6
+          txOptions,
         );
-        console.log("txSig", txSig);
-        console.log(`Staked ${amount} JUP`);
+        console.log(`Staked ${amount} JUP:`, txSig);
       } catch (e) {
         console.error(parseTxError(e));
         throw e;
@@ -40,19 +30,9 @@ export function installJupCommands(
     .command("unstake")
     .description("Unstake all JUP tokens")
     .action(async () => {
-      const statePda = cliConfig.glam_state
-        ? new PublicKey(cliConfig.glam_state)
-        : null;
-
-      if (!statePda) {
-        console.error("GLAM state not found in config file");
-        process.exit(1);
-      }
-
       try {
-        const txSig = await glamClient.jupiterVote.unstakeJup(statePda);
-        console.log("txSig", txSig);
-        console.log("Unstaked all JUP tokens");
+        const txSig = await glamClient.jupiterVote.unstakeJup(txOptions);
+        console.log("Unstaked all JUP tokens:", txSig);
       } catch (e) {
         console.error(parseTxError(e));
         throw e;
@@ -63,19 +43,9 @@ export function installJupCommands(
     .command("withdraw")
     .description("Withdraw all unstaked JUP")
     .action(async () => {
-      const statePda = cliConfig.glam_state
-        ? new PublicKey(cliConfig.glam_state)
-        : null;
-
-      if (!statePda) {
-        console.error("GLAM state not found in config file");
-        process.exit(1);
-      }
-
       try {
-        const txSig = await glamClient.jupiterVote.withdrawJup(statePda);
-        console.log("txSig", txSig);
-        console.log("Withdrawn all JUP");
+        const txSig = await glamClient.jupiterVote.withdrawJup(txOptions);
+        console.log("Withdrawn all JUP:", txSig);
       } catch (e) {
         console.error(parseTxError(e));
         throw e;
@@ -86,15 +56,6 @@ export function installJupCommands(
     .command("vote <proposal> <side>")
     .description("Vote on a proposal")
     .action(async (_proposal, side) => {
-      const statePda = cliConfig.glam_state
-        ? new PublicKey(cliConfig.glam_state)
-        : null;
-
-      if (!statePda) {
-        console.error("GLAM state not set");
-        process.exit(1);
-      }
-
       let proposal;
       let governor;
       try {
@@ -109,14 +70,13 @@ export function installJupCommands(
       }
 
       try {
-        const txId = await glamClient.jupiterVote.voteOnProposal(
-          statePda,
+        const txSig = await glamClient.jupiterVote.voteOnProposal(
           proposal,
           Number(side),
         );
         console.log(
           `Cast vote on proposal ${proposal.toBase58()} with side ${side}:`,
-          txId,
+          txSig,
         );
       } catch (e) {
         console.error(parseTxError(e));

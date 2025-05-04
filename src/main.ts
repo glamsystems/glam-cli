@@ -25,7 +25,11 @@ import { installInvestCommands } from "./cmds/invest";
 import { installAltCommands } from "./cmds/alt";
 
 const cliConfig = CliConfig.get();
-const glamClient = new GlamClient();
+
+// If glam_state is available from config, use it in GlamClient; otherwise leave it undefined
+const glamClient = new GlamClient({
+  statePda: cliConfig.glam_state && new PublicKey(cliConfig.glam_state),
+});
 
 const txOptions = {
   getPriorityFeeMicroLamports: async (tx: VersionedTransaction) => {
@@ -66,8 +70,8 @@ program
     console.log("RPC endpoint:", glamClient.provider.connection.rpcEndpoint);
     console.log("Priority fee:", cliConfig.priority_fee);
     if (cliConfig.glam_state) {
-      const vault = glamClient.getVaultPda(cliConfig.glamState);
-      console.log("GLAM state:", cliConfig.glam_state);
+      const vault = glamClient.vaultPda;
+      console.log("GLAM state:", glamClient.statePda.toBase58());
       console.log("✅ Active vault:", vault.toBase58());
     } else {
       console.log("No active GLAM specified");
@@ -137,10 +141,9 @@ program
     options?.yes ||
       (await confirmOperation(`Confirm updating owner to ${newOwnerPubkey}?`));
 
-    const glamState = cliConfig.glamState;
     try {
       const newOwner = new PublicKey(newOwnerPubkey);
-      await glamClient.state.update(glamState, {
+      await glamClient.state.update({
         owner: {
           portfolioManagerName: null,
           pubkey: newOwner,
@@ -171,7 +174,7 @@ program
       ));
 
     try {
-      const txSig = await glamClient.state.update(glamState, {
+      const txSig = await glamClient.state.update({
         enabled: enabledBool,
       });
       console.log(
@@ -191,7 +194,7 @@ program
   .action(async (state: string | null, options) => {
     try {
       const statePda = state ? new PublicKey(state) : cliConfig.glamState;
-      const glamStateModel = await glamClient.fetchState(statePda);
+      const glamStateModel = await glamClient.fetchStateModel(statePda);
       console.log(
         options?.compact
           ? JSON.stringify(glamStateModel)
@@ -221,12 +224,12 @@ program
     glamState.accountType = { [glamState.accountType]: {} };
 
     try {
-      const [txSig, statePda] = await glamClient.state.createState(glamState);
+      const [txSig] = await glamClient.state.create(glamState);
       console.log("txSig:", txSig);
-      console.log("GLAM state created:", statePda.toBase58());
-      console.log("Vault:", glamClient.getVaultPda(statePda).toBase58());
+      console.log("GLAM state created:", glamClient.statePda.toBase58());
+      console.log("Vault:", glamClient.vaultPda.toBase58());
 
-      cliConfig.glamState = statePda;
+      cliConfig.glamState = glamClient.statePda;
     } catch (e) {
       console.error(parseTxError(e));
       process.exit(1);
@@ -238,13 +241,8 @@ program
   .description("Close a GLAM product by its state pubkey")
   .option("-y, --yes", "Skip confirmation prompt")
   .action(async (state: string | null, options) => {
-    let statePda: PublicKey;
-    try {
-      statePda = new PublicKey(state) || cliConfig.glamState;
-    } catch (e) {
-      console.error("Not a valid pubkey:", state);
-      process.exit(1);
-    }
+    const statePda = state ? new PublicKey(state) : cliConfig.glamState;
+    const glamClient = new GlamClient({ statePda });
 
     options?.yes ||
       (await confirmOperation(
@@ -253,13 +251,13 @@ program
 
     const preInstructions = [];
     // @ts-ignore
-    const stateAccount = await glamClient.fetchStateAccount(statePda);
+    const stateAccount = await glamClient.fetchStateAccount();
     if (stateAccount.mints.length > 0) {
-      const closeMintIx = await glamClient.mint.closeMintIx(statePda, 0);
+      const closeMintIx = await glamClient.mint.closeMintIx();
       preInstructions.push(closeMintIx);
     }
     try {
-      const txSig = await glamClient.state.closeState(statePda, {
+      const txSig = await glamClient.state.close({
         ...txOptions,
         preInstructions,
       });
@@ -287,14 +285,15 @@ program
     }
     // TODO: support more token symbols
 
-    const { mint } = await glamClient.fetchMintWithOwner(new PublicKey(asset));
+    const { mint } = await glamClient.fetchMintAndTokenProgram(
+      new PublicKey(asset),
+    );
 
     options?.yes ||
       (await confirmOperation(`Confirm withdrawal of ${amount} ${asset}?`));
 
     try {
       const txSig = await glamClient.state.withdraw(
-        statePda,
         new PublicKey(asset),
         new anchor.BN(parseFloat(amount) * 10 ** mint.decimals),
         txOptions,
@@ -310,8 +309,6 @@ program
   .command("wrap <amount>")
   .description("Wrap SOL")
   .action(async (amount) => {
-    const statePda = cliConfig.glamState;
-
     const lamports = new anchor.BN(parseFloat(amount) * LAMPORTS_PER_SOL);
     if (lamports.lte(new anchor.BN(0))) {
       console.error("Error: amount must be greater than 0");
@@ -319,7 +316,7 @@ program
     }
 
     try {
-      const txSig = await glamClient.wsol.wrap(statePda, lamports, txOptions);
+      const txSig = await glamClient.wsol.wrap(lamports, txOptions);
       console.log(`Wrapped ${amount} SOL:`, txSig);
     } catch (e) {
       console.error(parseTxError(e));
@@ -331,10 +328,8 @@ program
   .command("unwrap")
   .description("Unwrap wSOL")
   .action(async () => {
-    const statePda = cliConfig.glamState;
-
     try {
-      const txSig = await glamClient.wsol.unwrap(statePda, txOptions);
+      const txSig = await glamClient.wsol.unwrap(txOptions);
       console.log(`All wSOL unwrapped:`, txSig);
     } catch (e) {
       console.error(parseTxError(e));
@@ -350,12 +345,10 @@ program
     "Show all assets including token accounts with 0 balance",
   )
   .action(async (options) => {
-    const statePda = cliConfig.glamState;
-
     const { all } = options;
-    const vault = glamClient.getVaultPda(statePda);
-    const tokenAccounts = await glamClient.getTokenAccountsByOwner(vault);
-    const solBalance = await glamClient.provider.connection.getBalance(vault);
+    const vault = glamClient.vaultPda;
+    const { uiAmount: solUiAmount, tokenAccounts } =
+      await glamClient.getSolAndTokenBalances(vault);
 
     const mints = tokenAccounts.map((ta) => ta.mint.toBase58());
     if (!mints.includes(WSOL.toBase58())) {
@@ -377,10 +370,9 @@ program
       "\t",
       "N/A",
       "\t",
-      solBalance / LAMPORTS_PER_SOL,
+      solUiAmount,
       "\t",
-      (parseFloat(pricesData[WSOL.toBase58()].price) * solBalance) /
-        LAMPORTS_PER_SOL,
+      parseFloat(pricesData[WSOL.toBase58()].price) * solUiAmount,
     );
     tokenAccounts.forEach((ta) => {
       const { uiAmount, mint } = ta;

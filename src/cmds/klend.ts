@@ -19,13 +19,9 @@ export function installKlendCommands(
     .command("init")
     .description("Initialize Kamino user")
     .action(async () => {
-      const glamState = cliConfig.glamState;
       try {
-        const txSig = await glamClient.kaminoLending.initUserMetadata(
-          glamState,
-          null,
-          txOptions,
-        );
+        const txSig =
+          await glamClient.kaminoLending.initUserMetadata(txOptions);
         console.log(`Initialized Kamino user:`, txSig);
       } catch (e) {
         console.error(parseTxError(e));
@@ -37,8 +33,7 @@ export function installKlendCommands(
     .command("list [market]")
     .description("List Kamino deposits and borrows")
     .action(async (market: string | null) => {
-      const glamState = cliConfig.glamState;
-      const vault = glamClient.getVaultPda(glamState);
+      const vault = glamClient.vaultPda;
       const lendingMarket = market ? new PublicKey(market) : null;
 
       const obligations = await fetchKaminoObligations(
@@ -54,34 +49,10 @@ export function installKlendCommands(
     });
 
   klend
-    .command("price")
-    .description("Price Kamino obligations")
-    .action(async () => {
-      const glamState = cliConfig.glamState;
-
-      const tx = new Transaction();
-      const refreshIx = await glamClient.price.priceKaminoIx(
-        glamState,
-        PriceDenom.SOL,
-      );
-      tx.add(refreshIx);
-      try {
-        const vTx = await glamClient.intoVersionedTransaction(tx, txOptions);
-        const txSig = await glamClient.sendAndConfirm(vTx);
-        console.log(`Priced Kamino obligations:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        throw e;
-      }
-    });
-
-  klend
     .command("deposit <market> <asset> <amount>")
     .description("Deposit to Kamino Lending market")
     .option("-y, --yes", "Skip confirmation prompt")
     .action(async (market, asset, amount, options) => {
-      const statePda = cliConfig.glam_state;
-
       options?.yes ||
         (await confirmOperation(`Confirm deposit of ${amount} ${asset}?`));
 
@@ -93,7 +64,6 @@ export function installKlendCommands(
 
       try {
         const txSig = await glamClient.kaminoLending.deposit(
-          statePda,
           market,
           asset,
           parseFloat(amount) * 10 ** decimals,
@@ -111,8 +81,6 @@ export function installKlendCommands(
     .description("Withdraw asset from Kamino Lending market")
     .option("-y, --yes", "Skip confirmation prompt")
     .action(async (market, asset, amount, options) => {
-      const statePda = cliConfig.glamState;
-
       options?.yes ||
         (await confirmOperation(`Confirm withdrawing ${amount} ${asset}?`));
 
@@ -124,7 +92,6 @@ export function installKlendCommands(
 
       try {
         const txSig = await glamClient.kaminoLending.withdraw(
-          statePda,
           market,
           asset,
           parseFloat(amount) * 10 ** decimals,
@@ -142,8 +109,6 @@ export function installKlendCommands(
     .description("Borrow from Kamino Lending market")
     .option("-y, --yes", "Skip confirmation prompt")
     .action(async (market, asset, amount, options) => {
-      const statePda = cliConfig.glamState;
-
       options?.yes ||
         (await confirmOperation(`Confirm borrow of ${amount} ${asset}?`));
 
@@ -155,7 +120,6 @@ export function installKlendCommands(
 
       try {
         const txSig = await glamClient.kaminoLending.borrow(
-          statePda,
           market,
           asset,
           parseFloat(amount) * 10 ** decimals,
@@ -173,8 +137,6 @@ export function installKlendCommands(
     .description("Repay loan from Kamino Lending market")
     .option("-y, --yes", "Skip confirmation prompt")
     .action(async (market, asset, amount, options) => {
-      const statePda = cliConfig.glamState;
-
       options?.yes ||
         (await confirmOperation(`Confirm repay of ${amount} ${asset}?`));
 
@@ -186,7 +148,6 @@ export function installKlendCommands(
 
       try {
         const txSig = await glamClient.kaminoLending.repay(
-          statePda,
           market,
           asset,
           parseFloat(amount) * 10 ** decimals,
@@ -203,10 +164,8 @@ export function installKlendCommands(
     .command("harvest")
     .description("Harvest Kamino farms rewards")
     .action(async () => {
-      const statePda = cliConfig.glamState;
-
       try {
-        const txSig = await glamClient.kaminoFarm.harvest(statePda, txOptions);
+        const txSig = await glamClient.kaminoFarm.harvest(txOptions);
         console.log(`Harvested farm rewards:`, txSig);
       } catch (e) {
         console.error(parseTxError(e));

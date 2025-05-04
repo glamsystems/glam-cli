@@ -21,11 +21,7 @@ export function installDriftCommands(
     .description("Initialize drift user")
     .action(async () => {
       try {
-        const txSig = await glamClient.drift.initialize(
-          cliConfig.glamState,
-          0,
-          txOptions,
-        );
+        const txSig = await glamClient.drift.initialize(0, txOptions);
         console.log(`Initialize drift user: ${txSig}`);
       } catch (e) {
         console.error(parseTxError(e));
@@ -38,9 +34,7 @@ export function installDriftCommands(
     .description("List drift positions")
     .action(async () => {
       try {
-        const { spotPositions } = await glamClient.drift.fetchDriftUser(
-          cliConfig.glamState,
-        );
+        const { spotPositions } = await glamClient.drift.fetchDriftUser();
         for (const { marketIndex, uiAmount, marketName } of spotPositions) {
           console.log(
             `${uiAmount} ${marketName} (market index: ${marketIndex})`,
@@ -67,7 +61,6 @@ export function installDriftCommands(
         const amountBn = new BN(Number(amount) * 10 ** marketConfig.decimals);
 
         const txSig = await glamClient.drift.withdraw(
-          cliConfig.glamState,
           amountBn,
           marketConfig.marketIndex,
           0,
@@ -94,7 +87,6 @@ export function installDriftCommands(
         const amountBn = new BN(Number(amount) * 10 ** marketConfig.decimals);
 
         const txSig = await glamClient.drift.deposit(
-          cliConfig.glamState,
           amountBn,
           marketConfig.marketIndex,
           0,
@@ -153,7 +145,6 @@ export function installDriftCommands(
 
       try {
         const txSig = await glamClient.drift.placeOrder(
-          cliConfig.glamState,
           orderParams,
           0,
           txOptions,
@@ -210,7 +201,6 @@ export function installDriftCommands(
 
       try {
         const txSig = await glamClient.drift.placeOrder(
-          cliConfig.glamState,
           orderParams,
           0,
           txOptions,
@@ -226,9 +216,7 @@ export function installDriftCommands(
     .command("orders")
     .description("List open orders")
     .action(async () => {
-      const driftUser = await glamClient.drift.fetchDriftUser(
-        cliConfig.glamState,
-      );
+      const driftUser = await glamClient.drift.fetchDriftUser();
       if (!driftUser) {
         console.error("Drift user not found");
         process.exit(1);
@@ -289,7 +277,6 @@ export function installDriftCommands(
     .action(async (order_ids) => {
       try {
         const txSig = await glamClient.drift.cancelOrdersByIds(
-          cliConfig.glamState,
           order_ids.map((id) => Number(id)),
           0,
           txOptions,
@@ -310,9 +297,7 @@ export function installDriftCommands(
         shouldEnable = true;
       }
 
-      const driftUser = await glamClient.drift.fetchDriftUser(
-        cliConfig.glamState,
-      );
+      const driftUser = await glamClient.drift.fetchDriftUser();
       if (!driftUser) {
         console.error("Drift user not found");
         process.exit(1);
@@ -328,7 +313,6 @@ export function installDriftCommands(
 
       try {
         const txSig = await glamClient.drift.updateUserMarginTradingEnabled(
-          cliConfig.glamState,
           shouldEnable,
           0,
           txOptions,
@@ -358,7 +342,6 @@ export function installDriftCommands(
 
       try {
         const txSig = await glamClient.drift.settlePnl(
-          cliConfig.glamState,
           parseInt(market_index),
           0,
           txOptions,
@@ -375,11 +358,7 @@ export function installDriftCommands(
     .description("Delete a drift user")
     .action(async () => {
       try {
-        const txSig = await glamClient.drift.deleteUser(
-          cliConfig.glamState,
-          0,
-          txOptions,
-        );
+        const txSig = await glamClient.drift.deleteUser(0, txOptions);
         console.log(`Deleted drift user: ${txSig}`);
       } catch (e) {
         console.error(parseTxError(e));

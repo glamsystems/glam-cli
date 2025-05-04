@@ -15,17 +15,8 @@ export function installMintCommands(
     .command("holders")
     .description("List all token holders")
     .action(async () => {
-      const statePda = cliConfig.glam_state
-        ? new PublicKey(cliConfig.glam_state)
-        : null;
-
-      if (!statePda) {
-        console.error("GLAM state not found in config file");
-        process.exit(1);
-      }
-
       try {
-        const holders = await glamClient.mint.getHolders(statePda);
+        const holders = await glamClient.mint.getHolders();
         console.log(
           "Owner                                      ",
           "\t",
@@ -58,15 +49,6 @@ export function installMintCommands(
     .option("-l, --lockup <seconds>", "Set lockup period in seconds")
     .option("-f, --frozen <boolean>", "Set default account state frozen")
     .action(async (options) => {
-      const statePda = cliConfig.glam_state
-        ? new PublicKey(cliConfig.glam_state)
-        : null;
-
-      if (!statePda) {
-        console.error("GLAM state not found in config file");
-        process.exit(1);
-      }
-
       const mintModel = {} as Partial<MintModel>;
 
       if (options.lockup) {
@@ -83,7 +65,7 @@ export function installMintCommands(
       }
 
       try {
-        const txSig = await glamClient.mint.update(statePda, 0, mintModel);
+        const txSig = await glamClient.mint.update(mintModel, txOptions);
         console.log(`Updated mint policies:`, txSig);
       } catch (e) {
         console.error(parseTxError(e));
@@ -96,22 +78,11 @@ export function installMintCommands(
     .description("Create a token account for a user")
     .option("-f, --frozen <boolean>", "Set account frozen state", "true")
     .action(async (owner, options) => {
-      const statePda = cliConfig.glam_state
-        ? new PublicKey(cliConfig.glam_state)
-        : null;
-
-      if (!statePda) {
-        console.error("GLAM state not found in config file");
-        process.exit(1);
-      }
-
       try {
         const ownerPubkey = new PublicKey(owner);
         const frozen = options.frozen === "true";
         const txSig = await glamClient.mint.createTokenAccount(
-          statePda,
           ownerPubkey,
-          0,
           frozen,
           txOptions,
         );
@@ -126,20 +97,9 @@ export function installMintCommands(
     .command("freeze <accounts...>")
     .description("Freeze token accounts (space-separated pubkeys)")
     .action(async (accounts) => {
-      const statePda = cliConfig.glam_state
-        ? new PublicKey(cliConfig.glam_state)
-        : null;
-
-      if (!statePda) {
-        console.error("GLAM state not found in config file");
-        process.exit(1);
-      }
-
       try {
         const accountPubkeys = accounts.map((acc) => new PublicKey(acc));
         const txSig = await glamClient.mint.setTokenAccountsStates(
-          statePda,
-          0,
           accountPubkeys,
           true,
           txOptions,
@@ -155,20 +115,9 @@ export function installMintCommands(
     .command("unfreeze <accounts...>")
     .description("Unfreeze token accounts (space-separated pubkeys)")
     .action(async (accounts) => {
-      const statePda = cliConfig.glam_state
-        ? new PublicKey(cliConfig.glam_state)
-        : null;
-
-      if (!statePda) {
-        console.error("GLAM state not found in config file");
-        process.exit(1);
-      }
-
       try {
         const accountPubkeys = accounts.map((acc) => new PublicKey(acc));
         const txSig = await glamClient.mint.setTokenAccountsStates(
-          statePda,
-          0,
           accountPubkeys,
           false,
           txOptions,
@@ -189,21 +138,10 @@ export function installMintCommands(
       false,
     )
     .action(async (recipient, amount, options) => {
-      const statePda = cliConfig.glam_state
-        ? new PublicKey(cliConfig.glam_state)
-        : null;
-
-      if (!statePda) {
-        console.error("GLAM state not found in config file");
-        process.exit(1);
-      }
-
       try {
         const recipientPubkey = new PublicKey(recipient);
         const amountBN = new BN(parseFloat(amount) * 1e9); // Assuming 9 decimals
         const txSig = await glamClient.mint.mint(
-          statePda,
-          0,
           recipientPubkey,
           amountBN,
           options.unfreeze,
@@ -221,21 +159,10 @@ export function installMintCommands(
     .description("Burn tokens from an account")
     .option("-u, --unfreeze", "Unfreeze token account before burning", false)
     .action(async (from, amount, options) => {
-      const statePda = cliConfig.glam_state
-        ? new PublicKey(cliConfig.glam_state)
-        : null;
-
-      if (!statePda) {
-        console.error("GLAM state not found in config file");
-        process.exit(1);
-      }
-
       try {
         const fromPubkey = new PublicKey(from);
         const amountBN = new BN(parseFloat(amount) * 1e9); // Assuming 9 decimals
         const txSig = await glamClient.mint.burn(
-          statePda,
-          0,
           amountBN,
           fromPubkey,
           options.unfreeze,
@@ -253,22 +180,11 @@ export function installMintCommands(
     .description("Force transfer tokens between accounts")
     .option("-u, --unfreeze", "Unfreeze accounts before transferring", false)
     .action(async (from, to, amount, options) => {
-      const statePda = cliConfig.glam_state
-        ? new PublicKey(cliConfig.glam_state)
-        : null;
-
-      if (!statePda) {
-        console.error("GLAM state not found in config file");
-        process.exit(1);
-      }
-
       try {
         const fromPubkey = new PublicKey(from);
         const toPubkey = new PublicKey(to);
         const amountBN = new BN(parseFloat(amount) * 1e9); // Assuming 9 decimals
         const txSig = await glamClient.mint.forceTransfer(
-          statePda,
-          0,
           amountBN,
           fromPubkey,
           toPubkey,

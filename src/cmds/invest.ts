@@ -154,13 +154,15 @@ export function installInvestCommands(
     .description("Create a tokenized vault for testing purpose")
     .action(async () => {
       try {
-        // @ts-ignore
-        const [txSig, glamState] = await glamClient.state.createState(
+        const [txSig, glamState] = await glamClient.state.create(
           stateModel,
           false,
           txOptions,
         );
-        console.log("State created:", txSig);
+        console.log("State PDA:", glamClient.statePda.toBase58());
+        console.log("Vault PDA:", glamClient.vaultPda.toBase58());
+        console.log("Mint PDA:", glamClient.mintPda.toBase58());
+        console.log("GLAM state created:", txSig);
 
         cliConfig.glamState = glamState;
       } catch (e) {
@@ -175,16 +177,13 @@ export function installInvestCommands(
     .option("-y, --yes", "Skip confirmation prompt")
     .option("-q, --queued", "Subscribe to a tokenized vault in queued mode")
     .action(async (amount, options) => {
-      const glamState = cliConfig.glamState;
-      const glamVault = glamClient.getVaultPda(glamState);
-
       const amountBN = new BN(parseFloat(amount) * LAMPORTS_PER_SOL);
 
       const lookupTables = [
         ...(await fetchLookupTables(
           glamClient.provider.connection,
           glamClient.getSigner(),
-          glamVault,
+          glamClient.statePda,
         )),
       ];
 
@@ -195,7 +194,6 @@ export function installInvestCommands(
 
       try {
         const txSig = await glamClient.investor.subscribe(
-          glamState,
           WSOL,
           amountBN,
           0,
@@ -204,7 +202,6 @@ export function installInvestCommands(
             ...txOptions,
             lookupTables,
             preInstructions: await glamClient.price.priceVaultIxs(
-              glamState,
               PriceDenom.SOL,
             ),
           },
@@ -223,20 +220,16 @@ export function installInvestCommands(
     .command("price")
     .description("Price vault assets")
     .action(async () => {
-      const glamState = cliConfig.glamState;
-      const glamVault = glamClient.getVaultPda(glamState);
+      const glamVault = glamClient.vaultPda;
       const lookupTables = [
         ...(await fetchLookupTables(
           glamClient.provider.connection,
           glamClient.getSigner(),
-          glamVault,
+          glamClient.statePda,
         )),
       ];
 
-      const ixs = await glamClient.price.priceVaultIxs(
-        glamState,
-        PriceDenom.SOL,
-      );
+      const ixs = await glamClient.price.priceVaultIxs(PriceDenom.SOL);
       const tx = new Transaction().add(...ixs);
       try {
         const vTx = await glamClient.intoVersionedTransaction(tx, {
@@ -255,24 +248,19 @@ export function installInvestCommands(
     .command("fulfill")
     .description("Fulfill subscription and redemption")
     .action(async () => {
-      const glamState = cliConfig.glamState;
-      const glamVault = glamClient.getVaultPda(glamState);
       const lookupTables = [
         ...(await fetchLookupTables(
           glamClient.provider.connection,
           glamClient.getSigner(),
-          glamState,
+          glamClient.statePda,
         )),
       ];
 
       try {
-        const txSig = await glamClient.investor.fulfill(glamState, WSOL, 0, {
+        const txSig = await glamClient.investor.fulfill(WSOL, 0, {
           ...txOptions,
           lookupTables,
-          preInstructions: await glamClient.price.priceVaultIxs(
-            glamState,
-            PriceDenom.SOL,
-          ),
+          preInstructions: await glamClient.price.priceVaultIxs(PriceDenom.SOL),
           // simulate: true,
         });
         console.log(
@@ -289,25 +277,20 @@ export function installInvestCommands(
     .command("claim-sub")
     .description("Claim subscription and receive share tokens")
     .action(async () => {
-      const glamState = cliConfig.glamState;
-      const glamVault = glamClient.getVaultPda(glamState);
       const lookupTables = [
         ...(await fetchLookupTables(
           glamClient.provider.connection,
           glamClient.getSigner(),
-          glamVault,
+          glamClient.statePda,
         )),
       ];
 
       try {
-        const glamMint = await glamClient.getMintPda(glamState);
-        const txSig = await glamClient.investor.claim(glamState, glamMint, 0, {
+        const glamMint = glamClient.mintPda;
+        const txSig = await glamClient.investor.claim(glamMint, 0, {
           ...txOptions,
           lookupTables,
-          preInstructions: await glamClient.price.priceVaultIxs(
-            glamState,
-            PriceDenom.SOL,
-          ),
+          preInstructions: await glamClient.price.priceVaultIxs(PriceDenom.SOL),
         });
         console.log(
           `${glamClient.getSigner().toBase58()} claimed tokens:`,
@@ -324,13 +307,11 @@ export function installInvestCommands(
     .description("Request to redeem share tokens")
     .option("-y, --yes", "Skip confirmation prompt")
     .action(async (amount, options) => {
-      const glamState = cliConfig.glamState;
-      const glamVault = glamClient.getVaultPda(glamState);
       const lookupTables = [
         ...(await fetchLookupTables(
           glamClient.provider.connection,
           glamClient.getSigner(),
-          glamVault,
+          glamClient.statePda,
         )),
       ];
       const amountBN = new BN(parseFloat(amount) * LAMPORTS_PER_SOL);
@@ -342,7 +323,6 @@ export function installInvestCommands(
 
       try {
         const txSig = await glamClient.investor.queuedRedeem(
-          glamState,
           WSOL,
           amountBN,
           0,
@@ -350,7 +330,6 @@ export function installInvestCommands(
             ...txOptions,
             lookupTables,
             preInstructions: await glamClient.price.priceVaultIxs(
-              glamState,
               PriceDenom.SOL,
             ),
           },
@@ -370,23 +349,19 @@ export function installInvestCommands(
     .description("Claim redemption to receive SOL")
     .action(async () => {
       const glamState = cliConfig.glamState;
-      const glamVault = glamClient.getVaultPda(glamState);
       const lookupTables = [
         ...(await fetchLookupTables(
           glamClient.provider.connection,
           glamClient.getSigner(),
-          glamVault,
+          glamClient.statePda,
         )),
       ];
 
       try {
-        const txSig = await glamClient.investor.claim(glamState, WSOL, 0, {
+        const txSig = await glamClient.investor.claim(WSOL, 0, {
           ...txOptions,
           lookupTables,
-          preInstructions: await glamClient.price.priceVaultIxs(
-            glamState,
-            PriceDenom.SOL,
-          ),
+          preInstructions: await glamClient.price.priceVaultIxs(PriceDenom.SOL),
         });
         console.log(
           `${glamClient.getSigner().toBase58()} claimed tokens:`,

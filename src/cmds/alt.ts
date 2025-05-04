@@ -17,10 +17,9 @@ export function installAltCommands(
     .command("create")
     .description("Create address lookup table (ALT) for the active GLAM")
     .action(async () => {
-      const statePda = cliConfig.glamState;
       try {
         const response = await fetch(
-          `https://rest2.glam.systems/v0/lut/vault/create?state=${statePda.toBase58()}&payer=${glamClient.getSigner().toBase58()}`,
+          `https://rest2.glam.systems/v0/lut/vault/create?state=${glamClient.statePda}&payer=${glamClient.getSigner()}`,
         );
         const data = await response.json();
         const table = data.tables[0];
@@ -56,11 +55,10 @@ export function installAltCommands(
     .command("list")
     .description("List lookup table(s) created for the active GLAM")
     .action(async () => {
-      const statePda = cliConfig.glamState;
       const lookupTables = await fetchLookupTables(
         glamClient.provider.connection,
         glamClient.getSigner(),
-        statePda,
+        glamClient.statePda,
       );
       console.log(
         "Lookup tables:",

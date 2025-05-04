@@ -28,12 +28,10 @@ export function installDelegateCommands(
     .command("list")
     .description("List delegates and their permissions")
     .action(async () => {
-      const statePda = cliConfig.glamState;
-
-      const stateModel = await glamClient.fetchState(statePda);
+      const stateModel = await glamClient.fetchStateModel();
       const cnt = stateModel.delegateAcls.length;
       console.log(
-        `${stateModel.name} (${statePda.toBase58()}) has ${cnt} delegate${cnt > 1 ? "s" : ""}`,
+        `${stateModel.name} (${glamClient.statePda}) has ${cnt} delegate${cnt > 1 ? "s" : ""}`,
       );
       for (let [i, acl] of stateModel.delegateAcls.entries()) {
         console.log(
@@ -67,7 +65,6 @@ export function installDelegateCommands(
 
       try {
         const txSig = await glamClient.state.upsertDelegateAcls(
-          cliConfig.glamState,
           [
             {
               pubkey: new PublicKey(pubkey),
@@ -97,7 +94,7 @@ export function installDelegateCommands(
     .action(async (pubkey, permissions: string[]) => {
       validate(permissions);
 
-      const stateModel = await glamClient.fetchState(cliConfig.glamState);
+      const stateModel = await glamClient.fetchStateModel();
       const acl = stateModel.delegateAcls.find(
         (acl) => acl.pubkey.toBase58() === pubkey,
       );
@@ -121,7 +118,6 @@ export function installDelegateCommands(
 
       try {
         const txSig = await glamClient.state.upsertDelegateAcls(
-          cliConfig.glamState,
           [
             {
               pubkey: new PublicKey(pubkey),
@@ -149,7 +145,7 @@ export function installDelegateCommands(
     .action(async (pubkey, permissions) => {
       validate(permissions);
 
-      const stateModel = await glamClient.fetchState(cliConfig.glamState);
+      const stateModel = await glamClient.fetchStateModel();
       const acl = stateModel.delegateAcls.find(
         (acl) => acl.pubkey.toBase58() === pubkey,
       );
@@ -166,7 +162,6 @@ export function installDelegateCommands(
 
       try {
         const txSig = await glamClient.state.upsertDelegateAcls(
-          cliConfig.glamState,
           [
             {
               pubkey: new PublicKey(pubkey),
@@ -187,9 +182,7 @@ export function installDelegateCommands(
     .command("delete <pubkey>")
     .description("Revoke delegate access entirely")
     .action(async (pubkey) => {
-      const statePda = cliConfig.glamState;
-
-      const stateModel = await glamClient.fetchState(statePda);
+      const stateModel = await glamClient.fetchStateModel();
       const acl = stateModel.delegateAcls.find(
         (acl) => acl.pubkey.toBase58() === pubkey,
       );
@@ -200,12 +193,11 @@ export function installDelegateCommands(
 
       try {
         const txSig = await glamClient.state.deleteDelegateAcls(
-          statePda,
           [new PublicKey(pubkey)],
           txOptions,
         );
         console.log(
-          `Revoked ${pubkey} access to ${statePda.toBase58()}: ${txSig}`,
+          `Revoked ${pubkey} access to ${glamClient.statePda}: ${txSig}`,
         );
       } catch (e) {
         console.error(parseTxError(e));

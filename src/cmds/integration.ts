@@ -18,19 +18,10 @@ export function installIntegrationCommands(
     .command("list")
     .description("List enabled integrations")
     .action(async () => {
-      const statePda = cliConfig.glam_state
-        ? new PublicKey(cliConfig.glam_state)
-        : null;
-
-      if (!statePda) {
-        console.error("GLAM state not found in config file");
-        process.exit(1);
-      }
-
-      const stateModel = await glamClient.fetchState(statePda);
+      const stateModel = await glamClient.fetchStateModel();
       const cnt = stateModel.integrations.length;
       console.log(
-        `${stateModel.name} (${statePda.toBase58()}) has ${cnt} integration${
+        `${stateModel.name} (${glamClient.statePda}) has ${cnt} integration${
           cnt > 1 ? "s" : ""
         } enabled`,
       );
@@ -61,22 +52,13 @@ export function installIntegrationCommands(
       integrationValidation,
     )
     .action(async (integration) => {
-      const statePda = cliConfig.glam_state
-        ? new PublicKey(cliConfig.glam_state)
-        : null;
-
-      if (!statePda) {
-        console.error("GLAM state not found in config file");
-        process.exit(1);
-      }
-
-      const stateModel = await glamClient.fetchState(statePda);
+      const stateModel = await glamClient.fetchStateModel();
       const acl = stateModel.integrations.find(
         (integ) => Object.keys(integ)[0] === integration,
       );
       if (acl) {
         console.log(
-          `${integration} is already enabled on ${stateModel.name} (${statePda.toBase58()})`,
+          `${integration} is already enabled on ${stateModel.name} (${glamClient.statePda})`,
         );
         process.exit(1);
       }
@@ -87,11 +69,7 @@ export function installIntegrationCommands(
       });
 
       try {
-        const txSig = await glamClient.state.update(
-          statePda,
-          updated,
-          txOptions,
-        );
+        const txSig = await glamClient.state.update(updated, txOptions);
         console.log(`${integration} enabled: ${txSig}`);
       } catch (e) {
         console.error(parseTxError(e));
@@ -108,16 +86,7 @@ export function installIntegrationCommands(
       integrationValidation,
     )
     .action(async (integration) => {
-      const statePda = cliConfig.glam_state
-        ? new PublicKey(cliConfig.glam_state)
-        : null;
-
-      if (!statePda) {
-        console.error("GLAM state not found in config file");
-        process.exit(1);
-      }
-
-      const stateModel = await glamClient.fetchState(statePda);
+      const stateModel = await glamClient.fetchStateModel();
       const updated = new StateModel({
         integrations: stateModel.integrations.filter(
           (integ) => Object.keys(integ)[0] !== integration,
@@ -125,11 +94,7 @@ export function installIntegrationCommands(
       });
 
       try {
-        const txSig = await glamClient.state.update(
-          statePda,
-          updated,
-          txOptions,
-        );
+        const txSig = await glamClient.state.update(updated, txOptions);
         console.log(`${integration} disabled: ${txSig}`);
       } catch (e) {
         console.error(parseTxError(e));
