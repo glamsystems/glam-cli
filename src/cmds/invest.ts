@@ -28,7 +28,7 @@ const stateModelForDemo = {
       // Glam Policies
       allowlist: null,
       blocklist: null,
-      lockUpPeriodInSeconds: 0, // number or BN
+      lockUpPeriod: 0, // number or BN
       permanentDelegate: null, // PublicKey, new PublicKey(0) => mint
       defaultAccountStateFrozen: false, // bool
       // Openfunds Share Class
