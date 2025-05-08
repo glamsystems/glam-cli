@@ -28,6 +28,8 @@ export function installDelegateCommands(
     .command("list")
     .description("List delegates and their permissions")
     .action(async () => {
+      console.log("cliConfig:", cliConfig);
+
       const stateModel = await glamClient.fetchStateModel();
       const cnt = stateModel.delegateAcls.length;
       console.log(

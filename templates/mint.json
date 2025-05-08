@@ -11,9 +11,9 @@
   "fundLaunchDate": "2024-11-02",
   "fiscalYearEnd": "12-31",
   "company": {
-    "fundGroupName": "Glam Systems",
-    "manCo": "Glam Management",
-    "domicileOfManCo": "CH",
+    "fundGroupName": "GLAM",
+    "manCo": "GLAM",
+    "domicileOfManCo": "US",
     "emailAddressOfManCo": "hello@glam.systems",
     "fundWebsiteOfManCo": "https://glam.systems"
   },
@@ -22,7 +22,7 @@
       "name": "GLAM Token XYZ",
       "symbol": "GXYZ",
       "asset": "So11111111111111111111111111111111111111112",
-      "lockUpPeriodInSeconds": 30,
+      "lockUpPeriod": 30,
       "allowlist": null,
       "blocklist": null,
       "permanentDelegate": "11111111111111111111111111111111",

@@ -3,13 +3,20 @@ import {
   WSOL,
   getPriorityFeeEstimate,
   GlamClient,
+  TxOptions,
 } from "@glamsystems/glam-sdk";
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import { Command } from "commander";
 
 import fs from "fs";
 
-import { CliConfig, confirmOperation, parseTxError } from "./utils";
+import {
+  CliConfig,
+  confirmOperation,
+  fundJsonToStateModel,
+  parseTxError,
+  validatePublicKey,
+} from "./utils";
 import { VersionedTransaction } from "@solana/web3.js";
 import { installDriftCommands } from "./cmds/drift";
 import { installMintCommands } from "./cmds/mint";
@@ -24,47 +31,71 @@ import { installSwapCommands } from "./cmds/swap";
 import { installInvestCommands } from "./cmds/invest";
 import { installAltCommands } from "./cmds/alt";
 
-const cliConfig = CliConfig.get();
+let cliConfig: CliConfig;
+let glamClient: GlamClient;
+let txOptions: TxOptions;
 
-// If glam_state is available from config, use it in GlamClient; otherwise leave it undefined
-const glamClient = new GlamClient({
-  statePda: cliConfig.glam_state && new PublicKey(cliConfig.glam_state),
-});
+function initialize(configPath?: string) {
+  // Load config from the specified path or default
+  cliConfig = configPath ? CliConfig.load(configPath) : CliConfig.get();
+  glamClient = new GlamClient({
+    statePda: cliConfig.glam_state && new PublicKey(cliConfig.glam_state),
+  });
 
-const txOptions = {
-  getPriorityFeeMicroLamports: async (tx: VersionedTransaction) => {
-    if (cliConfig.cluster === "localnet" || cliConfig.cluster === "devnet") {
-      return 1_000_000;
-    }
+  txOptions = {
+    simulate: true,
+    getPriorityFeeMicroLamports: async (tx: VersionedTransaction) => {
+      if (cliConfig.cluster === "localnet" || cliConfig.cluster === "devnet") {
+        return 1_000_000;
+      }
 
-    const { micro_lamports, helius_api_key, level } =
-      cliConfig.priority_fee || {};
+      const { micro_lamports, helius_api_key, level } =
+        cliConfig.priority_fee || {};
 
-    // If micro_lamports is provided, use it
-    if (micro_lamports) {
-      return micro_lamports;
-    }
+      // If micro_lamports is provided, use it
+      if (micro_lamports) {
+        return micro_lamports;
+      }
 
-    // If helius_api_key is not provided, return 0
-    return helius_api_key
-      ? await getPriorityFeeEstimate(helius_api_key, tx, undefined, level)
-      : 0;
-  },
-  simulate: true,
-};
+      // If helius_api_key is not provided, return 0
+      return helius_api_key
+        ? await getPriorityFeeEstimate(helius_api_key, tx, undefined, level)
+        : 0;
+    },
+  };
+}
+
+// Initialize with default config initially
+initialize();
 
 const program = new Command();
-let globalOpts = { skipSimulation: false };
+let globalOpts = { skipSimulation: false, config: null };
 
 program
   .name("glam-cli")
   .description("CLI for interacting with the GLAM Protocol")
-  .version("0.1.22")
-  .option("-S, --skip-simulation", "Skip transaction simulation");
+  .version("0.1.23")
+  // .option("-S, --skip-simulation", "Skip transaction simulation")
+  // .option(
+  //   "-C, --config <path>",
+  //   "Use a custom config file and ignore default config at $HOME/.config/glam/config.json",
+  // )
+  .hook("preAction", (thisCommand, actionCommand) => {
+    // const opts = program.opts();
+    // globalOpts.skipSimulation = !!opts.skipSimulation;
+    // globalOpts.config = opts.config || null;
+    // if (globalOpts.config) {
+    //   console.log(`Using custom config from: ${globalOpts.config}`);
+    //   initialize(globalOpts.config);
+    // }
+    // if (txOptions && globalOpts.skipSimulation) {
+    //   txOptions.simulate = false;
+    // }
+  });
 
 program
   .command("env")
-  .description("Show environment setup")
+  .description("Show environment and config setup")
   .action(async () => {
     console.log("Wallet connected:", glamClient.getSigner().toBase58());
     console.log("RPC endpoint:", glamClient.provider.connection.rpcEndpoint);
@@ -121,40 +152,31 @@ program
   });
 
 program
-  .command("set <state>")
+  .command("set")
+  .argument("<state>", "GLAM state public key", validatePublicKey)
   .description("Set the active GLAM product by its state public key")
-  .action((state: string) => {
-    try {
-      cliConfig.glamState = new PublicKey(state);
-      console.log("Set active GLAM to:", state);
-    } catch (e) {
-      console.error("Not a valid pubkey:", state);
-      process.exit(1);
-    }
+  .action((state: PublicKey) => {
+    cliConfig.glamState = state;
+    console.log(`Set active GLAM to: ${state}`);
   });
 
 program
-  .command("update-owner <new-owner-pubkey>")
+  .command("update-owner")
+  .argument("<new-owner-pubkey>", "New owner public key", validatePublicKey)
   .description("Update the owner of a GLAM product")
   .option("-y, --yes", "Skip confirmation prompt")
-  .action(async (newOwnerPubkey, options) => {
+  .action(async (newOwner: PublicKey, options) => {
     options?.yes ||
-      (await confirmOperation(`Confirm updating owner to ${newOwnerPubkey}?`));
+      (await confirmOperation(`Confirm updating owner to ${newOwner}?`));
 
-    try {
-      const newOwner = new PublicKey(newOwnerPubkey);
-      await glamClient.state.update({
-        owner: {
-          portfolioManagerName: null,
-          pubkey: newOwner,
-          kind: { wallet: {} },
-        },
-      });
-      console.log(`Updated GLAM owner to ${newOwnerPubkey}`);
-    } catch (e) {
-      console.error("Not a valid pubkey:", newOwnerPubkey);
-      process.exit(1);
-    }
+    const txSig = await glamClient.state.update({
+      owner: {
+        portfolioManagerName: null,
+        pubkey: newOwner,
+        kind: { wallet: {} },
+      },
+    });
+    console.log(`Updated GLAM owner to ${newOwner}: ${txSig}`);
   });
 
 program
@@ -188,22 +210,19 @@ program
   });
 
 program
-  .command("view [state]")
+  .command("view")
+  .argument("[state]", "GLAM state public key", validatePublicKey)
   .description("View a GLAM product by its state pubkey")
   .option("-c, --compact", "Compact output")
-  .action(async (state: string | null, options) => {
-    try {
-      const statePda = state ? new PublicKey(state) : cliConfig.glamState;
-      const glamStateModel = await glamClient.fetchStateModel(statePda);
-      console.log(
-        options?.compact
-          ? JSON.stringify(glamStateModel)
-          : JSON.stringify(glamStateModel, null, 2),
-      );
-    } catch (e) {
-      console.error("Not a valid GLAM state pubkey:", state);
-      process.exit(1);
-    }
+  .action(async (state: PublicKey | null, options) => {
+    const glamStateModel = await glamClient.fetchStateModel(
+      state || cliConfig.glamState,
+    );
+    console.log(
+      options?.compact
+        ? JSON.stringify(glamStateModel)
+        : JSON.stringify(glamStateModel, null, 2),
+    );
   });
 
 program
@@ -211,23 +230,34 @@ program
   .description("Create a new GLAM product from a json file")
   .action(async (file) => {
     const data = fs.readFileSync(file, "utf8");
-    const glamState = JSON.parse(data);
 
-    // Convert pubkey strings to PublicKey objects
-    glamState.mints?.forEach((mint) => {
-      mint.asset = new PublicKey(mint.asset);
-      mint.permanentDelegate = mint.permanentDelegate
-        ? new PublicKey(mint.permanentDelegate)
-        : null;
-    });
-    glamState.assets = glamState.assets.map((a) => new PublicKey(a));
-    glamState.accountType = { [glamState.accountType]: {} };
+    let stateModel = null;
+    const json = JSON.parse(data);
+
+    if (json.accountType === "fund") {
+      stateModel = fundJsonToStateModel(json);
+    } else {
+      stateModel = { ...json };
+      stateModel.mints?.forEach((mint) => {
+        mint.asset = new PublicKey(mint.asset);
+        mint.permanentDelegate = mint.permanentDelegate
+          ? new PublicKey(mint.permanentDelegate)
+          : null;
+      });
+      stateModel.assets = stateModel.assets.map((a) => new PublicKey(a));
+      stateModel.accountType = { [stateModel.accountType]: {} };
+    }
 
     try {
-      const [txSig] = await glamClient.state.create(glamState);
-      console.log("txSig:", txSig);
-      console.log("GLAM state created:", glamClient.statePda.toBase58());
-      console.log("Vault:", glamClient.vaultPda.toBase58());
+      const [txSig] = await glamClient.state.create(
+        stateModel,
+        false,
+        txOptions,
+      );
+      console.log("GLAM state created:", txSig);
+      console.log("State PDA:", glamClient.statePda.toBase58());
+      console.log("Vault PDA:", glamClient.vaultPda.toBase58());
+      console.log("Mint PDA:", glamClient.mintPda.toBase58());
 
       cliConfig.glamState = glamClient.statePda;
     } catch (e) {
@@ -237,11 +267,12 @@ program
   });
 
 program
-  .command("close [state]")
+  .command("close")
+  .argument("[state]", "GLAM state public key", validatePublicKey)
   .description("Close a GLAM product by its state pubkey")
   .option("-y, --yes", "Skip confirmation prompt")
-  .action(async (state: string | null, options) => {
-    const statePda = state ? new PublicKey(state) : cliConfig.glamState;
+  .action(async (state: PublicKey | null, options) => {
+    const statePda = state || cliConfig.glamState;
     const glamClient = new GlamClient({ statePda });
 
     options?.yes ||
@@ -262,10 +293,7 @@ program
         preInstructions,
       });
 
-      console.log(
-        `GLAM with state pubkey ${statePda.toBase58()} closed:`,
-        txSig,
-      );
+      console.log(`GLAM with state pubkey ${statePda} closed:`, txSig);
       cliConfig.glamState = null;
     } catch (e) {
       console.error(parseTxError(e));
@@ -274,28 +302,24 @@ program
   });
 
 program
-  .command("withdraw <asset> <amount>")
-  .description("Withdraw <asset> (mint address) from the vault")
+  .command("withdraw")
+  .argument(
+    "<asset>",
+    "Mint pubkey of the asset to withdraw",
+    validatePublicKey,
+  )
+  .argument("<amount>", "Amount to withdraw", parseFloat)
+  .description("Withdraw the specified amount of asset from the vault")
   .option("-y, --yes", "Skip confirmation prompt")
-  .action(async (asset, amount, options) => {
-    const statePda = cliConfig.glamState;
-
-    if (asset.toLowerCase() === "sol") {
-      asset = WSOL.toBase58();
-    }
-    // TODO: support more token symbols
-
-    const { mint } = await glamClient.fetchMintAndTokenProgram(
-      new PublicKey(asset),
-    );
-
+  .action(async (asset: PublicKey, amount: number, options) => {
     options?.yes ||
       (await confirmOperation(`Confirm withdrawal of ${amount} ${asset}?`));
 
+    const { mint } = await glamClient.fetchMintAndTokenProgram(asset);
     try {
       const txSig = await glamClient.state.withdraw(
         new PublicKey(asset),
-        new anchor.BN(parseFloat(amount) * 10 ** mint.decimals),
+        new anchor.BN(amount * 10 ** mint.decimals),
         txOptions,
       );
       console.log(`Withdrawn ${amount} ${asset}:`, txSig);
@@ -306,10 +330,12 @@ program
   });
 
 program
-  .command("wrap <amount>")
+  .command("wrap")
+  .argument("<amount>", "Amount to wrap", parseFloat)
   .description("Wrap SOL")
-  .action(async (amount) => {
-    const lamports = new anchor.BN(parseFloat(amount) * LAMPORTS_PER_SOL);
+  .action(async (amount: number) => {
+    const lamports = new anchor.BN(amount * LAMPORTS_PER_SOL);
+
     if (lamports.lte(new anchor.BN(0))) {
       console.error("Error: amount must be greater than 0");
       process.exit(1);
@@ -435,7 +461,10 @@ installAltCommands(alt, glamClient, cliConfig, txOptions);
 
 //
 // Run the CLI in development mode as follows:
-// npx nx run cli:dev -- --args="view <pubkey>"
+// npx nx run cli:dev -- --args="cmd [arg]"
+//
+// For example:
+// npx nx run cli:dev -- --args="list -a"
 //
 if (process.env.NODE_ENV === "development") {
   const argv = [
@@ -447,4 +476,3 @@ if (process.env.NODE_ENV === "development") {
 } else {
   program.parse(process.argv);
 }
-globalOpts = program.opts();
