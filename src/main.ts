@@ -30,6 +30,7 @@ import { installDelegateCommands } from "./cmds/delegate";
 import { installSwapCommands } from "./cmds/swap";
 import { installInvestCommands } from "./cmds/invest";
 import { installAltCommands } from "./cmds/alt";
+import { installStakeCommands } from "./cmds/stake";
 
 let cliConfig: CliConfig;
 let glamClient: GlamClient;
@@ -441,6 +442,9 @@ installMarinadeCommands(marinade, glamClient, cliConfig, txOptions);
 
 const lst = program.command("lst").description("Liquid staking");
 installLstCommands(lst, glamClient, cliConfig, txOptions);
+
+const stake = program.command("stake").description("Native staking");
+installStakeCommands(stake, glamClient, cliConfig, txOptions);
 
 const meteora = program.command("meteora").description("Meteora DLMM");
 installMeteoraCommands(meteora, glamClient, cliConfig, txOptions);

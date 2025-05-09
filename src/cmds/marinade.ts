@@ -25,6 +25,23 @@ export function installMarinadeCommands(
         throw e;
       }
     });
+
+  marinade
+    .command("stake-native <amount>")
+    .description("Stake <amount> SOL")
+    .action(async (amount, options) => {
+      try {
+        const txSig = await glamClient.marinade.depositNative(
+          new BN(parseFloat(amount) * LAMPORTS_PER_SOL),
+          txOptions,
+        );
+        console.log(`Staked ${amount} SOL to Marinade:`, txSig);
+      } catch (e) {
+        console.error(parseTxError(e));
+        throw e;
+      }
+    });
+
   marinade
     .command("list")
     .description("List all Marinade tickets")

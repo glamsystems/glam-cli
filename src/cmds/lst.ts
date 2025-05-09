@@ -43,46 +43,4 @@ export function installLstCommands(
         process.exit(1);
       }
     });
-  lst
-    .command("list")
-    .description("List all stake accounts")
-    .action(async () => {
-      try {
-        let stakeAccounts =
-          await glamClient.staking.getStakeAccountsWithStates();
-        console.log(
-          "Account                                     ",
-          "\t",
-          "Lamports",
-          "\t",
-          "State",
-        );
-        stakeAccounts.forEach((acc: any) => {
-          console.log(
-            acc.address.toBase58(),
-            "\t",
-            acc.lamports,
-            "\t",
-            acc.state,
-          );
-        });
-      } catch (e) {
-        console.error(e);
-        process.exit(1);
-      }
-    });
-  lst
-    .command("withdraw <accounts...>")
-    .description("Withdraw staking accounts (space-separated pubkeys)")
-    .action(async (accounts) => {
-      try {
-        const txSig = await glamClient.staking.withdraw(
-          accounts.map((addr: string) => new PublicKey(addr)),
-        );
-        console.log(`Withdrew from ${accounts}:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
-    });
 }
