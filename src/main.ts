@@ -1,11 +1,9 @@
-import * as anchor from "@coral-xyz/anchor";
 import {
-  WSOL,
   getPriorityFeeEstimate,
   GlamClient,
   TxOptions,
 } from "@glamsystems/glam-sdk";
-import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
 import { Command } from "commander";
 
 import fs from "fs";
@@ -31,6 +29,7 @@ import { installSwapCommands } from "./cmds/swap";
 import { installInvestCommands } from "./cmds/invest";
 import { installAltCommands } from "./cmds/alt";
 import { installStakeCommands } from "./cmds/stake";
+import { installVaultCommands } from "./cmds/vault";
 
 let cliConfig: CliConfig;
 let glamClient: GlamClient;
@@ -302,126 +301,8 @@ program
     }
   });
 
-program
-  .command("withdraw")
-  .argument(
-    "<asset>",
-    "Mint pubkey of the asset to withdraw",
-    validatePublicKey,
-  )
-  .argument("<amount>", "Amount to withdraw", parseFloat)
-  .description("Withdraw the specified amount of asset from the vault")
-  .option("-y, --yes", "Skip confirmation prompt")
-  .action(async (asset: PublicKey, amount: number, options) => {
-    options?.yes ||
-      (await confirmOperation(`Confirm withdrawal of ${amount} ${asset}?`));
-
-    const { mint } = await glamClient.fetchMintAndTokenProgram(asset);
-    try {
-      const txSig = await glamClient.state.withdraw(
-        new PublicKey(asset),
-        new anchor.BN(amount * 10 ** mint.decimals),
-        txOptions,
-      );
-      console.log(`Withdrawn ${amount} ${asset}:`, txSig);
-    } catch (e) {
-      console.error(parseTxError(e));
-      process.exit(1);
-    }
-  });
-
-program
-  .command("wrap")
-  .argument("<amount>", "Amount to wrap", parseFloat)
-  .description("Wrap SOL")
-  .action(async (amount: number) => {
-    const lamports = new anchor.BN(amount * LAMPORTS_PER_SOL);
-
-    if (lamports.lte(new anchor.BN(0))) {
-      console.error("Error: amount must be greater than 0");
-      process.exit(1);
-    }
-
-    try {
-      const txSig = await glamClient.wsol.wrap(lamports, txOptions);
-      console.log(`Wrapped ${amount} SOL:`, txSig);
-    } catch (e) {
-      console.error(parseTxError(e));
-      process.exit(1);
-    }
-  });
-
-program
-  .command("unwrap")
-  .description("Unwrap wSOL")
-  .action(async () => {
-    try {
-      const txSig = await glamClient.wsol.unwrap(txOptions);
-      console.log(`All wSOL unwrapped:`, txSig);
-    } catch (e) {
-      console.error(parseTxError(e));
-      process.exit(1);
-    }
-  });
-
-program
-  .command("balances")
-  .description("Get balances")
-  .option(
-    "-a, --all",
-    "Show all assets including token accounts with 0 balance",
-  )
-  .action(async (options) => {
-    const { all } = options;
-    const vault = glamClient.vaultPda;
-    const { uiAmount: solUiAmount, tokenAccounts } =
-      await glamClient.getSolAndTokenBalances(vault);
-
-    const mints = tokenAccounts.map((ta) => ta.mint.toBase58());
-    if (!mints.includes(WSOL.toBase58())) {
-      mints.push(WSOL.toBase58());
-    }
-    const pricesResp = await fetch(
-      `https://api.jup.ag/price/v2?ids=${mints.join(",")}`,
-    );
-    const tokensResp = await fetch(
-      "https://tokens.jup.ag/tokens?tags=verified",
-    );
-
-    const { data: pricesData } = await pricesResp.json();
-    const tokens = await tokensResp.json(); // an array of tokens
-
-    console.log("Token", "\t", "Mint", "\t", "Amount", "\t", "Value (USD)");
-    console.log(
-      "SOL",
-      "\t",
-      "N/A",
-      "\t",
-      solUiAmount,
-      "\t",
-      parseFloat(pricesData[WSOL.toBase58()].price) * solUiAmount,
-    );
-    tokenAccounts.forEach((ta) => {
-      const { uiAmount, mint } = ta;
-      const mintStr = mint.toBase58();
-
-      if (all || uiAmount > 0) {
-        const token = tokens.find((t) => t.address === mintStr);
-
-        console.log(
-          token.symbol === "SOL" ? "wSOL" : token.symbol,
-          "\t",
-          mintStr,
-          "\t",
-          uiAmount,
-          "\t",
-          parseFloat(pricesData[mintStr].price) * uiAmount,
-        );
-      }
-    });
-  });
-
 installSwapCommands(program, glamClient, cliConfig, txOptions);
+installVaultCommands(program, glamClient, cliConfig, txOptions);
 
 const delegate = program.command("delegate").description("Manage delegates");
 installDelegateCommands(delegate, glamClient, cliConfig, txOptions);
