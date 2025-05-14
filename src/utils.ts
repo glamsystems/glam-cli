@@ -158,6 +158,7 @@ export function fundJsonToStateModel(json: any) {
   const converted = {
     ...json,
     assets: json.assets.map((asset: string) => new PublicKey(asset)),
+    baseAsset: new PublicKey(json.baseAsset),
     accountType: { [json.accountType]: {} },
     timeUnit: { [json.timeUnit]: {} },
     owner: new ManagerModel({

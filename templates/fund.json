@@ -2,10 +2,7 @@
   "accountType": "fund",
   "name": "GLAM SOL",
   "enabled": true,
-  "assets": [
-    "So11111111111111111111111111111111111111112",
-    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
-  ],
+  "assets": ["So11111111111111111111111111111111111111112"],
   "owner": { "portfolioManagerName": "glamsystems.sol" },
   "updateTimelock": 0,
   "timeUnit": "slot",
@@ -16,6 +13,7 @@
     "emailAddressOfManCo": "hello@glam.systems",
     "fundWebsiteOfManCo": "https://glam.systems"
   },
+  "baseAsset": "So11111111111111111111111111111111111111112",
   "mints": [
     {
       "name": "GLAM SOL",
