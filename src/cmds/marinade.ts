@@ -43,6 +43,22 @@ export function installMarinadeCommands(
     });
 
   marinade
+    .command("withdraw-stake <amount>")
+    .description("Withdraw <amount> mSOL into a stake account")
+    .action(async (amount, options) => {
+      try {
+        const txSig = await glamClient.marinade.withdrawStakeAccount(
+          new BN(parseFloat(amount) * LAMPORTS_PER_SOL),
+          txOptions,
+        );
+        console.log(`Withdraw ${amount} mSOL:`, txSig);
+      } catch (e) {
+        console.error(parseTxError(e));
+        throw e;
+      }
+    });
+
+  marinade
     .command("list")
     .description("List all Marinade tickets")
     .action(async () => {

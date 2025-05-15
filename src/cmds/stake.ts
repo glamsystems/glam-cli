@@ -1,8 +1,7 @@
-import { BN } from "@coral-xyz/anchor";
 import { Command } from "commander";
 import { GlamClient, TxOptions } from "@glamsystems/glam-sdk";
-import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
-import { CliConfig, parseTxError, validatePublicKey } from "../utils";
+import { PublicKey } from "@solana/web3.js";
+import { CliConfig, parseTxError } from "../utils";
 
 export function installStakeCommands(
   stake: Command,
