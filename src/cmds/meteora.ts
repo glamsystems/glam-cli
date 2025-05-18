@@ -5,7 +5,8 @@ import {
   TxOptions,
 } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
-import { CliConfig, parseTxError } from "../utils";
+import { CliConfig, parseTxError, validatePublicKey } from "../utils";
+import { PublicKey } from "@solana/web3.js";
 
 export function installMeteoraCommands(
   meteora: Command,
@@ -45,22 +46,56 @@ export function installMeteoraCommands(
     });
 
   meteora
-    .command("add <position> <amountX> <amountY> <strategy>")
-    .description("Add liquidity to position")
-    .action(async (position, amountX, amountY, strategy) => {
-      try {
-        const txSig = await glamClient.meteoraDlmm.addLiquidityByStrategy(
-          position,
-          new BN(amountX),
-          new BN(amountY),
-          strategy.toString(),
+    .command("add")
+    .argument("<position>", "Position pubkey", validatePublicKey)
+    .argument("<amountX>", "Amount of X token", parseFloat)
+    .argument("<amountY>", "Amount of Y token", parseFloat)
+    .argument(
+      "<strategy>",
+      "Strategy, must be one of: Spot, BidAsk, Curve",
+      (value) => {
+        if (["Spot", "BidAsk", "Curve"].includes(value)) {
+          return value;
+        }
+        throw new Error(
+          `Invalid strategy input: ${value}. Must be one of: Spot, BidAsk, Curve`,
         );
-        console.log(`Added liquidity to ${position}:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
-    });
+      },
+    )
+    .option(
+      "-m, --max-active-bin-slippage <maxActiveBinSlippage>",
+      "Max active bin slippage BPS, default is 10 BPS (0.1%)",
+    )
+    .description("Add liquidity to position")
+    .action(
+      async (
+        position: PublicKey,
+        amountX: number,
+        amountY: number,
+        strategy: string,
+        options,
+      ) => {
+        const maxActiveBinSlippage = parseInt(
+          options.maxActiveBinSlippage || 10,
+        );
+        const strategyType = strategy + "ImBalanced";
+
+        try {
+          const txSig = await glamClient.meteoraDlmm.addLiquidityByStrategy(
+            position,
+            new BN(amountX),
+            new BN(amountY),
+            strategyType as any,
+            maxActiveBinSlippage,
+            txOptions,
+          );
+          console.log(`Added liquidity to ${position}:`, txSig);
+        } catch (e) {
+          console.error(parseTxError(e));
+          process.exit(1);
+        }
+      },
+    );
 
   meteora
     .command("remove <position> <bps>")
