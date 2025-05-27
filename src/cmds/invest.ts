@@ -4,6 +4,7 @@ import {
   GlamClient,
   PriceDenom,
   TxOptions,
+  USDC,
   WSOL,
 } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
@@ -22,8 +23,6 @@ export function installInvestCommands(
     .option("-y, --yes", "Skip confirmation prompt")
     .option("-q, --queued", "Subscribe to a tokenized vault in queued mode")
     .action(async (amount, options) => {
-      const amountBN = new BN(parseFloat(amount) * LAMPORTS_PER_SOL);
-
       const lookupTables = [
         ...(await fetchLookupTables(
           glamClient.provider.connection,
@@ -32,23 +31,33 @@ export function installInvestCommands(
         )),
       ];
 
+      const stateModel = await glamClient.fetchStateModel();
+      const baseAsset = stateModel.baseAsset;
+      if (!baseAsset.equals(WSOL) && !baseAsset.equals(USDC)) {
+        throw new Error(`Vault base asset ${baseAsset} is not supported.`);
+      }
+      const symbol = baseAsset.equals(WSOL) ? "SOL" : "USDC";
+
       options?.yes ||
         (await confirmOperation(
-          `Confirm ${options?.queued ? "queued" : "instant"} subscription with ${amount} SOL?`,
+          `Confirm ${options?.queued ? "queued" : "instant"} subscription with ${amount} ${symbol}?`,
         ));
+
+      const decimals = baseAsset.equals(WSOL) ? 9 : 6;
+      const priceDenom = baseAsset.equals(WSOL)
+        ? PriceDenom.SOL
+        : PriceDenom.USD;
 
       try {
         const txSig = await glamClient.investor.subscribe(
-          WSOL,
-          amountBN,
+          stateModel.baseAsset,
+          new BN(parseFloat(amount) * 10 ** decimals),
           0,
           !!options?.queued,
           {
             ...txOptions,
             lookupTables,
-            preInstructions: await glamClient.price.priceVaultIxs(
-              PriceDenom.SOL,
-            ),
+            preInstructions: await glamClient.price.priceVaultIxs(priceDenom),
           },
         );
         console.log(`${glamClient.signer} instant subscription:`, txSig);
