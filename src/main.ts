@@ -180,6 +180,23 @@ program
   });
 
 program
+  .command("add-asset")
+  .argument("<asset>", "New asset public key", validatePublicKey)
+  .description("Add a new asset to the GLAM")
+  .action(async (asset: PublicKey, options) => {
+    const stateModel = await glamClient.fetchStateModel();
+    const assetsSet = new Set(
+      [...stateModel.assets, asset].map((a) => a.toBase58()),
+    );
+    const assets = Array.from(assetsSet).map((a) => new PublicKey(a));
+
+    const txSig = await glamClient.state.update({
+      assets,
+    });
+    console.log(`Added asset ${asset}: ${txSig}`);
+  });
+
+program
   .command("set-enabled <enabled>")
   .description("Set GLAM state enabled or disabled")
   .option("-y, --yes", "Skip confirmation prompt")

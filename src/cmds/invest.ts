@@ -8,8 +8,14 @@ import {
   WSOL,
 } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
-import { CliConfig, confirmOperation, parseTxError } from "../utils";
+import {
+  CliConfig,
+  confirmOperation,
+  parseTxError,
+  validatePublicKey,
+} from "../utils";
 import { LAMPORTS_PER_SOL, Transaction } from "@solana/web3.js";
+import tokens from "../tokens-verified.json";
 
 export function installInvestCommands(
   tokenized: Command,
@@ -18,11 +24,22 @@ export function installInvestCommands(
   txOptions: TxOptions,
 ) {
   tokenized
-    .command("sub <amount>")
+    .command("sub")
+    .argument("<amount>", "Amount to subscribe", parseFloat)
+    .argument(
+      "[state]",
+      "State pubkey of the vault to subscribe to. Leave empty to use the active GLAM in CLI config.",
+      validatePublicKey,
+    )
     .description("Subscribe to a tokenized vault")
     .option("-y, --yes", "Skip confirmation prompt")
     .option("-q, --queued", "Subscribe to a tokenized vault in queued mode")
-    .action(async (amount, options) => {
+    .action(async (amount, state, options) => {
+      // Override default glamClient if state is provided
+      if (state) {
+        glamClient = new GlamClient({ statePda: state });
+      }
+
       const lookupTables = [
         ...(await fetchLookupTables(
           glamClient.provider.connection,
@@ -33,25 +50,39 @@ export function installInvestCommands(
 
       const stateModel = await glamClient.fetchStateModel();
       const baseAsset = stateModel.baseAsset;
-      if (!baseAsset.equals(WSOL) && !baseAsset.equals(USDC)) {
-        throw new Error(`Vault base asset ${baseAsset} is not supported.`);
+
+      let name, symbol, decimals;
+      const metadata = tokens.find((t) => t.address === baseAsset.toString());
+      if (!metadata) {
+        console.warn(`Base asset ${baseAsset} is unverified`);
       }
-      const symbol = baseAsset.equals(WSOL) ? "SOL" : "USDC";
+      if (metadata) {
+        name = metadata.name;
+        symbol = metadata.symbol;
+        decimals = metadata.decimals;
+      } else {
+        const { mint } = await glamClient.fetchMintAndTokenProgram(baseAsset);
+        name = baseAsset.toBase58();
+        symbol = "token";
+        decimals = mint.decimals;
+      }
 
       options?.yes ||
         (await confirmOperation(
-          `Confirm ${options?.queued ? "queued" : "instant"} subscription with ${amount} ${symbol}?`,
+          `Confirm ${options?.queued ? "queued" : "instant"} subscription with ${amount} ${symbol} (${name})?`,
         ));
 
-      const decimals = baseAsset.equals(WSOL) ? 9 : 6;
       const priceDenom = baseAsset.equals(WSOL)
         ? PriceDenom.SOL
-        : PriceDenom.USD;
+        : baseAsset.equals(USDC)
+          ? PriceDenom.USD
+          : PriceDenom.ASSET;
+      const amountBN = new BN(amount * 10 ** decimals);
 
       try {
         const txSig = await glamClient.investor.subscribe(
           stateModel.baseAsset,
-          new BN(parseFloat(amount) * 10 ** decimals),
+          amountBN,
           0,
           !!options?.queued,
           {
@@ -107,11 +138,14 @@ export function installInvestCommands(
         )),
       ];
 
+      const stateModel = await glamClient.fetchStateModel();
+      const asset = stateModel.baseAsset!;
+      const priceDenom = PriceDenom.fromAsset(asset);
       try {
-        const txSig = await glamClient.investor.fulfill(WSOL, 0, {
+        const txSig = await glamClient.investor.fulfill(0, {
           ...txOptions,
           lookupTables,
-          preInstructions: await glamClient.price.priceVaultIxs(PriceDenom.SOL),
+          preInstructions: await glamClient.price.priceVaultIxs(priceDenom),
           simulate: true,
         });
         console.log(`${glamClient.signer} triggered fulfillment:`, txSig);
@@ -152,13 +186,6 @@ export function installInvestCommands(
     .description("Request to redeem share tokens")
     .option("-y, --yes", "Skip confirmation prompt")
     .action(async (amount, options) => {
-      const lookupTables = [
-        ...(await fetchLookupTables(
-          glamClient.provider.connection,
-          glamClient.getSigner(),
-          glamClient.statePda,
-        )),
-      ];
       const amountBN = new BN(parseFloat(amount) * LAMPORTS_PER_SOL);
 
       options?.yes ||
@@ -167,18 +194,9 @@ export function installInvestCommands(
         ));
 
       try {
-        const txSig = await glamClient.investor.queuedRedeem(
-          WSOL,
-          amountBN,
-          0,
-          {
-            ...txOptions,
-            lookupTables,
-            preInstructions: await glamClient.price.priceVaultIxs(
-              PriceDenom.SOL,
-            ),
-          },
-        );
+        const txSig = await glamClient.investor.queuedRedeem(amountBN, 0, {
+          ...txOptions,
+        });
         console.log(`${glamClient.signer} requested to redeem:`, txSig);
       } catch (e) {
         console.error(parseTxError(e));
