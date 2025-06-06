@@ -33,7 +33,7 @@ export function installIntegrationCommands(
   const allowIntegrations = GlamIntegrations.map(
     (i) => i.slice(0, 1).toLowerCase() + i.slice(1),
   );
-  const integrationValidation = (input) => {
+  const validateIntegration = (input) => {
     if (!allowIntegrations.includes(input)) {
       console.error(
         `Invalid input: "${input}". Allowed values are: ${allowIntegrations.join(", ")}`,
@@ -49,7 +49,7 @@ export function installIntegrationCommands(
     .argument(
       "<integration>",
       `Integration to enable (must be one of: ${allowIntegrations.join(", ")})`,
-      integrationValidation,
+      validateIntegration,
     )
     .action(async (integration) => {
       const stateModel = await glamClient.fetchStateModel();
@@ -83,7 +83,7 @@ export function installIntegrationCommands(
     .argument(
       "<integration>",
       `Integration to disable (must be one of: ${allowIntegrations.join(", ")})`,
-      integrationValidation,
+      validateIntegration,
     )
     .action(async (integration) => {
       const stateModel = await glamClient.fetchStateModel();
