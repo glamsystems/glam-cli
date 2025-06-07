@@ -469,4 +469,18 @@ export function installDriftCommands(
         process.exit(1);
       }
     });
+
+  drift
+    .command("vault-withdraw")
+    .argument("<vault>", "Drift vault public key", validatePublicKey)
+    .description("Claim withdrawal")
+    .action(async (vault) => {
+      try {
+        const txSig = await glamClient.driftVaults.withdraw(vault, txOptions);
+        console.log(`Confirmed withdrawal from drift vault ${vault}: ${txSig}`);
+      } catch (e) {
+        console.error(e);
+        process.exit(1);
+      }
+    });
 }
