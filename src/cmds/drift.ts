@@ -373,6 +373,19 @@ export function installDriftCommands(
     });
 
   drift
+    .command("list-vault-depositors")
+    .description("List vault depositors accounts")
+    .action(async () => {
+      const parsedVaultDepositors =
+        await glamClient.driftVaults.findAndParseVaultDepositors();
+      parsedVaultDepositors.map(({ address, driftVault, shares }, i) => {
+        console.log(
+          `[${i}] Depositor: ${address}, vault: ${driftVault}, shares: ${shares}`,
+        );
+      });
+    });
+
+  drift
     .command("init-vault-depositor")
     .argument("<vault>", "Drift vault public key", validatePublicKey)
     .description("Initialize vault depositor")

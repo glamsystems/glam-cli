@@ -1,13 +1,7 @@
-import {
-  ASSETS_MAINNET,
-  fetchKaminoObligations,
-  GlamClient,
-  PriceDenom,
-  TxOptions,
-} from "@glamsystems/glam-sdk";
+import { ASSETS_MAINNET, GlamClient, TxOptions } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
 import { CliConfig, confirmOperation, parseTxError } from "../utils";
-import { PublicKey, Transaction } from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
 
 export function installKlendCommands(
   klend: Command,
@@ -36,15 +30,15 @@ export function installKlendCommands(
       const vault = glamClient.vaultPda;
       const lendingMarket = market ? new PublicKey(market) : null;
 
-      const obligations = await fetchKaminoObligations(
-        glamClient.provider.connection,
-        vault,
-        lendingMarket,
-      );
+      const obligations =
+        await glamClient.kaminoLending.findAndParseObligations(
+          vault,
+          lendingMarket,
+        );
 
       console.log(
         "Obligations:",
-        obligations.map((o) => o.toBase58()),
+        obligations.map((o) => o.address.toBase58()),
       );
     });
 
