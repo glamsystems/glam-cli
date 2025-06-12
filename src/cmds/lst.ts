@@ -2,7 +2,7 @@ import { BN } from "@coral-xyz/anchor";
 import { Command } from "commander";
 import { GlamClient, TxOptions } from "@glamsystems/glam-sdk";
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
-import { CliConfig, parseTxError } from "../utils";
+import { CliConfig, parseTxError, validatePublicKey } from "../utils";
 
 export function installLstCommands(
   lst: Command,
@@ -28,13 +28,19 @@ export function installLstCommands(
       }
     });
   lst
-    .command("unstake <asset> <amount>")
+    .command("unstake")
+    .argument("<asset>", "LST mint address", validatePublicKey)
+    .argument("<amount>", "Amount to unstake", parseFloat)
+    .option("-d, --deactivate", "Deactivate the stake account", false)
     .description("Unstake <amount> worth of <asset> (mint address)")
-    .action(async (asset, amount) => {
+    .action(async (asset, amount, options) => {
+      const amountBN = new BN(amount * LAMPORTS_PER_SOL);
+
       try {
         const txSig = await glamClient.staking.unstake(
-          new PublicKey(asset),
-          new BN(parseFloat(amount) * LAMPORTS_PER_SOL), // TODO: better decimals (even though all LSTs have 9 right now)
+          asset,
+          amountBN,
+          options.deactivate,
           txOptions,
         );
         console.log(`Unstaked ${amount} ${asset}:`, txSig);

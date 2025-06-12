@@ -43,60 +43,22 @@ export function installMarinadeCommands(
     });
 
   marinade
-    .command("withdraw-stake <amount>")
+    .command("withdraw-stake")
+    .argument("<amount>", "mSOL amount", parseFloat)
+    .option("-d, --deactivate", "Deactivate the stake account", false)
     .description("Withdraw <amount> mSOL into a stake account")
     .action(async (amount, options) => {
+      const amountBN = new BN(amount * LAMPORTS_PER_SOL);
       try {
         const txSig = await glamClient.marinade.withdrawStakeAccount(
-          new BN(parseFloat(amount) * LAMPORTS_PER_SOL),
+          amountBN,
+          options.deactivate,
           txOptions,
         );
         console.log(`Withdraw ${amount} mSOL:`, txSig);
       } catch (e) {
         console.error(parseTxError(e));
         throw e;
-      }
-    });
-
-  marinade
-    .command("list")
-    .description("List all Marinade tickets")
-    .action(async () => {
-      try {
-        let stakeAccounts = await glamClient.marinade.getParsedTickets();
-        console.log(
-          "Ticket                                      ",
-          "\t",
-          "Lamports",
-          "\t",
-          "State",
-        );
-        stakeAccounts.forEach((acc: any) => {
-          console.log(
-            acc.address.toBase58(),
-            "\t",
-            acc.lamports,
-            "\t",
-            acc.isClaimable ? "Claimable" : "Pending",
-          );
-        });
-      } catch (e) {
-        console.error(e);
-        process.exit(1);
-      }
-    });
-  marinade
-    .command("claim <tickets...>")
-    .description("Claim Marinade tickets (space-separated)")
-    .action(async (tickets) => {
-      try {
-        const txSig = await glamClient.marinade.claim(
-          tickets.map((addr: string) => new PublicKey(addr)),
-        );
-        console.log(`Claimed ${tickets}:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
       }
     });
 }
