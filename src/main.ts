@@ -284,6 +284,25 @@ program
   });
 
 program
+  .command("extend")
+  .argument("<bytes>", "New bytes", parseInt)
+  .description("Extend GLAM state account size")
+  .action(async (bytes) => {
+    const statePda = cliConfig.glamState;
+    const glamClient = new GlamClient({ statePda });
+    try {
+      const txSig = await glamClient.state.extend(bytes);
+      console.log(
+        `GLAM state account ${statePda} extended by ${bytes} bytes:`,
+        txSig,
+      );
+    } catch (e) {
+      console.error(parseTxError(e));
+      process.exit(1);
+    }
+  });
+
+program
   .command("close")
   .argument("[state]", "GLAM state public key", validatePublicKey)
   .description("Close a GLAM product by its state pubkey")
