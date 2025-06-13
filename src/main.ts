@@ -17,11 +17,13 @@ import {
 } from "./utils";
 import { VersionedTransaction } from "@solana/web3.js";
 import { installDriftCommands } from "./cmds/drift";
+import { installDriftVaultsCommands } from "./cmds/drift-vaults";
 import { installMintCommands } from "./cmds/mint";
 import { installMeteoraCommands } from "./cmds/meteora";
 import { installLstCommands } from "./cmds/lst";
 import { installMarinadeCommands } from "./cmds/marinade";
-import { installKlendCommands } from "./cmds/klend";
+import { installKLendCommands } from "./cmds/klend";
+import { installKVaultsCommands } from "./cmds/kvaults";
 import { installJupCommands } from "./cmds/jup";
 import { installIntegrationCommands } from "./cmds/integration";
 import { installDelegateCommands } from "./cmds/delegate";
@@ -351,8 +353,11 @@ installIntegrationCommands(integration, glamClient, cliConfig, txOptions);
 const jup = program.command("jup").description("JUP staking");
 installJupCommands(jup, glamClient, cliConfig, txOptions);
 
-const klend = program.command("klend").description("Kamino Lending");
-installKlendCommands(klend, glamClient, cliConfig, txOptions);
+const klend = program.command("klend").description("Kamino lending");
+installKLendCommands(klend, glamClient, cliConfig, txOptions);
+
+const kvaults = program.command("kvaults").description("Kamino vaults");
+installKVaultsCommands(kvaults, glamClient, cliConfig, txOptions);
 
 const marinade = program.command("marinade").description("Marinade staking");
 installMarinadeCommands(marinade, glamClient, cliConfig, txOptions);
@@ -368,6 +373,9 @@ installMeteoraCommands(meteora, glamClient, cliConfig, txOptions);
 
 const drift = program.command("drift").description("Drift operations");
 installDriftCommands(drift, glamClient, cliConfig, txOptions);
+
+const driftVaults = program.command("drift-vaults").description("Drift vaults");
+installDriftVaultsCommands(driftVaults, glamClient, cliConfig, txOptions);
 
 const mint = program.command("mint").description("Mint operations");
 installMintCommands(mint, glamClient, cliConfig, txOptions);

@@ -3,7 +3,7 @@ import { Command } from "commander";
 import { CliConfig, confirmOperation, parseTxError } from "../utils";
 import { PublicKey } from "@solana/web3.js";
 
-export function installKlendCommands(
+export function installKLendCommands(
   klend: Command,
   glamClient: GlamClient,
   cliConfig: CliConfig,
