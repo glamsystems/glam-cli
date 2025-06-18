@@ -143,13 +143,13 @@ export function installVaultCommands(
           const token = tokens.find((t) => t.address === mintStr);
 
           console.log(
-            token.symbol === "SOL" ? "wSOL" : token.symbol,
+            token?.symbol === "SOL" ? "wSOL" : token?.symbol || "Unknown",
             "\t",
             mintStr,
             "\t",
             uiAmount,
             "\t",
-            parseFloat(pricesData[mintStr].price) * uiAmount,
+            parseFloat(pricesData[mintStr]?.price) * uiAmount,
           );
         }
       });

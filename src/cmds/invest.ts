@@ -102,7 +102,6 @@ export function installInvestCommands(
     .command("price")
     .description("Price vault assets")
     .action(async () => {
-      const glamVault = glamClient.vaultPda;
       const lookupTables = [
         ...(await fetchLookupTables(
           glamClient.provider.connection,
@@ -111,7 +110,7 @@ export function installInvestCommands(
         )),
       ];
 
-      const ixs = await glamClient.price.priceVaultIxs(PriceDenom.SOL);
+      const ixs = await glamClient.price.priceVaultIxs(PriceDenom.USD);
       const tx = new Transaction().add(...ixs);
       try {
         const vTx = await glamClient.intoVersionedTransaction(tx, {
