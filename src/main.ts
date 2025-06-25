@@ -76,7 +76,7 @@ let globalOpts = { skipSimulation: false, config: null };
 program
   .name("glam-cli")
   .description("CLI for interacting with the GLAM Protocol")
-  .version("0.1.26")
+  .version("0.1.27")
   // .option("-S, --skip-simulation", "Skip transaction simulation")
   // .option(
   //   "-C, --config <path>",
