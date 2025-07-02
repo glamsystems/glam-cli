@@ -1,4 +1,9 @@
-import { GlamClient, QuoteParams, TxOptions } from "@glamsystems/glam-sdk";
+import {
+  fetchTokensList,
+  GlamClient,
+  QuoteParams,
+  TxOptions,
+} from "@glamsystems/glam-sdk";
 import { Command } from "commander";
 import { CliConfig, confirmOperation, parseTxError } from "../utils";
 
@@ -18,18 +23,13 @@ export function installSwapCommands(
     .action(async (from, to, amount, options) => {
       const { maxAccounts, slippageBps, onlyDirectRoutes } = options;
 
-      const response = await fetch(
-        "https://tokens.jup.ag/tokens?tags=verified",
-      );
-      const data = await response.json(); // an array of tokens
-
-      const tokenFrom = data.find(
-        (t: any) =>
+      const tokenList = await fetchTokensList();
+      const tokenFrom = tokenList.find(
+        (t) =>
           t.address === from || t.symbol.toLowerCase() === from.toLowerCase(),
       );
-      const tokenTo = data.find(
-        (t: any) =>
-          t.address === to || t.symbol.toLowerCase() === to.toLowerCase(),
+      const tokenTo = tokenList.find(
+        (t) => t.address === to || t.symbol.toLowerCase() === to.toLowerCase(),
       );
 
       if (!tokenTo) {
