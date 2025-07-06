@@ -32,6 +32,7 @@ import { installInvestCommands } from "./cmds/invest";
 import { installAltCommands } from "./cmds/alt";
 import { installStakeCommands } from "./cmds/stake";
 import { installVaultCommands } from "./cmds/vault";
+import { installValidatorCommands } from "./cmds/validator";
 
 let cliConfig: CliConfig;
 let glamClient: GlamClient;
@@ -387,6 +388,11 @@ installInvestCommands(invest, glamClient, cliConfig, txOptions);
 
 const alt = program.command("alt").description("Manage address lookup tables");
 installAltCommands(alt, glamClient, cliConfig, txOptions);
+
+const validator = program
+  .command("validator")
+  .description("Validator operations");
+installValidatorCommands(validator, glamClient, cliConfig, txOptions);
 
 //
 // Run the CLI in development mode as follows:

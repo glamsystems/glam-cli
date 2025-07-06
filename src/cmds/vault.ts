@@ -1,4 +1,9 @@
-import { GlamClient, TxOptions, WSOL } from "@glamsystems/glam-sdk";
+import {
+  GlamClient,
+  TxOptions,
+  WSOL,
+  JUPITER_API_DEFAULT,
+} from "@glamsystems/glam-sdk";
 import { Command } from "commander";
 import {
   CliConfig,
@@ -116,7 +121,7 @@ export function installVaultCommands(
         mints.push(WSOL.toBase58());
       }
       const pricesResp = await fetch(
-        `https://api.jup.ag/price/v2?ids=${mints.join(",")}`,
+        `${JUPITER_API_DEFAULT}/price/v2?ids=${mints.join(",")}`,
       );
       const tokensResp = await fetch(
         "https://tokens.jup.ag/tokens?tags=verified",
