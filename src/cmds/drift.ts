@@ -7,6 +7,7 @@ import {
   PositionDirection,
   TxOptions,
 } from "@glamsystems/glam-sdk";
+import { PublicKey } from "@solana/web3.js";
 import { Command } from "commander";
 import { CliConfig, confirmOperation, parseTxError } from "../utils";
 
@@ -362,6 +363,32 @@ export function installDriftCommands(
         console.log(`Deleted drift user: ${txSig}`);
       } catch (e) {
         console.error(parseTxError(e));
+        process.exit(1);
+      }
+    });
+
+  drift
+    .command("claim")
+    .description("")
+    .action(async () => {
+      const response = await fetch(
+        `https://airdrop-fuel-1.drift.trade/eligibility/${glamClient.vaultPda}`,
+      );
+      const data = await response.json();
+      const { merkle_tree, proof, claimable_amount, locked_amount } = data;
+      const distributor = new PublicKey(merkle_tree);
+
+      try {
+        const txSig = await glamClient.drift.claim(
+          distributor,
+          new BN(claimable_amount),
+          new BN(locked_amount),
+          proof,
+          txOptions,
+        );
+        console.log(`${claimable_amount / 1e6} DRIFT claimed: ${txSig}`);
+      } catch (e) {
+        console.error(e);
         process.exit(1);
       }
     });
