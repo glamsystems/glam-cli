@@ -19,13 +19,41 @@ export function installDriftCommands(
 ) {
   drift
     .command("init")
+    .option("-s, --sub-account-id <sub_account_id>", "Sub account ID", "0")
+    .option("-y, --yes", "Skip confirmation prompt")
     .description("Initialize drift user")
-    .action(async () => {
+    .action(async (options) => {
+      const subAccountId = parseInt(options.subAccountId);
+
+      options?.yes ||
+        (await confirmOperation(
+          `Initializing drift user for sub account ${subAccountId}`,
+        ));
+
       try {
-        const txSig = await glamClient.drift.initialize(0, txOptions);
+        const txSig = await glamClient.drift.initialize(
+          subAccountId,
+          txOptions,
+        );
         console.log(`Initialize drift user: ${txSig}`);
       } catch (e) {
         console.error(parseTxError(e));
+        process.exit(1);
+      }
+    });
+
+  drift
+    .command("users")
+    .description("List drift users (sub accounts)")
+    .action(async () => {
+      try {
+        const driftUsers = await glamClient.drift.fetchDriftUsers();
+        console.log(`${driftUsers.length} Drift users found`);
+        driftUsers.map((u, i) => {
+          console.log(`[${i}]: ${u.name} (Pool ID: ${u.poolId})`);
+        });
+      } catch (e) {
+        console.error(e);
         process.exit(1);
       }
     });
@@ -51,8 +79,11 @@ export function installDriftCommands(
 
   drift
     .command("withdraw <market_index> <amount>")
+    .option("-s, --sub-account-id <sub_account_id>", "Sub account ID", "0")
     .description("Withdraw from drift")
-    .action(async (market_index, amount) => {
+    .action(async (market_index, amount, options) => {
+      const subAccountId = parseInt(options.subAccountId);
+
       try {
         const marketConfigs = await glamClient.drift.fetchMarketConfigs();
 
@@ -64,7 +95,7 @@ export function installDriftCommands(
         const txSig = await glamClient.drift.withdraw(
           amountBn,
           marketConfig.marketIndex,
-          0,
+          subAccountId,
           txOptions,
         );
 
@@ -77,8 +108,10 @@ export function installDriftCommands(
 
   drift
     .command("deposit <market_index> <amount>")
+    .option("-s, --sub-account-id <sub_account_id>", "Sub account ID")
     .description("Deposit to drift")
-    .action(async (market_index, amount) => {
+    .action(async (market_index, amount, options) => {
+      const subAccountId = options.subAccountId || 0;
       try {
         const marketConfigs = await glamClient.drift.fetchMarketConfigs();
 
@@ -90,7 +123,7 @@ export function installDriftCommands(
         const txSig = await glamClient.drift.deposit(
           amountBn,
           marketConfig.marketIndex,
-          0,
+          subAccountId,
           txOptions,
         );
 
