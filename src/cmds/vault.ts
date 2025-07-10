@@ -2,7 +2,8 @@ import {
   GlamClient,
   TxOptions,
   WSOL,
-  JUPITER_API_DEFAULT,
+  fetchTokenPrices,
+  fetchTokensList,
 } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
 import {
@@ -120,15 +121,14 @@ export function installVaultCommands(
       if (!mints.includes(WSOL.toBase58())) {
         mints.push(WSOL.toBase58());
       }
-      const pricesResp = await fetch(
-        `${JUPITER_API_DEFAULT}/price/v2?ids=${mints.join(",")}`,
-      );
-      const tokensResp = await fetch(
-        "https://tokens.jup.ag/tokens?tags=verified",
-      );
 
-      const { data: pricesData } = await pricesResp.json();
-      const tokens = await tokensResp.json(); // an array of tokens
+      const tokenPrices = await fetchTokenPrices(mints);
+      const mintToPrice = new Map(
+        tokenPrices.map(({ mint, price }) => [mint, price]),
+      );
+      const tokenList = await fetchTokensList();
+
+      console.log("mintToPrice:", mintToPrice);
 
       console.log("Token", "\t", "Mint", "\t", "Amount", "\t", "Value (USD)");
       console.log(
@@ -138,14 +138,14 @@ export function installVaultCommands(
         "\t",
         solUiAmount,
         "\t",
-        parseFloat(pricesData[WSOL.toBase58()].price) * solUiAmount,
+        mintToPrice.get(WSOL.toBase58()) * solUiAmount,
       );
       tokenAccounts.forEach((ta) => {
         const { uiAmount, mint } = ta;
         const mintStr = mint.toBase58();
 
         if (all || uiAmount > 0) {
-          const token = tokens.find((t) => t.address === mintStr);
+          const token = tokenList.find((t) => t.address === mintStr);
 
           console.log(
             token?.symbol === "SOL" ? "wSOL" : token?.symbol || "Unknown",
@@ -154,7 +154,7 @@ export function installVaultCommands(
             "\t",
             uiAmount,
             "\t",
-            parseFloat(pricesData[mintStr]?.price) * uiAmount,
+            mintToPrice.get(mintStr) * uiAmount,
           );
         }
       });
