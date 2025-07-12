@@ -106,7 +106,7 @@ program
     if (cliConfig.glam_state) {
       const vault = glamClient.vaultPda;
       console.log("GLAM state:", glamClient.statePda.toBase58());
-      console.log("✅ Active vault:", vault.toBase58());
+      console.log("Active vault:", vault.toBase58());
     } else {
       console.log("No active GLAM specified");
     }
