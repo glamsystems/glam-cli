@@ -80,7 +80,7 @@ export function installInvestCommands(
       const amountBN = new BN(amount * 10 ** decimals);
 
       try {
-        const txSig = await glamClient.investor.subscribe(
+        const txSig = await glamClient.invest.subscribe(
           stateModel.baseAsset,
           amountBN,
           0,
@@ -141,7 +141,7 @@ export function installInvestCommands(
       const asset = stateModel.baseAsset!;
       const priceDenom = PriceDenom.fromAsset(asset);
       try {
-        const txSig = await glamClient.investor.fulfill(0, {
+        const txSig = await glamClient.invest.fulfill(0, {
           ...txOptions,
           lookupTables,
           preInstructions: await glamClient.price.priceVaultIxs(priceDenom),
@@ -168,7 +168,7 @@ export function installInvestCommands(
 
       try {
         const glamMint = glamClient.mintPda;
-        const txSig = await glamClient.investor.claim(glamMint, 0, {
+        const txSig = await glamClient.invest.claim(glamMint, 0, {
           ...txOptions,
           lookupTables,
           preInstructions: await glamClient.price.priceVaultIxs(PriceDenom.SOL),
@@ -193,7 +193,7 @@ export function installInvestCommands(
         ));
 
       try {
-        const txSig = await glamClient.investor.queuedRedeem(amountBN, 0, {
+        const txSig = await glamClient.invest.queuedRedeem(amountBN, 0, {
           ...txOptions,
         });
         console.log(`${glamClient.signer} requested to redeem:`, txSig);
@@ -216,7 +216,7 @@ export function installInvestCommands(
       ];
 
       try {
-        const txSig = await glamClient.investor.claim(WSOL, 0, {
+        const txSig = await glamClient.invest.claim(WSOL, 0, {
           ...txOptions,
           lookupTables,
           preInstructions: await glamClient.price.priceVaultIxs(PriceDenom.SOL),
