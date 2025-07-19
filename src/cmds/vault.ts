@@ -128,34 +128,41 @@ export function installVaultCommands(
       );
       const tokenList = await fetchTokensList();
 
-      console.log("mintToPrice:", mintToPrice);
+      // Define column widths
+      const colWidths = [12, 45, 15, 20];
+      const printRow = (items: string[]) => {
+        console.log(
+          items[0].padEnd(colWidths[0]),
+          items[1].padEnd(colWidths[1]),
+          items[2].padEnd(colWidths[2]),
+          items[3].padEnd(colWidths[3]),
+        );
+      };
 
-      console.log("Token", "\t", "Mint", "\t", "Amount", "\t", "Value (USD)");
-      console.log(
+      printRow(["Token", "Mint", "Amount", "Value (USD)"]); // header row
+      printRow([
         "SOL",
-        "\t",
         "N/A",
-        "\t",
-        solUiAmount,
-        "\t",
-        mintToPrice.get(WSOL.toBase58()) * solUiAmount,
-      );
+        solUiAmount.toFixed(9).toString(),
+        (mintToPrice.get(WSOL.toBase58()) * solUiAmount).toFixed(6),
+      ]);
+
       tokenAccounts.forEach((ta) => {
         const { uiAmount, mint } = ta;
         const mintStr = mint.toBase58();
 
         if (all || uiAmount > 0) {
           const token = tokenList.find((t) => t.address === mintStr);
+          const tokenSymbol =
+            token?.symbol === "SOL" ? "wSOL" : token?.symbol || "Unknown";
+          const value = mintToPrice.get(mintStr) * uiAmount;
 
-          console.log(
-            token?.symbol === "SOL" ? "wSOL" : token?.symbol || "Unknown",
-            "\t",
+          printRow([
+            tokenSymbol,
             mintStr,
-            "\t",
-            uiAmount,
-            "\t",
-            mintToPrice.get(mintStr) * uiAmount,
-          );
+            uiAmount.toString(),
+            value ? value.toFixed(6) : "NaN",
+          ]);
         }
       });
     });

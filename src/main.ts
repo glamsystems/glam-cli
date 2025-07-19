@@ -68,37 +68,17 @@ function initialize(configPath?: string) {
   };
 }
 
-// Initialize with default config initially
 initialize();
 
 const program = new Command();
-let globalOpts = { skipSimulation: false, config: null };
-
 program
   .name("glam-cli")
   .description("CLI for interacting with the GLAM Protocol")
-  .version("0.1.27")
-  // .option("-S, --skip-simulation", "Skip transaction simulation")
-  // .option(
-  //   "-C, --config <path>",
-  //   "Use a custom config file and ignore default config at $HOME/.config/glam/config.json",
-  // )
-  .hook("preAction", (thisCommand, actionCommand) => {
-    // const opts = program.opts();
-    // globalOpts.skipSimulation = !!opts.skipSimulation;
-    // globalOpts.config = opts.config || null;
-    // if (globalOpts.config) {
-    //   console.log(`Using custom config from: ${globalOpts.config}`);
-    //   initialize(globalOpts.config);
-    // }
-    // if (txOptions && globalOpts.skipSimulation) {
-    //   txOptions.simulate = false;
-    // }
-  });
+  .version("0.1.28");
 
 program
   .command("env")
-  .description("Show environment and config setup")
+  .description("Display current environment setup")
   .action(async () => {
     console.log("Wallet connected:", glamClient.getSigner().toBase58());
     console.log("RPC endpoint:", glamClient.provider.connection.rpcEndpoint);
@@ -114,12 +94,13 @@ program
 
 program
   .command("list")
-  .description(
-    "List glam products the wallet has access to (either as owner or delegate)",
+  .description("List GLAM instances the wallet has access to")
+  .option(
+    "-o, --owner-only",
+    "Only show instances owned by the connected wallet",
   )
-  .option("-o, --owner-only", "Only list products the wallet owns")
-  .option("-a, --all", "All GLAM products")
-  .option("-t, --type <type>", "Filter by account type: vault, mint, or fund")
+  .option("-a, --all", "Show all GLAM instance")
+  .option("-t, --type <type>", "Filter by type: vault, mint, or fund")
   .action(async (options) => {
     const { ownerOnly, all, type } = options;
     if (ownerOnly && all) {
@@ -157,7 +138,7 @@ program
 program
   .command("set")
   .argument("<state>", "GLAM state public key", validatePublicKey)
-  .description("Set the active GLAM product by its state public key")
+  .description("Set the active GLAM instance by its state public key")
   .action((state: PublicKey) => {
     cliConfig.glamState = state;
     console.log(`Set active GLAM to: ${state}`);
@@ -165,8 +146,8 @@ program
 
 program
   .command("update-owner")
-  .argument("<new-owner-pubkey>", "New owner public key", validatePublicKey)
-  .description("Update the owner of a GLAM product")
+  .argument("<new-owner>", "New owner public key", validatePublicKey)
+  .description("Update the owner of a GLAM instance")
   .option("-y, --yes", "Skip confirmation prompt")
   .action(async (newOwner: PublicKey, options) => {
     options?.yes ||
