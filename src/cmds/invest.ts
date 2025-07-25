@@ -112,6 +112,7 @@ export function installInvestCommands(
 
       const ixs = await glamClient.price.priceVaultIxs(PriceDenom.USD);
       const tx = new Transaction().add(...ixs);
+
       try {
         const vTx = await glamClient.intoVersionedTransaction(tx, {
           ...txOptions,

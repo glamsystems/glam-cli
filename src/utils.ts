@@ -19,6 +19,7 @@ export class CliConfig {
   json_rpc_url: string;
   tx_rpc_url: string;
   keypair_path: string;
+  glam_api?: string;
   priority_fee?: {
     micro_lamports?: number;
     level?: PriorityLevel;
@@ -34,6 +35,7 @@ export class CliConfig {
     this.json_rpc_url = config.json_rpc_url || "";
     this.tx_rpc_url = config.tx_rpc_url || "";
     this.keypair_path = config.keypair_path || "";
+    this.glam_api = config.glam_api;
     this.priority_fee = config.priority_fee;
     this.glam_state = config.glam_state;
 
@@ -95,6 +97,10 @@ export class CliConfig {
 
       if (cliConfig.tx_rpc_url) {
         process.env.TX_RPC = cliConfig.tx_rpc_url;
+      }
+
+      if (cliConfig.glam_api) {
+        process.env.GLAM_API = cliConfig.glam_api;
       }
 
       process.env.ANCHOR_PROVIDER_URL = cliConfig.json_rpc_url;
