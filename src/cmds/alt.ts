@@ -1,8 +1,4 @@
-import {
-  fetchLookupTables,
-  GlamClient,
-  TxOptions,
-} from "@glamsystems/glam-sdk";
+import { GlamClient, TxOptions } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
 import { CliConfig, parseTxError } from "../utils";
 import { Transaction, VersionedTransaction } from "@solana/web3.js";
@@ -60,14 +56,11 @@ export function installAltCommands(
     .command("list")
     .description("List lookup table(s) created for the active GLAM")
     .action(async () => {
-      const lookupTables = await fetchLookupTables(
-        glamClient.provider.connection,
-        glamClient.getSigner(),
-        glamClient.statePda,
-      );
+      const lookupTableAccountss = await glamClient.findLookupTables();
+
       console.log(
         "Lookup tables:",
-        lookupTables.map((t) => t.key.toBase58()),
+        lookupTableAccountss.map((t) => t.key.toBase58()),
       );
     });
 }
