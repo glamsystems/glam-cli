@@ -33,6 +33,7 @@ import { installAltCommands } from "./cmds/alt";
 import { installStakeCommands } from "./cmds/stake";
 import { installVaultCommands } from "./cmds/vault";
 import { installValidatorCommands } from "./cmds/validator";
+import { idlCheck } from "./idl";
 
 let cliConfig: CliConfig;
 let glamClient: GlamClient;
@@ -74,7 +75,13 @@ const program = new Command();
 program
   .name("glam-cli")
   .description("CLI for interacting with the GLAM Protocol")
-  .version("0.1.28");
+  .hook(
+    "preSubcommand",
+    async (thisCommand: Command, actionCommand: Command) => {
+      await idlCheck(glamClient);
+    },
+  )
+  .version("0.1.29");
 
 program
   .command("env")
