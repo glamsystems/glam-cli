@@ -69,6 +69,8 @@ export function installInvestCommands(
           ? PriceDenom.USD
           : PriceDenom.ASSET;
       const amountBN = new BN(amount * 10 ** decimals);
+      const preInstructions = await glamClient.price.priceVaultIxs(priceDenom); // this loads lookup tables
+      const lookupTables = glamClient.price.lookupTables;
 
       try {
         const txSig = await glamClient.invest.subscribe(
@@ -78,7 +80,8 @@ export function installInvestCommands(
           !!options?.queued,
           {
             ...txOptions,
-            preInstructions: await glamClient.price.priceVaultIxs(priceDenom),
+            preInstructions,
+            lookupTables,
           },
         );
         console.log(`${glamClient.signer} instant subscription:`, txSig);
@@ -90,13 +93,20 @@ export function installInvestCommands(
 
   tokenized
     .command("price")
+    .option("-d, --denom <denom>", "Price denomination, USD or SOL", "USD")
     .description("Price vault assets")
-    .action(async () => {
-      const ixs = await glamClient.price.priceVaultIxs(PriceDenom.USD);
+    .action(async (options) => {
+      const priceDenom = PriceDenom.fromString(options?.denom);
+      const ixs = await glamClient.price.priceVaultIxs(priceDenom); // this loads lookup tables
+      const lookupTables = glamClient.price.lookupTables;
+
       const tx = new Transaction().add(...ixs);
 
       try {
-        const vTx = await glamClient.intoVersionedTransaction(tx, txOptions);
+        const vTx = await glamClient.intoVersionedTransaction(tx, {
+          ...txOptions,
+          lookupTables,
+        });
         const txSig = await glamClient.sendAndConfirm(vTx);
         console.log("Priced vault assets:", txSig);
       } catch (e) {
@@ -112,10 +122,15 @@ export function installInvestCommands(
       const stateModel = await glamClient.fetchStateModel();
       const asset = stateModel.baseAsset!;
       const priceDenom = PriceDenom.fromAsset(asset);
+
+      const preInstructions = await glamClient.price.priceVaultIxs(priceDenom); // this loads lookup tables
+      const lookupTables = glamClient.price.lookupTables;
+
       try {
         const txSig = await glamClient.invest.fulfill(0, {
           ...txOptions,
-          preInstructions: await glamClient.price.priceVaultIxs(priceDenom),
+          preInstructions,
+          lookupTables,
           simulate: true,
         });
         console.log(`${glamClient.signer} triggered fulfillment:`, txSig);
@@ -129,11 +144,17 @@ export function installInvestCommands(
     .command("claim-sub")
     .description("Claim subscription and receive share tokens")
     .action(async () => {
+      const preInstructions = await glamClient.price.priceVaultIxs(
+        PriceDenom.SOL,
+      );
+      const lookupTables = glamClient.price.lookupTables;
+
       try {
         const glamMint = glamClient.mintPda;
         const txSig = await glamClient.invest.claim(glamMint, 0, {
           ...txOptions,
-          preInstructions: await glamClient.price.priceVaultIxs(PriceDenom.SOL),
+          preInstructions,
+          lookupTables,
         });
         console.log(`${glamClient.signer} claimed shares:`, txSig);
       } catch (e) {
@@ -169,10 +190,16 @@ export function installInvestCommands(
     .command("claim-redeem")
     .description("Claim redemption to receive deposit asset")
     .action(async () => {
+      const preInstructions = await glamClient.price.priceVaultIxs(
+        PriceDenom.SOL,
+      ); // this loads lookup tables
+      const lookupTables = glamClient.price.lookupTables;
+
       try {
         const txSig = await glamClient.invest.claim(WSOL, 0, {
           ...txOptions,
-          preInstructions: await glamClient.price.priceVaultIxs(PriceDenom.SOL),
+          preInstructions,
+          lookupTables,
         });
         console.log(`${glamClient.signer} claimed tokens:`, txSig);
       } catch (e) {
