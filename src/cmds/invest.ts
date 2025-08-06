@@ -117,7 +117,7 @@ export function installInvestCommands(
 
   tokenized
     .command("fulfill")
-    .description("Fulfill subscription and redemption")
+    .description("Fulfill queued subscriptions and redemptions")
     .action(async () => {
       const stateModel = await glamClient.fetchStateModel();
       const asset = stateModel.baseAsset!;
@@ -142,7 +142,9 @@ export function installInvestCommands(
 
   tokenized
     .command("claim-sub")
-    .description("Claim subscription and receive share tokens")
+    .description(
+      "Claim subscription and receive share tokens. Only needed for queued subscriptions.",
+    )
     .action(async () => {
       const preInstructions = await glamClient.price.priceVaultIxs(
         PriceDenom.SOL,
@@ -202,6 +204,19 @@ export function installInvestCommands(
           lookupTables,
         });
         console.log(`${glamClient.signer} claimed tokens:`, txSig);
+      } catch (e) {
+        console.error(parseTxError(e));
+        throw e;
+      }
+    });
+
+  tokenized
+    .command("claim-fees")
+    .description("Claim fees collected by tokenized vault")
+    .action(async () => {
+      try {
+        const txSig = await glamClient.fees.disburseFees();
+        console.log(`${glamClient.signer} claimed fees:`, txSig);
       } catch (e) {
         console.error(parseTxError(e));
         throw e;
