@@ -141,17 +141,29 @@ export const parseTxError = (error: any) => {
 };
 
 export async function confirmOperation(message: string) {
-  const confirmation = await inquirer.prompt([
-    {
-      type: "confirm",
-      name: "proceed",
-      message,
-      default: false,
-    },
-  ]);
-  if (!confirmation.proceed) {
-    console.log("Aborted.");
-    process.exit(0);
+  try {
+    const confirmation = await inquirer.prompt([
+      {
+        type: "confirm",
+        name: "proceed",
+        message,
+        default: false,
+      },
+    ]);
+    if (!confirmation.proceed) {
+      console.log("Aborted.");
+      process.exit(0);
+    }
+  } catch (error) {
+    // Handle Ctrl+C interruption gracefully
+    if (
+      error.name === "ExitPromptError" ||
+      error.message?.includes("force closed")
+    ) {
+      console.log("\nOperation cancelled.");
+      process.exit(0);
+    }
+    throw error;
   }
 }
 

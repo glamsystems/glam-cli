@@ -2,16 +2,15 @@ import { PublicKey } from "@solana/web3.js";
 import { GlamClient } from "@glamsystems/glam-sdk";
 
 export const idlCheck = async (glamClient: GlamClient) => {
-  // Fetch anchor idl for program ID GLAMbTqav9N9witRjswJ8enwp9vv5G8bsSJ2kPJ4rcyc
-  // and parse the idl
+  // Fetch anchor idl and parse it
   const base = PublicKey.findProgramAddressSync(
     [],
-    glamClient.program.programId,
+    glamClient.protocolProgram.programId,
   )[0];
   const idlPda = await PublicKey.createWithSeed(
     base,
     "anchor:idl",
-    glamClient.program.programId,
+    glamClient.protocolProgram.programId,
   );
 
   const idlAccountInfo =
@@ -26,7 +25,7 @@ export const idlCheck = async (glamClient: GlamClient) => {
     const idlJson = JSON.parse(idlString);
 
     const onchainIdlVersion = idlJson.metadata.version;
-    const cliIdlVersion = glamClient.program.idl.metadata.version;
+    const cliIdlVersion = glamClient.protocolProgram.idl.metadata.version;
 
     if (cliIdlVersion < onchainIdlVersion) {
       console.warn(

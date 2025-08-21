@@ -1,5 +1,5 @@
 {
-  "accountType": "fund",
+  "accountType": "tokenizedVault",
   "name": "GLAM SOL",
   "enabled": true,
   "assets": ["So11111111111111111111111111111111111111112"],

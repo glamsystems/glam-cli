@@ -5,7 +5,7 @@ import {
   TxOptions,
 } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
-import { CliConfig, parseTxError } from "../utils";
+import { CliConfig, parseTxError, validatePublicKey } from "../utils";
 import { PublicKey } from "@solana/web3.js";
 
 export function installIntegrationCommands(
@@ -16,17 +16,19 @@ export function installIntegrationCommands(
 ) {
   integration
     .command("list")
-    .description("List enabled integrations")
+    .description("List enabled integration programs and protocols")
     .action(async () => {
       const stateModel = await glamClient.fetchStateModel();
-      const cnt = stateModel.integrations.length;
+      const cnt = stateModel.integrationAcls.length;
       console.log(
-        `${stateModel.name} (${glamClient.statePda}) has ${cnt} integration${
+        `${stateModel.name} (${glamClient.statePda}) has ${cnt} integration program${
           cnt > 1 ? "s" : ""
         } enabled`,
       );
-      for (let [i, integ] of stateModel.integrations.entries()) {
-        console.log(`[${i}] ${Object.keys(integ)[0]}`);
+      for (let [i, integ] of stateModel.integrationAcls.entries()) {
+        console.log(
+          `[${i}] ${integ.integrationProgram} protocolsBitmask: ${integ.protocolsBitmask.toString(2).padStart(16, "0")}}`,
+        );
       }
     });
 
@@ -45,32 +47,39 @@ export function installIntegrationCommands(
 
   integration
     .command("enable")
-    .description("Enable an integration")
+    .description("Enable an integration program")
     .argument(
-      "<integration>",
+      "<integration_program_id>",
       `Integration to enable (must be one of: ${allowIntegrations.join(", ")})`,
-      validateIntegration,
+      validatePublicKey,
     )
-    .action(async (integration) => {
+    .action(async (integrationProgramId: PublicKey) => {
       const stateModel = await glamClient.fetchStateModel();
-      const acl = stateModel.integrations.find(
-        (integ) => Object.keys(integ)[0] === integration,
+      const enabled = stateModel.integrationAcls.find((integ) =>
+        integ.integrationProgram.equals(integrationProgramId),
       );
-      if (acl) {
+      if (enabled) {
         console.log(
-          `${integration} is already enabled on ${stateModel.name} (${glamClient.statePda})`,
+          `${integrationProgramId} is already enabled on ${stateModel.name}`,
         );
         process.exit(1);
       }
 
-      const updated = new StateModel({
-        // @ts-ignore
-        integrations: [...stateModel.integrations, { [integration]: {} }],
-      });
-
       try {
-        const txSig = await glamClient.state.update(updated, txOptions);
-        console.log(`${integration} enabled: ${txSig}`);
+        const txSig = await glamClient.state.update(
+          {
+            integrationAcls: [
+              ...stateModel.integrationAcls,
+              {
+                integrationProgram: integrationProgramId,
+                protocolsBitmask: 0xffff, // FIXME: more granular control
+                protocolPolicies: [],
+              },
+            ],
+          },
+          txOptions,
+        );
+        console.log(`${integrationProgramId} enabled: ${txSig}`);
       } catch (e) {
         console.error(parseTxError(e));
         process.exit(1);
@@ -81,21 +90,23 @@ export function installIntegrationCommands(
     .command("disable")
     .description("Disable an integration")
     .argument(
-      "<integration>",
+      "<integration_program_id>",
       `Integration to disable (must be one of: ${allowIntegrations.join(", ")})`,
-      validateIntegration,
+      validatePublicKey,
     )
-    .action(async (integration) => {
+    .action(async (integrationProgramId) => {
       const stateModel = await glamClient.fetchStateModel();
-      const updated = new StateModel({
-        integrations: stateModel.integrations.filter(
-          (integ) => Object.keys(integ)[0] !== integration,
-        ),
-      });
 
       try {
-        const txSig = await glamClient.state.update(updated, txOptions);
-        console.log(`${integration} disabled: ${txSig}`);
+        const txSig = await glamClient.state.update(
+          {
+            integrationAcls: stateModel.integrationAcls.filter(
+              (integ) => integ.integrationProgram !== integrationProgramId,
+            ),
+          },
+          txOptions,
+        );
+        console.log(`${integrationProgramId} disabled: ${txSig}`);
       } catch (e) {
         console.error(parseTxError(e));
         process.exit(1);

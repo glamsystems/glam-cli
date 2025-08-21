@@ -1,7 +1,9 @@
 import {
   getPriorityFeeEstimate,
   GlamClient,
+  MSOL,
   TxOptions,
+  WSOL,
 } from "@glamsystems/glam-sdk";
 import { PublicKey } from "@solana/web3.js";
 import { Command } from "commander";
@@ -18,26 +20,47 @@ import {
 import { VersionedTransaction } from "@solana/web3.js";
 import { installDriftCommands } from "./cmds/drift";
 import { installDriftVaultsCommands } from "./cmds/drift-vaults";
-import { installMintCommands } from "./cmds/mint";
-import { installMeteoraCommands } from "./cmds/meteora";
-import { installLstCommands } from "./cmds/lst";
-import { installMarinadeCommands } from "./cmds/marinade";
+// import { installMintCommands } from "./cmds/mint";
+// import { installMeteoraCommands } from "./cmds/meteora";
+// import { installLstCommands } from "./cmds/lst";
+// import { installMarinadeCommands } from "./cmds/marinade";
 import { installKLendCommands } from "./cmds/klend";
 import { installKVaultsCommands } from "./cmds/kvaults";
-import { installJupCommands } from "./cmds/jup";
+// import { installJupCommands } from "./cmds/jup";
 import { installIntegrationCommands } from "./cmds/integration";
-import { installDelegateCommands } from "./cmds/delegate";
+// import { installDelegateCommands } from "./cmds/delegate";
 import { installSwapCommands } from "./cmds/swap";
-import { installInvestCommands } from "./cmds/invest";
+// import { installInvestCommands } from "./cmds/invest";
 import { installAltCommands } from "./cmds/alt";
-import { installStakeCommands } from "./cmds/stake";
+// import { installStakeCommands } from "./cmds/stake";
 import { installVaultCommands } from "./cmds/vault";
-import { installValidatorCommands } from "./cmds/validator";
+// import { installValidatorCommands } from "./cmds/validator";
 import { idlCheck } from "./idl";
 
 let cliConfig: CliConfig;
 let glamClient: GlamClient;
 let txOptions: TxOptions;
+
+// Graceful shutdown handling
+function setupGracefulShutdown() {
+  process.on("SIGINT", () => {
+    process.exit(0);
+  });
+
+  process.on("SIGTERM", () => {
+    process.exit(0);
+  });
+
+  process.on("uncaughtException", (error) => {
+    console.error("\nUncaught Exception:", error);
+    process.exit(1);
+  });
+
+  process.on("unhandledRejection", (reason, promise) => {
+    console.error("\nUnhandled Rejection at:", promise, "reason:", reason);
+    process.exit(1);
+  });
+}
 
 function initialize(configPath?: string) {
   // Load config from the specified path or default
@@ -70,6 +93,7 @@ function initialize(configPath?: string) {
 }
 
 initialize();
+setupGracefulShutdown();
 
 const program = new Command();
 program
@@ -90,6 +114,10 @@ program
     console.log("Wallet connected:", glamClient.getSigner().toBase58());
     console.log("RPC endpoint:", glamClient.provider.connection.rpcEndpoint);
     console.log("Priority fee:", cliConfig.priority_fee);
+    console.log(
+      "GLAM protocol:",
+      glamClient.protocolProgram.programId.toBase58(),
+    );
     if (cliConfig.glam_state) {
       const vault = glamClient.vaultPda;
       console.log("GLAM state:", glamClient.statePda.toBase58());
@@ -126,9 +154,9 @@ program
 
     const states = await glamClient.fetchGlamStates(filterOptions);
     states
-      .sort((a, b) =>
-        a.rawOpenfunds.fundLaunchDate > b.rawOpenfunds.fundLaunchDate ? -1 : 1,
-      )
+      // .sort((a, b) =>
+      // a.rawOpenfunds.fundLaunchDate > b.rawOpenfunds.fundLaunchDate ? -1 : 1,
+      // )
       .forEach((state) => {
         console.log(
           state.productType,
@@ -242,30 +270,32 @@ program
     let stateModel = null;
     const json = JSON.parse(data);
 
-    if (json.accountType === "fund") {
+    if (json.accountType === "tokenizedVault") {
       stateModel = fundJsonToStateModel(json);
     } else {
       stateModel = { ...json };
-      stateModel.mints?.forEach((mint) => {
-        mint.asset = new PublicKey(mint.asset);
-        mint.permanentDelegate = mint.permanentDelegate
-          ? new PublicKey(mint.permanentDelegate)
-          : null;
-      });
+      // FIXME: need to support creating a tokenized vault and a mint
+      // stateModel.mints?.forEach((mint) => {
+      //   mint.asset = new PublicKey(mint.asset);
+      //   mint.permanentDelegate = mint.permanentDelegate
+      //     ? new PublicKey(mint.permanentDelegate)
+      //     : null;
+      // });
+      if (stateModel.baseAsset) {
+        stateModel.baseAsset = new PublicKey(stateModel.baseAsset);
+      }
       stateModel.assets = stateModel.assets.map((a) => new PublicKey(a));
       stateModel.accountType = { [stateModel.accountType]: {} };
     }
 
     try {
-      const [txSig] = await glamClient.state.create(
-        stateModel,
-        false,
-        txOptions,
-      );
+      const [txSig] = await glamClient.state.create(stateModel, txOptions);
       console.log("GLAM state created:", txSig);
       console.log("State PDA:", glamClient.statePda.toBase58());
       console.log("Vault PDA:", glamClient.vaultPda.toBase58());
-      console.log("Mint PDA:", glamClient.mintPda.toBase58());
+      if (["tokenizedVault", "mint"].includes(json.accountType)) {
+        console.log("Mint PDA:", glamClient.mintPda.toBase58());
+      }
 
       cliConfig.glamState = glamClient.statePda;
     } catch (e) {
@@ -308,11 +338,12 @@ program
       ));
 
     const preInstructions = [];
-    // @ts-ignore
     const stateAccount = await glamClient.fetchStateAccount();
     if (stateAccount.mints.length > 0) {
-      const closeMintIx = await glamClient.mint.closeMintIx();
-      preInstructions.push(closeMintIx);
+      // FIXME: close mints
+      // const closeMintIx = await glamClient.mint.closeMintIx();
+      // preInstructions.push(closeMintIx);
+      throw new Error("Cannot close a GLAM with mints");
     }
     try {
       const txSig = await glamClient.state.close({
@@ -331,8 +362,8 @@ program
 installSwapCommands(program, glamClient, cliConfig, txOptions);
 installVaultCommands(program, glamClient, cliConfig, txOptions);
 
-const delegate = program.command("delegate").description("Manage delegates");
-installDelegateCommands(delegate, glamClient, cliConfig, txOptions);
+// const delegate = program.command("delegate").description("Manage delegates");
+// installDelegateCommands(delegate, glamClient, cliConfig, txOptions);
 
 const integration = program
   .command("integration")
@@ -340,7 +371,7 @@ const integration = program
 installIntegrationCommands(integration, glamClient, cliConfig, txOptions);
 
 const jup = program.command("jup").description("JUP staking");
-installJupCommands(jup, glamClient, cliConfig, txOptions);
+// installJupCommands(jup, glamClient, cliConfig, txOptions);
 
 const klend = program.command("klend").description("Kamino lending");
 installKLendCommands(klend, glamClient, cliConfig, txOptions);
@@ -349,16 +380,16 @@ const kvaults = program.command("kvaults").description("Kamino vaults");
 installKVaultsCommands(kvaults, glamClient, cliConfig, txOptions);
 
 const marinade = program.command("marinade").description("Marinade staking");
-installMarinadeCommands(marinade, glamClient, cliConfig, txOptions);
+// installMarinadeCommands(marinade, glamClient, cliConfig, txOptions);
 
 const lst = program.command("lst").description("Liquid staking");
-installLstCommands(lst, glamClient, cliConfig, txOptions);
+// installLstCommands(lst, glamClient, cliConfig, txOptions);
 
 const stake = program.command("stake").description("Native staking");
-installStakeCommands(stake, glamClient, cliConfig, txOptions);
+// installStakeCommands(stake, glamClient, cliConfig, txOptions);
 
 const meteora = program.command("meteora").description("Meteora DLMM");
-installMeteoraCommands(meteora, glamClient, cliConfig, txOptions);
+// installMeteoraCommands(meteora, glamClient, cliConfig, txOptions);
 
 const drift = program.command("drift").description("Drift operations");
 installDriftCommands(drift, glamClient, cliConfig, txOptions);
@@ -367,12 +398,12 @@ const driftVaults = program.command("drift-vaults").description("Drift vaults");
 installDriftVaultsCommands(driftVaults, glamClient, cliConfig, txOptions);
 
 const mint = program.command("mint").description("Mint operations");
-installMintCommands(mint, glamClient, cliConfig, txOptions);
+// installMintCommands(mint, glamClient, cliConfig, txOptions);
 
 const invest = program
   .command("invest")
   .description("Tokenized vault operations");
-installInvestCommands(invest, glamClient, cliConfig, txOptions);
+// installInvestCommands(invest, glamClient, cliConfig, txOptions);
 
 const alt = program.command("alt").description("Manage address lookup tables");
 installAltCommands(alt, glamClient, cliConfig, txOptions);
@@ -380,7 +411,7 @@ installAltCommands(alt, glamClient, cliConfig, txOptions);
 const validator = program
   .command("validator")
   .description("Validator operations");
-installValidatorCommands(validator, glamClient, cliConfig, txOptions);
+// installValidatorCommands(validator, glamClient, cliConfig, txOptions);
 
 //
 // Run the CLI in development mode as follows:
