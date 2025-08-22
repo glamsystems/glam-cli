@@ -20,22 +20,22 @@ import {
 import { VersionedTransaction } from "@solana/web3.js";
 import { installDriftCommands } from "./cmds/drift";
 import { installDriftVaultsCommands } from "./cmds/drift-vaults";
-// import { installMintCommands } from "./cmds/mint";
-// import { installMeteoraCommands } from "./cmds/meteora";
-// import { installLstCommands } from "./cmds/lst";
-// import { installMarinadeCommands } from "./cmds/marinade";
+import { installMintCommands } from "./cmds/mint";
+import { installLstCommands } from "./cmds/lst";
+import { installMarinadeCommands } from "./cmds/marinade";
 import { installKLendCommands } from "./cmds/klend";
 import { installKVaultsCommands } from "./cmds/kvaults";
-// import { installJupCommands } from "./cmds/jup";
 import { installIntegrationCommands } from "./cmds/integration";
-// import { installDelegateCommands } from "./cmds/delegate";
+import { installDelegateCommands } from "./cmds/delegate";
 import { installSwapCommands } from "./cmds/swap";
-// import { installInvestCommands } from "./cmds/invest";
+import { installInvestCommands } from "./cmds/invest";
 import { installAltCommands } from "./cmds/alt";
-// import { installStakeCommands } from "./cmds/stake";
+import { installStakeCommands } from "./cmds/stake";
 import { installVaultCommands } from "./cmds/vault";
-// import { installValidatorCommands } from "./cmds/validator";
 import { idlCheck } from "./idl";
+// import { installJupCommands } from "./cmds/jup";
+// import { installMeteoraCommands } from "./cmds/meteora";
+// import { installValidatorCommands } from "./cmds/validator";
 
 let cliConfig: CliConfig;
 let glamClient: GlamClient;
@@ -362,15 +362,15 @@ program
 installSwapCommands(program, glamClient, cliConfig, txOptions);
 installVaultCommands(program, glamClient, cliConfig, txOptions);
 
-// const delegate = program.command("delegate").description("Manage delegates");
-// installDelegateCommands(delegate, glamClient, cliConfig, txOptions);
+const delegate = program.command("delegate").description("Manage delegates");
+installDelegateCommands(delegate, glamClient, cliConfig, txOptions);
 
 const integration = program
   .command("integration")
   .description("Manage integrations");
 installIntegrationCommands(integration, glamClient, cliConfig, txOptions);
 
-const jup = program.command("jup").description("JUP staking");
+// const jup = program.command("jup").description("JUP staking");
 // installJupCommands(jup, glamClient, cliConfig, txOptions);
 
 const klend = program.command("klend").description("Kamino lending");
@@ -380,15 +380,15 @@ const kvaults = program.command("kvaults").description("Kamino vaults");
 installKVaultsCommands(kvaults, glamClient, cliConfig, txOptions);
 
 const marinade = program.command("marinade").description("Marinade staking");
-// installMarinadeCommands(marinade, glamClient, cliConfig, txOptions);
+installMarinadeCommands(marinade, glamClient, cliConfig, txOptions);
 
 const lst = program.command("lst").description("Liquid staking");
-// installLstCommands(lst, glamClient, cliConfig, txOptions);
+installLstCommands(lst, glamClient, cliConfig, txOptions);
 
 const stake = program.command("stake").description("Native staking");
-// installStakeCommands(stake, glamClient, cliConfig, txOptions);
+installStakeCommands(stake, glamClient, cliConfig, txOptions);
 
-const meteora = program.command("meteora").description("Meteora DLMM");
+// const meteora = program.command("meteora").description("Meteora DLMM");
 // installMeteoraCommands(meteora, glamClient, cliConfig, txOptions);
 
 const drift = program.command("drift").description("Drift operations");
@@ -398,19 +398,19 @@ const driftVaults = program.command("drift-vaults").description("Drift vaults");
 installDriftVaultsCommands(driftVaults, glamClient, cliConfig, txOptions);
 
 const mint = program.command("mint").description("Mint operations");
-// installMintCommands(mint, glamClient, cliConfig, txOptions);
+installMintCommands(mint, glamClient, cliConfig, txOptions);
 
 const invest = program
   .command("invest")
   .description("Tokenized vault operations");
-// installInvestCommands(invest, glamClient, cliConfig, txOptions);
+installInvestCommands(invest, glamClient, cliConfig, txOptions);
 
 const alt = program.command("alt").description("Manage address lookup tables");
 installAltCommands(alt, glamClient, cliConfig, txOptions);
 
-const validator = program
-  .command("validator")
-  .description("Validator operations");
+// const validator = program
+//   .command("validator")
+//   .description("Validator operations");
 // installValidatorCommands(validator, glamClient, cliConfig, txOptions);
 
 //
