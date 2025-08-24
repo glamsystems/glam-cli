@@ -41,7 +41,7 @@ export function installInvestCommands(
       }
 
       const stateModel = await glamClient.fetchStateModel();
-      const baseAsset = stateModel.baseAsset;
+      const baseAsset = stateModel.baseAssetMint;
 
       let name, symbol, decimals;
       const metadata = tokens.find((t) => t.address === baseAsset.toString());
@@ -119,7 +119,7 @@ export function installInvestCommands(
     .description("Fulfill queued subscriptions and redemptions")
     .action(async () => {
       const stateModel = await glamClient.fetchStateModel();
-      const asset = stateModel.baseAsset!;
+      const asset = stateModel.baseAssetMint;
       const priceDenom = PriceDenom.fromAsset(asset);
 
       const preInstructions = await glamClient.price.priceVaultIxs(priceDenom); // this loads lookup tables

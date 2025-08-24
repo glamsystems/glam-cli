@@ -2,6 +2,7 @@ import {
   getPriorityFeeEstimate,
   GlamClient,
   MSOL,
+  nameToChars,
   TxOptions,
   WSOL,
 } from "@glamsystems/glam-sdk";
@@ -182,18 +183,25 @@ program
 program
   .command("update-owner")
   .argument("<new-owner>", "New owner public key", validatePublicKey)
-  .description("Update the owner of a GLAM instance")
+  .option("-n, --name <name>", "New portfolio manager name")
   .option("-y, --yes", "Skip confirmation prompt")
+  .description("Update the owner of a GLAM instance")
   .action(async (newOwner: PublicKey, options) => {
-    options?.yes ||
-      (await confirmOperation(`Confirm updating owner to ${newOwner}?`));
+    const newPortfolioManagerName = options?.name
+      ? nameToChars(options.name)
+      : null;
+
+    if (newPortfolioManagerName && !options?.yes) {
+      await confirmOperation(
+        `Confirm updating owner to ${newOwner} and portfolio manager name to ${newPortfolioManagerName}?`,
+      );
+    } else {
+      await confirmOperation(`Confirm updating owner to ${newOwner}?`);
+    }
 
     const txSig = await glamClient.state.update({
-      owner: {
-        portfolioManagerName: null,
-        pubkey: newOwner,
-        kind: { wallet: {} },
-      },
+      owner: newOwner,
+      portfolioManagerName: newPortfolioManagerName,
     });
     console.log(`Updated GLAM owner to ${newOwner}: ${txSig}`);
   });
@@ -339,7 +347,7 @@ program
 
     const preInstructions = [];
     const stateAccount = await glamClient.fetchStateAccount();
-    if (stateAccount.mints.length > 0) {
+    if (!stateAccount.mint.equals(PublicKey.default)) {
       // FIXME: close mints
       // const closeMintIx = await glamClient.mint.closeMintIx();
       // preInstructions.push(closeMintIx);

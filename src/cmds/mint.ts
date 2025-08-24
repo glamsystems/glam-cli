@@ -52,7 +52,7 @@ export function installMintCommands(
       const mintModel = {} as Partial<MintModel>;
 
       if (options.lockup) {
-        mintModel.lockUpPeriod = parseInt(options.lockup);
+        mintModel.lockupPeriod = parseInt(options.lockup);
       }
 
       if (options.frozen !== undefined) {
