@@ -2,6 +2,7 @@ import { AnchorError, BN } from "@coral-xyz/anchor";
 import {
   ManagerModel,
   MintModel,
+  nameToChars,
   PriorityLevel,
   StateModel,
 } from "@glamsystems/glam-sdk";
@@ -167,55 +168,96 @@ export async function confirmOperation(message: string) {
   }
 }
 
-export function fundJsonToStateModel(json: any) {
-  if (json.accountType !== "fund") {
-    throw Error(
-      "Account account not supported. This helper function only supports fund (aka tokenized vault) account type",
-    );
+export function parseStateJson(json: any) {
+  if (!json.state) {
+    return null;
   }
-  const converted = {
-    ...json,
-    assets: json.assets.map((asset: string) => new PublicKey(asset)),
-    baseAsset: new PublicKey(json.baseAsset),
-    accountType: { [json.accountType]: {} },
-    timeUnit: { [json.timeUnit]: {} },
-    owner: new ManagerModel({
-      portfolioManagerName: json.owner.portfolioManagerName,
-      kind: { wallet: {} },
-    }),
-    mints: json.mints.map(
-      (mintData) =>
-        new MintModel({
-          ...mintData,
-          maxCap: new BN(mintData.maxCap),
-          minSubscription: new BN(mintData.minSubscription),
-          minRedemption: new BN(mintData.minRedemption),
-          feeStructure: {
-            ...mintData.feeStructure,
-            performance: {
-              ...mintData.feeStructure.performance,
-              hurdleType: {
-                [mintData.feeStructure.performance.hurdleType]: {},
-              },
-            },
-          },
-          notifyAndSettle: {
-            ...mintData.notifyAndSettle,
-            model: { [mintData.notifyAndSettle.model]: {} },
-            noticePeriod: new BN(mintData.notifyAndSettle.noticePeriod),
-            settlementPeriod: new BN(mintData.notifyAndSettle.settlementPeriod),
-            cancellationWindow: new BN(
-              mintData.notifyAndSettle.cancellationWindow,
-            ),
-            noticePeriodType: {
-              [mintData.notifyAndSettle.noticePeriodType]: {},
-            },
-          },
-        }),
+  const stateModel = {
+    accountType: { [json.state.accountType]: {} },
+    name: json.state.name,
+    enabled: json.state.enabled,
+    assets: (json.state.assets || []).map(
+      (asset: string) => new PublicKey(asset),
     ),
+    baseAssetMint: json.state.baseAssetMint
+      ? new PublicKey(json.state.baseAssetMint)
+      : null,
+    baseAssetTokenProgram: Number(json.state.baseAssetTokenProgram),
+    portfolioManagerName: json.state.portfolioManagerName
+      ? nameToChars(json.state.portfolioManagerName)
+      : null,
+    timelockDuration: Number(json.state.timelockDuration),
   };
 
-  return new StateModel(converted);
+  return stateModel;
+}
+
+export function parseMintJson(json: any) {
+  if (!json.mint) {
+    return null;
+  }
+  const mintModel = {
+    name: json.mint.name ? nameToChars(json.mint.name) : null,
+    symbol: json.mint.symbol,
+    uri: json.mint.uri,
+    asset: new PublicKey(json.mint.asset),
+    maxCap: json.mint.maxCap ? new BN(json.mint.maxCap) : null,
+    minSubscription: json.mint.minSubscription
+      ? new BN(json.mint.minSubscription)
+      : null,
+    minRedemption: json.mint.minRedemption
+      ? new BN(json.mint.minRedemption)
+      : null,
+    lockupPeriod: Number(json.mint.lockupPeriod),
+    permanentDelegate: json.mint.permanentDelegate
+      ? new PublicKey(json.mint.permanentDelegate)
+      : null,
+    defaultAccountStateFrozen: json.mint.defaultAccountStateFrozen || false,
+    feeStructure: json.mint.feeStructure
+      ? {
+          ...json.mint.feeStructure,
+          performance: {
+            ...json.mint.feeStructure.performance,
+            hurdleType: {
+              [json.mint.feeStructure.performance.hurdleType]: {},
+            },
+          },
+        }
+      : null,
+    notifyAndSettle: json.mint.notifyAndSettle
+      ? {
+          ...json.mint.notifyAndSettle,
+          model: { [json.mint.notifyAndSettle.model]: {} },
+          subscribeNoticePeriodType: {
+            [json.mint.notifyAndSettle.subscribeNoticePeriodType]: {},
+          },
+          subscribeNoticePeriod: new BN(
+            json.mint.notifyAndSettle.subscribeNoticePeriod || 0,
+          ),
+          subscribeSettlementPeriod: new BN(
+            json.mint.notifyAndSettle.subscribeSettlementPeriod || 0,
+          ),
+          subscribeCancellationWindow: new BN(
+            json.mint.notifyAndSettle.subscribeCancellationWindow || 0,
+          ),
+          redeemNoticePeriodType: {
+            [json.mint.notifyAndSettle.redeemNoticePeriodType]: {},
+          },
+          redeemNoticePeriod: new BN(
+            json.mint.notifyAndSettle.redeemNoticePeriod || 0,
+          ),
+          redeemSettlementPeriod: new BN(
+            json.mint.notifyAndSettle.redeemSettlementPeriod || 0,
+          ),
+          redeemCancellationWindow: new BN(
+            json.mint.notifyAndSettle.redeemCancellationWindow || 0,
+          ),
+          timeUnit: { [json.mint.notifyAndSettle.timeUnit]: {} },
+          padding: [0, 0, 0],
+        }
+      : null,
+  };
+  return mintModel;
 }
 
 export function validatePublicKey(value: string) {

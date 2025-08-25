@@ -1,10 +1,9 @@
 import {
+  charsToName,
   getPriorityFeeEstimate,
   GlamClient,
-  MSOL,
   nameToChars,
   TxOptions,
-  WSOL,
 } from "@glamsystems/glam-sdk";
 import { PublicKey } from "@solana/web3.js";
 import { Command } from "commander";
@@ -14,7 +13,8 @@ import fs from "fs";
 import {
   CliConfig,
   confirmOperation,
-  fundJsonToStateModel,
+  parseMintJson,
+  parseStateJson,
   parseTxError,
   validatePublicKey,
 } from "./utils";
@@ -155,9 +155,7 @@ program
 
     const states = await glamClient.fetchGlamStates(filterOptions);
     states
-      // .sort((a, b) =>
-      // a.rawOpenfunds.fundLaunchDate > b.rawOpenfunds.fundLaunchDate ? -1 : 1,
-      // )
+      .sort((a, b) => (a.launchDate > b.launchDate ? -1 : 1))
       .forEach((state) => {
         console.log(
           state.productType,
@@ -166,7 +164,7 @@ program
           "\t",
           state.launchDate,
           "\t",
-          state.name,
+          charsToName(state.name),
         );
       });
   });
@@ -193,7 +191,7 @@ program
 
     if (newPortfolioManagerName && !options?.yes) {
       await confirmOperation(
-        `Confirm updating owner to ${newOwner} and portfolio manager name to ${newPortfolioManagerName}?`,
+        `Confirm updating owner to ${newOwner} and portfolio manager name to ${options.name}?`,
       );
     } else {
       await confirmOperation(`Confirm updating owner to ${newOwner}?`);
@@ -208,7 +206,7 @@ program
 
 program
   .command("add-asset")
-  .argument("<asset>", "New asset public key", validatePublicKey)
+  .argument("<asset>", "Asset mint public key", validatePublicKey)
   .description("Add a new asset to the GLAM")
   .action(async (asset: PublicKey, options) => {
     const stateModel = await glamClient.fetchStateModel();
@@ -240,7 +238,7 @@ program
       ));
 
     try {
-      const txSig = await glamClient.state.update({
+      const txSig = await glamClient.state.emergencyUpdate({
         enabled: enabledBool,
       });
       console.log(
@@ -271,39 +269,44 @@ program
 
 program
   .command("create <path>")
-  .description("Create a new GLAM product from a json file")
+  .description("Create a new GLAM from a json file")
   .action(async (file) => {
+    if (!fs.existsSync(file)) {
+      console.error(`File ${file} does not exist`);
+      process.exit(1);
+    }
     const data = fs.readFileSync(file, "utf8");
 
-    let stateModel = null;
     const json = JSON.parse(data);
+    if (!json.state && !json.mint) {
+      throw new Error(
+        "Invalid JSON file: must contain 'state' or 'mint' property",
+      );
+    }
 
-    if (json.accountType === "tokenizedVault") {
-      stateModel = fundJsonToStateModel(json);
-    } else {
-      stateModel = { ...json };
-      // FIXME: need to support creating a tokenized vault and a mint
-      // stateModel.mints?.forEach((mint) => {
-      //   mint.asset = new PublicKey(mint.asset);
-      //   mint.permanentDelegate = mint.permanentDelegate
-      //     ? new PublicKey(mint.permanentDelegate)
-      //     : null;
-      // });
-      if (stateModel.baseAsset) {
-        stateModel.baseAsset = new PublicKey(stateModel.baseAsset);
-      }
-      stateModel.assets = stateModel.assets.map((a) => new PublicKey(a));
-      stateModel.accountType = { [stateModel.accountType]: {} };
+    const mintModel = parseMintJson(json);
+    const stateModel = parseStateJson(json);
+
+    console.log("Mint model:", mintModel);
+    console.log("State model:", stateModel);
+
+    if (!stateModel && !mintModel) {
+      console.error(
+        "Invalid JSON file: must contain 'state' or 'mint' property",
+      );
+      process.exit(1);
     }
 
     try {
-      const [txSig] = await glamClient.state.create(stateModel, txOptions);
-      console.log("GLAM state created:", txSig);
+      const txSig = await glamClient.mint.initialize(
+        mintModel,
+        stateModel.accountType,
+        txOptions,
+      );
+      console.log("GLAM mint initialized:", txSig);
       console.log("State PDA:", glamClient.statePda.toBase58());
       console.log("Vault PDA:", glamClient.vaultPda.toBase58());
-      if (["tokenizedVault", "mint"].includes(json.accountType)) {
-        console.log("Mint PDA:", glamClient.mintPda.toBase58());
-      }
+      console.log("Mint PDA:", glamClient.mintPda.toBase58());
 
       cliConfig.glamState = glamClient.statePda;
     } catch (e) {
@@ -339,19 +342,17 @@ program
   .action(async (state: PublicKey | null, options) => {
     const statePda = state || cliConfig.glamState;
     const glamClient = new GlamClient({ statePda });
+    const stateModel = await glamClient.fetchStateModel();
 
     options?.yes ||
       (await confirmOperation(
-        `Confirm closing GLAM with state pubkey ${statePda.toBase58()}?`,
+        `Confirm closing GLAM: ${stateModel.nameStr} (state pubkey ${statePda.toBase58()})?`,
       ));
 
     const preInstructions = [];
-    const stateAccount = await glamClient.fetchStateAccount();
-    if (!stateAccount.mint.equals(PublicKey.default)) {
-      // FIXME: close mints
-      // const closeMintIx = await glamClient.mint.closeMintIx();
-      // preInstructions.push(closeMintIx);
-      throw new Error("Cannot close a GLAM with mints");
+    if (!stateModel.mint.equals(PublicKey.default)) {
+      const closeMintIx = await glamClient.mint.closeMintIx();
+      preInstructions.push(closeMintIx);
     }
     try {
       const txSig = await glamClient.state.close({
@@ -359,7 +360,7 @@ program
         preInstructions,
       });
 
-      console.log(`GLAM with state pubkey ${statePda} closed:`, txSig);
+      console.log(`${stateModel.nameStr} closed:`, txSig);
       cliConfig.glamState = null;
     } catch (e) {
       console.error(parseTxError(e));
