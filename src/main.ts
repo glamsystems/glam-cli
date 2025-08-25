@@ -34,6 +34,7 @@ import { installAltCommands } from "./cmds/alt";
 import { installStakeCommands } from "./cmds/stake";
 import { installVaultCommands } from "./cmds/vault";
 import { idlCheck } from "./idl";
+import { installManageCommands } from "./cmds/manage";
 // import { installJupCommands } from "./cmds/jup";
 // import { installMeteoraCommands } from "./cmds/meteora";
 // import { installValidatorCommands } from "./cmds/validator";
@@ -382,10 +383,10 @@ installIntegrationCommands(integration, glamClient, cliConfig, txOptions);
 // const jup = program.command("jup").description("JUP staking");
 // installJupCommands(jup, glamClient, cliConfig, txOptions);
 
-const klend = program.command("klend").description("Kamino lending");
+const klend = program.command("kamino-lend").description("Kamino lending");
 installKLendCommands(klend, glamClient, cliConfig, txOptions);
 
-const kvaults = program.command("kvaults").description("Kamino vaults");
+const kvaults = program.command("kamino-vaults").description("Kamino vaults");
 installKVaultsCommands(kvaults, glamClient, cliConfig, txOptions);
 
 const marinade = program.command("marinade").description("Marinade staking");
@@ -411,8 +412,13 @@ installMintCommands(mint, glamClient, cliConfig, txOptions);
 
 const invest = program
   .command("invest")
-  .description("Tokenized vault operations");
+  .description("Tokenized vault investor operations");
 installInvestCommands(invest, glamClient, cliConfig, txOptions);
+
+const manage = program
+  .command("manage")
+  .description("Tokenized vault manager operations");
+installManageCommands(manage, glamClient, cliConfig, txOptions);
 
 const alt = program.command("alt").description("Manage address lookup tables");
 installAltCommands(alt, glamClient, cliConfig, txOptions);

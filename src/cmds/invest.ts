@@ -4,8 +4,6 @@ import {
   PriceDenom,
   RequestType,
   TxOptions,
-  USDC,
-  WSOL,
 } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
 import {
@@ -14,17 +12,17 @@ import {
   parseTxError,
   validatePublicKey,
 } from "../utils";
-import { LAMPORTS_PER_SOL, PublicKey, Transaction } from "@solana/web3.js";
+import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import tokens from "../tokens-verified.json";
 
 export function installInvestCommands(
-  tokenized: Command,
+  invest: Command,
   glamClient: GlamClient,
   cliConfig: CliConfig,
   txOptions: TxOptions,
 ) {
-  tokenized
-    .command("sub")
+  invest
+    .command("subscribe")
     .argument("<amount>", "Amount to subscribe", parseFloat)
     .argument(
       "[state]",
@@ -64,11 +62,7 @@ export function installInvestCommands(
           `Confirm ${options?.queued ? "queued" : "instant"} subscription with ${amount} ${symbol} (${name})?`,
         ));
 
-      const priceDenom = baseAsset.equals(WSOL)
-        ? PriceDenom.SOL
-        : baseAsset.equals(USDC)
-          ? PriceDenom.USD
-          : PriceDenom.ASSET;
+      const priceDenom = PriceDenom.fromAsset(baseAsset);
       const amountBN = new BN(amount * 10 ** decimals);
       const preInstructions = await glamClient.price.priceVaultIxs(priceDenom); // this loads lookup tables
       const lookupTables = glamClient.price.lookupTables;
@@ -90,57 +84,8 @@ export function installInvestCommands(
       }
     });
 
-  tokenized
-    .command("price")
-    .option("-d, --denom <denom>", "Price denomination, USD or SOL", "USD")
-    .description("Price vault assets")
-    .action(async (options) => {
-      const priceDenom = PriceDenom.fromString(options?.denom);
-      const ixs = await glamClient.price.priceVaultIxs(priceDenom); // this loads lookup tables
-      const lookupTables = glamClient.price.lookupTables;
-
-      const tx = new Transaction().add(...ixs);
-
-      try {
-        const vTx = await glamClient.intoVersionedTransaction(tx, {
-          ...txOptions,
-          lookupTables,
-        });
-        const txSig = await glamClient.sendAndConfirm(vTx);
-        console.log("Priced vault assets:", txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
-    });
-
-  tokenized
-    .command("fulfill")
-    .description("Fulfill queued subscriptions and redemptions")
-    .action(async () => {
-      const stateModel = await glamClient.fetchStateModel();
-      const asset = stateModel.baseAssetMint;
-      const priceDenom = PriceDenom.fromAsset(asset);
-
-      const preInstructions = await glamClient.price.priceVaultIxs(priceDenom); // this loads lookup tables
-      const lookupTables = glamClient.price.lookupTables;
-
-      try {
-        const txSig = await glamClient.invest.fulfill({
-          ...txOptions,
-          preInstructions,
-          lookupTables,
-          simulate: true,
-        });
-        console.log(`${glamClient.signer} triggered fulfillment:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        throw e;
-      }
-    });
-
-  tokenized
-    .command("claim-sub")
+  invest
+    .command("claim-subscription")
     .description(
       "Claim subscription and receive share tokens. Only needed for queued subscriptions.",
     )
@@ -164,7 +109,7 @@ export function installInvestCommands(
       }
     });
 
-  tokenized
+  invest
     .command("redeem <amount>")
     .description("Request to redeem share tokens")
     .option("-y, --yes", "Skip confirmation prompt")
@@ -187,8 +132,8 @@ export function installInvestCommands(
       }
     });
 
-  tokenized
-    .command("claim-redeem")
+  invest
+    .command("claim-redemption")
     .description("Claim redemption to receive deposit asset")
     .action(async () => {
       const preInstructions = await glamClient.price.priceVaultIxs(
@@ -203,19 +148,6 @@ export function installInvestCommands(
           lookupTables,
         });
         console.log(`${glamClient.signer} claimed tokens:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        throw e;
-      }
-    });
-
-  tokenized
-    .command("claim-fees")
-    .description("Claim fees collected by tokenized vault")
-    .action(async () => {
-      try {
-        const txSig = await glamClient.fees.claimFees();
-        console.log(`${glamClient.signer} claimed fees:`, txSig);
       } catch (e) {
         console.error(parseTxError(e));
         throw e;

@@ -21,13 +21,13 @@ export function installIntegrationCommands(
       const stateModel = await glamClient.fetchStateModel();
       const cnt = stateModel.integrationAcls.length;
       console.log(
-        `${stateModel.name} (${glamClient.statePda}) has ${cnt} integration program${
+        `${stateModel.nameStr} (${glamClient.statePda}) has ${cnt} integration program${
           cnt > 1 ? "s" : ""
         } enabled`,
       );
       for (let [i, integ] of stateModel.integrationAcls.entries()) {
         console.log(
-          `[${i}] ${integ.integrationProgram} protocolsBitmask: ${integ.protocolsBitmask.toString(2).padStart(16, "0")}}`,
+          `[${i}] ${integ.integrationProgram} protocolsBitmask: ${integ.protocolsBitmask.toString(2).padStart(16, "0")}`,
         );
       }
     });
@@ -50,7 +50,7 @@ export function installIntegrationCommands(
     .description("Enable an integration program")
     .argument(
       "<integration_program_id>",
-      `Integration to enable (must be one of: ${allowIntegrations.join(", ")})`,
+      "Integration program to enable",
       validatePublicKey,
     )
     .action(async (integrationProgramId: PublicKey) => {
@@ -96,13 +96,21 @@ export function installIntegrationCommands(
     )
     .action(async (integrationProgramId) => {
       const stateModel = await glamClient.fetchStateModel();
+      const acl = stateModel.integrationAcls.find((integ) =>
+        integ.integrationProgram.equals(integrationProgramId),
+      );
+      if (!acl) {
+        console.log(
+          `${integrationProgramId} is not enabled on ${stateModel.name}`,
+        );
+        process.exit(1);
+      }
+      acl.protocolsBitmask = 0; // disable all protocols == disable the integration program
 
       try {
         const txSig = await glamClient.state.update(
           {
-            integrationAcls: stateModel.integrationAcls.filter(
-              (integ) => integ.integrationProgram !== integrationProgramId,
-            ),
+            integrationAcls: [acl],
           },
           txOptions,
         );

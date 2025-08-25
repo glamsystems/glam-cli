@@ -14,7 +14,7 @@ export function installSwapCommands(
   txOptions: TxOptions = {},
 ) {
   program
-    .command("swap <from> <to> <amount>")
+    .command("jupiter-swap <from> <to> <amount>")
     .description("Swap assets held in the vault")
     .option("-m, --max-accounts <num>", "Specify max accounts allowed")
     .option("-s, --slippage-bps <bps>", "Specify slippage bps")

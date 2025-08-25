@@ -28,18 +28,17 @@ export function installDelegateCommands(
     .command("list")
     .description("List delegates and their permissions")
     .action(async () => {
-      console.log("cliConfig:", cliConfig);
-
       const stateModel = await glamClient.fetchStateModel();
       const cnt = stateModel.delegateAcls.length;
       console.log(
-        `${stateModel.name} (${glamClient.statePda}) has ${cnt} delegate${cnt > 1 ? "s" : ""}`,
+        `${stateModel.nameStr} (${glamClient.statePda}) has ${cnt} delegate${cnt > 1 ? "s" : ""}`,
       );
       for (let [i, acl] of stateModel.delegateAcls.entries()) {
         console.log(
           `[${i}] ${acl.pubkey.toBase58()}:`,
-          // @ts-ignore
-          acl.permissions.map((p) => Object.keys(p)[0]).join(", "),
+          acl.integrationPermissions
+            .map((p) => p.integrationProgram.toBase58())
+            .join(", "),
         );
       }
     });
@@ -49,11 +48,13 @@ export function installDelegateCommands(
     .argument("<pubkey>", "Delegate pubkey")
     .argument(
       "<integration_programs...>",
-      "Integration program to grant permissions to",
+      "Integration programs to grant permissions to",
     )
-    .description("Grant delegate new permissions")
+    .description("Grant delegate permissions to integration programs")
     .action(async (pubkey, integrationPrograms: string[]) => {
       // validate(permissions);
+
+      console.log("integrationPrograms:", integrationPrograms);
 
       const stateModel = await glamClient.fetchStateModel();
       const acl = stateModel.delegateAcls.find(
@@ -109,49 +110,53 @@ export function installDelegateCommands(
       }
     });
 
-  // delegate
-  //   .command("revoke")
-  //   .argument("<pubkey>", "Delegate pubkey")
-  //   .argument(
-  //     "<permissions...>",
-  //     `A space-separated list of permissions to revoke. Allowed values: ${allowedPermissions.join(", ")}.`,
-  //   )
-  //   .description("Revoke delegate permissions")
-  //   .action(async (pubkey, permissions) => {
-  //     validate(permissions);
+  delegate
+    .command("revoke")
+    .argument("<pubkey>", "Delegate pubkey")
+    .argument(
+      "<integration_programs...>",
+      "Integration programs to revoke permissions from",
+    )
+    .description(
+      "Revoke delegate permissions to specified integration programs",
+    )
+    .action(async (pubkey, integrationPrograms) => {
+      // validate(permissions);
 
-  //     const stateModel = await glamClient.fetchStateModel();
-  //     const acl = stateModel.delegateAcls.find(
-  //       (acl) => acl.pubkey.toBase58() === pubkey,
-  //     );
-  //     if (!acl) {
-  //       console.error(`Delegate ${pubkey} not found. No need to revoke.`);
-  //       return;
-  //     }
-  //     const existingPermissionKeys = new Set(
-  //       acl.permissions.map((p) => Object.keys(p)[0]),
-  //     );
-  //     const updatedPermissions = Array.from(existingPermissionKeys)
-  //       .filter((p) => !permissions.includes(p))
-  //       .map((p) => ({ [p]: {} }));
+      const stateModel = await glamClient.fetchStateModel();
+      const acl = stateModel.delegateAcls.find(
+        (acl) => acl.pubkey.toBase58() === pubkey,
+      );
+      if (!acl) {
+        console.error(`Delegate ${pubkey} not found. No need to revoke.`);
+        return;
+      }
+      // const existingIntegrationPrograms = new Set(
+      //   acl.integrationPermissions.map((p) => p.integrationProgram.toBase58()),
+      // );
+      // const updatedPermissions = Array.from(existingIntegrationPrograms)
+      //   .filter((p) => !integrationPrograms.includes(p))
+      //   .map((p) => ({ [p]: {} }));
 
-  //     try {
-  //       const txSig = await glamClient.state.upsertDelegateAcls(
-  //         [
-  //           {
-  //             pubkey: new PublicKey(pubkey),
-  //             permissions: updatedPermissions,
-  //             expiresAt: new BN(0),
-  //           },
-  //         ],
-  //         txOptions,
-  //       );
-  //       console.log(`Revoked ${pubkey} permissions ${permissions}: ${txSig}`);
-  //     } catch (e) {
-  //       console.error(parseTxError(e));
-  //       process.exit(1);
-  //     }
-  //   });
+      try {
+        const txSig = await glamClient.state.upsertDelegateAcls(
+          [
+            {
+              pubkey: new PublicKey(pubkey),
+              expiresAt: new BN(0),
+              integrationPermissions: [],
+            },
+          ],
+          txOptions,
+        );
+        console.log(
+          `Revoked ${pubkey} permissions to ${integrationPrograms.join(", ")}: ${txSig}`,
+        );
+      } catch (e) {
+        console.error(parseTxError(e));
+        process.exit(1);
+      }
+    });
 
   delegate
     .command("delete")
