@@ -5,7 +5,7 @@ import {
   nameToChars,
   TxOptions,
 } from "@glamsystems/glam-sdk";
-import { PublicKey } from "@solana/web3.js";
+import { PublicKey, Transaction } from "@solana/web3.js";
 import { Command } from "commander";
 
 import fs from "fs";
@@ -334,6 +334,48 @@ program
       process.exit(1);
     }
   });
+
+program
+  .command("set-protocol-fees")
+  .argument(
+    "<state>",
+    "GLAM state public key for the tokenized vault",
+    validatePublicKey,
+  )
+  .argument("<base-fee-bps>", "Base fee in basis points", parseInt)
+  .argument("<flow-fee-bps>", "Flow fee in basis points", parseInt)
+  .option("-y, --yes", "Skip confirmation prompt")
+  .description("Set protocol fees for a GLAM tokenized vault")
+  .action(
+    async (
+      state: PublicKey,
+      baseFeeBps: number,
+      flowFeeBps: number,
+      options,
+    ) => {
+      options?.yes ||
+        (await confirmOperation(
+          `Confirm setting protocol base fee to ${baseFeeBps} and flow fee to ${flowFeeBps} for ${state}?`,
+        ));
+
+      try {
+        const ix = await glamClient.mintProgram.methods
+          .setProtocolFees(baseFeeBps, flowFeeBps)
+          .accounts({
+            glamState: state,
+          })
+          .instruction();
+        const tx = new Transaction().add(ix);
+        const vTx = await glamClient.intoVersionedTransaction(tx, txOptions);
+        const txSig = await glamClient.sendAndConfirm(vTx);
+
+        console.log(`Set protocol fees for ${state}:`, txSig);
+      } catch (e) {
+        console.error(parseTxError(e));
+        process.exit(1);
+      }
+    },
+  );
 
 program
   .command("close")
