@@ -1,11 +1,5 @@
 import { AnchorError, BN } from "@coral-xyz/anchor";
-import {
-  ManagerModel,
-  MintModel,
-  nameToChars,
-  PriorityLevel,
-  StateModel,
-} from "@glamsystems/glam-sdk";
+import { nameToChars, PriorityLevel } from "@glamsystems/glam-sdk";
 import {
   PublicKey,
   TransactionExpiredBlockheightExceededError,
