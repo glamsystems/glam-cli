@@ -227,23 +227,32 @@ program
   .description("Set GLAM state enabled or disabled")
   .option("-y, --yes", "Skip confirmation prompt")
   .action(async (enabled, options) => {
+    const parseBooleanInput = (input: string): boolean => {
+      const normalized = input.toLowerCase().trim();
+      const truthyValues = ["true", "1", "yes", "y", "on", "enable"];
+      const falsyValues = ["false", "0", "no", "n", "off", "disable"];
+
+      if (truthyValues.includes(normalized)) return true;
+      if (falsyValues.includes(normalized)) return false;
+
+      throw new Error(
+        `Invalid boolean value: "${input}". Use: true/false, yes/no, 1/0, enable/disable`,
+      );
+    };
+    const enabledBool = parseBooleanInput(enabled);
     const glamState = cliConfig.glamState;
-
-    // Convert string input to boolean
-    const enabledBool =
-      enabled === "true" || enabled === "1" || enabled === "yes";
-
     options?.yes ||
       (await confirmOperation(
-        `Confirm ${enabledBool ? "enabling" : "disabling"} ${glamState.toBase58()}?`,
+        `Confirm ${enabledBool ? "enabling" : "disabling"} ${glamState}?`,
       ));
 
     try {
-      const txSig = await glamClient.state.emergencyUpdate({
-        enabled: enabledBool,
-      });
+      const txSig = await glamClient.access.emergencyAccessUpdate(
+        { stateEnabled: enabledBool },
+        txOptions,
+      );
       console.log(
-        `Set GLAM state ${glamState.toBase58()} to ${enabledBool ? "enabled" : "disabled"}:`,
+        `Set GLAM state ${glamState} to ${enabledBool ? "enabled" : "disabled"}:`,
         txSig,
       );
     } catch (e) {
