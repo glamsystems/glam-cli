@@ -4,24 +4,10 @@ import {
   PriceDenom,
   RequestType,
   TxOptions,
-  USDC,
-  WSOL,
 } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
-import {
-  CliConfig,
-  confirmOperation,
-  parseTxError,
-  validatePublicKey,
-} from "../utils";
-import { LAMPORTS_PER_SOL, PublicKey, Transaction } from "@solana/web3.js";
-import tokens from "../tokens-verified.json";
-import {
-  encodeMintPolicy,
-  MintPolicy,
-  MintPolicyLayout,
-} from "anchor/src/deser/integrationPolicies";
-
+import { CliConfig, confirmOperation, parseTxError } from "../utils";
+import { Transaction } from "@solana/web3.js";
 export function installManageCommands(
   manage: Command,
   glamClient: GlamClient,
@@ -96,16 +82,10 @@ export function installManageCommands(
     .description("Update the minimum subscription amount")
     .action(async (amount) => {
       const stateModel = await glamClient.fetchStateModel();
-      const { mint } = await glamClient.fetchMintAndTokenProgram(
-        stateModel.baseAssetMint,
-      );
-      const amountBN = new BN(amount * 10 ** mint.decimals);
+      const amountBN = new BN(amount * 10 ** stateModel.baseAssetDecimals!);
       try {
         const txSig = await glamClient.mint.update(
-          {
-            ...stateModel.mintModel.notifyAndSettle,
-            minSubscriptionAmount: amountBN,
-          },
+          { minSubscription: amountBN },
           txOptions,
         );
         console.log(`Updated minimum subscription amount to ${amount}:`, txSig);
@@ -120,43 +100,70 @@ export function installManageCommands(
     .argument("<amount>", "Minimum redemption amount", parseFloat)
     .description("Update the minimum redemption amount")
     .action(async (amount) => {
-      const amountBN = new BN(amount * 10 ** 9); // share amount is always in 9 decimals
-
-      const stateAccount = await glamClient.fetchStateAccount();
-      const mintIntegrationPolicy = stateAccount.integrationAcls?.find((acl) =>
-        acl.integrationProgram.equals(glamClient.mintProgram.programId),
-      );
-      const mintPolicyData = mintIntegrationPolicy?.protocolPolicies?.find(
-        (policy) => policy.protocolBitflag === 1,
-      )?.data;
-      const mintPolicy = MintPolicyLayout.decode(mintPolicyData) as MintPolicy;
-
-      const updatedMintPolicy = {
-        ...mintPolicy,
-        minRedemption: amountBN,
-      };
-
-      const encodedBuffer = encodeMintPolicy(updatedMintPolicy);
-
+      const stateModel = await glamClient.fetchStateModel();
+      const amountBN = new BN(amount * 10 ** stateModel.baseAssetDecimals!);
       try {
-        const txSig = await glamClient.state.update(
-          {
-            integrationAcls: [
-              {
-                integrationProgram: glamClient.mintProgram.programId,
-                protocolsBitmask: 0b1,
-                protocolPolicies: [
-                  {
-                    protocolBitflag: 0b1,
-                    data: encodedBuffer,
-                  },
-                ],
-              },
-            ],
-          },
+        const txSig = await glamClient.mint.update(
+          { minRedemption: amountBN },
           txOptions,
         );
         console.log(`Updated minimum redemption amount to ${amount}:`, txSig);
+      } catch (e) {
+        console.error(parseTxError(e));
+        throw e;
+      }
+    });
+
+  manage
+    .command("pause")
+    .argument("<action>", "Action to pause", (action) => {
+      if (action !== "subscription" && action !== "redemption") {
+        console.error(`<action> must be "subscription" or "redemption"`);
+        process.exit(1);
+      }
+      return action;
+    })
+    .option("-y, --yes", "Skip confirmation prompt")
+    .description("Pause subscription or redemption")
+    .action(async (action, options) => {
+      options?.yes || (await confirmOperation(`Confirm pausing ${action}?`));
+
+      const promise =
+        action === "subscription"
+          ? glamClient.mint.pauseSubscription(txOptions)
+          : glamClient.mint.pauseRedemption(txOptions);
+
+      try {
+        const txSig = await promise;
+        console.log(`Paused ${action}:`, txSig);
+      } catch (e) {
+        console.error(parseTxError(e));
+        throw e;
+      }
+    });
+
+  manage
+    .command("unpause")
+    .argument("<action>", "Action to pause", (action) => {
+      if (action !== "subscription" && action !== "redemption") {
+        console.error(`<action> must be "subscription" or "redemption"`);
+        process.exit(1);
+      }
+      return action;
+    })
+    .option("-y, --yes", "Skip confirmation prompt")
+    .description("Unpause subscription or redemption")
+    .action(async (action, options) => {
+      options?.yes || (await confirmOperation(`Confirm unpausing ${action}?`));
+
+      const promise =
+        action === "subscription"
+          ? glamClient.mint.unpauseSubscription(txOptions)
+          : glamClient.mint.unpauseRedemption(txOptions);
+
+      try {
+        const txSig = await promise;
+        console.log(`Unpaused ${action}:`, txSig);
       } catch (e) {
         console.error(parseTxError(e));
         throw e;
