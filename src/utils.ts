@@ -194,7 +194,7 @@ export function parseMintJson(json: any) {
     name: json.mint.name ? nameToChars(json.mint.name) : null,
     symbol: json.mint.symbol,
     uri: json.mint.uri,
-    asset: new PublicKey(json.mint.asset),
+    baseAssetMint: new PublicKey(json.mint.baseAssetMint),
     maxCap: json.mint.maxCap ? new BN(json.mint.maxCap) : null,
     minSubscription: json.mint.minSubscription
       ? new BN(json.mint.minSubscription)
@@ -216,6 +216,7 @@ export function parseMintJson(json: any) {
               [json.mint.feeStructure.performance.hurdleType]: {},
             },
           },
+          protocol: { baseFeeBps: 0, floorFeeBps: 0 },
         }
       : null,
     notifyAndSettle: json.mint.notifyAndSettle

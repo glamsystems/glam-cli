@@ -7,14 +7,14 @@ import {
 import { Command } from "commander";
 import { CliConfig, confirmOperation, parseTxError } from "../utils";
 
-export function installSwapCommands(
+export function installJupiterCommands(
   program: Command,
   glamClient: GlamClient,
   cliConfig: CliConfig,
   txOptions: TxOptions = {},
 ) {
   program
-    .command("jupiter-swap <from> <to> <amount>")
+    .command("swap <from> <to> <amount>")
     .description("Swap assets held in the vault")
     .option("-m, --max-accounts <num>", "Specify max accounts allowed")
     .option("-s, --slippage-bps <bps>", "Specify slippage bps")

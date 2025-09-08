@@ -5,10 +5,10 @@
   "mint": {
     "name": "GLAM SOL",
     "symbol": "gmSOL",
-    "asset": "So11111111111111111111111111111111111111112",
+    "baseAssetMint": "So11111111111111111111111111111111111111112",
     "maxCap": 1000000000000,
-    "minSubscription": 1000000000,
-    "minRedemption": 1000000000,
+    "minSubscription": 100000000,
+    "minRedemption": 100000000,
     "lockupPeriod": 0,
     "feeStructure": {
       "vault": {

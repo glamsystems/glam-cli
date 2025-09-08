@@ -21,14 +21,14 @@ import {
 import { VersionedTransaction } from "@solana/web3.js";
 import { installDriftCommands } from "./cmds/drift";
 import { installDriftVaultsCommands } from "./cmds/drift-vaults";
-import { installMintCommands } from "./cmds/mint";
+// import { installMintCommands } from "./cmds/mint";
 import { installLstCommands } from "./cmds/lst";
 import { installMarinadeCommands } from "./cmds/marinade";
 import { installKLendCommands } from "./cmds/klend";
 import { installKVaultsCommands } from "./cmds/kvaults";
 import { installIntegrationCommands } from "./cmds/integration";
 import { installDelegateCommands } from "./cmds/delegate";
-import { installSwapCommands } from "./cmds/swap";
+import { installJupiterCommands } from "./cmds/jupiter";
 import { installInvestCommands } from "./cmds/invest";
 import { installAltCommands } from "./cmds/alt";
 import { installStakeCommands } from "./cmds/stake";
@@ -297,9 +297,6 @@ program
     const mintModel = parseMintJson(json);
     const stateModel = parseStateJson(json);
 
-    console.log("Mint model:", mintModel);
-    console.log("State model:", stateModel);
-
     if (!stateModel && !mintModel) {
       console.error(
         "Invalid JSON file: must contain 'state' or 'mint' property",
@@ -403,7 +400,7 @@ program
 
     const preInstructions = [];
     if (!stateModel.mint.equals(PublicKey.default)) {
-      const closeMintIx = await glamClient.mint.closeMintIx();
+      const closeMintIx = await glamClient.mint.txBuilder.closeMintIx();
       preInstructions.push(closeMintIx);
     }
     try {
@@ -420,8 +417,11 @@ program
     }
   });
 
-installSwapCommands(program, glamClient, cliConfig, txOptions);
-installVaultCommands(program, glamClient, cliConfig, txOptions);
+const jupiter = program.command("jupiter").description("Jupiter protocols");
+installJupiterCommands(jupiter, glamClient, cliConfig, txOptions);
+
+const vault = program.command("vault").description("Manage vault");
+installVaultCommands(vault, glamClient, cliConfig, txOptions);
 
 const delegate = program.command("delegate").description("Manage delegates");
 installDelegateCommands(delegate, glamClient, cliConfig, txOptions);
@@ -458,8 +458,8 @@ installDriftCommands(drift, glamClient, cliConfig, txOptions);
 const driftVaults = program.command("drift-vaults").description("Drift vaults");
 installDriftVaultsCommands(driftVaults, glamClient, cliConfig, txOptions);
 
-const mint = program.command("mint").description("Mint operations");
-installMintCommands(mint, glamClient, cliConfig, txOptions);
+// const mint = program.command("mint").description("Mint operations");
+// installMintCommands(mint, glamClient, cliConfig, txOptions);
 
 const invest = program
   .command("invest")

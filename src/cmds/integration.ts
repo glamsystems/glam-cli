@@ -1,9 +1,4 @@
-import {
-  formatBits,
-  GlamClient,
-  StateAccountType,
-  TxOptions,
-} from "@glamsystems/glam-sdk";
+import { formatBits, GlamClient, TxOptions } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
 import { CliConfig, parseTxError, validatePublicKey } from "../utils";
 import { PublicKey } from "@solana/web3.js";
