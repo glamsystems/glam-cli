@@ -421,11 +421,21 @@ export function installDriftCommands(
     });
 
   drift
-    .command("delete")
-    .description("Delete a drift user")
-    .action(async () => {
+    .command("delete-user")
+    .argument("<sub_account_id>", "Sub account ID", parseInt)
+    .option("-y, --yes", "Skip confirmation prompt")
+    .description("Delete a drift user (sub account)")
+    .action(async (subAccountId, options) => {
+      options?.yes ||
+        (await confirmOperation(
+          `Confirm deleting drift user (sub account) ${subAccountId}?`,
+        ));
+
       try {
-        const txSig = await glamClient.drift.deleteUser(0, txOptions);
+        const txSig = await glamClient.drift.deleteUser(
+          subAccountId,
+          txOptions,
+        );
         console.log(`Deleted drift user: ${txSig}`);
       } catch (e) {
         console.error(parseTxError(e));

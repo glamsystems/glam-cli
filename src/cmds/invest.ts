@@ -153,4 +153,19 @@ export function installInvestCommands(
         throw e;
       }
     });
+
+  invest
+    .command("cancel")
+    .description(
+      "Cancel a queued subscription or redemption that has not been fulfilled",
+    )
+    .action(async () => {
+      try {
+        const txSig = await glamClient.invest.cancel(txOptions);
+        console.log(`${glamClient.signer} cancelled queued request:`, txSig);
+      } catch (e) {
+        console.error(parseTxError(e));
+        throw e;
+      }
+    });
 }
