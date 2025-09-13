@@ -1,6 +1,6 @@
 {
   "name": "@glamsystems/glam-cli",
-  "version": "0.1.32",
+  "version": "0.1.33",
   "description": "CLI for interacting with the GLAM Protocol",
   "main": "./main.js",
   "bin": {
@@ -21,7 +21,7 @@
     "node": ">=20.18.0"
   },
   "dependencies": {
-    "@glamsystems/glam-sdk": "0.1.32",
+    "@glamsystems/glam-sdk": "0.1.33",
     "commander": "^11.1.0",
     "inquirer": "^8.2.6",
     "@switchboard-xyz/common": "^3.0.0"
