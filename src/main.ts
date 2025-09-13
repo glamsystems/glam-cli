@@ -1,11 +1,9 @@
 import {
-  charsToName,
   getPriorityFeeEstimate,
   GlamClient,
-  nameToChars,
   TxOptions,
 } from "@glamsystems/glam-sdk";
-import { PublicKey, Transaction } from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
 import { Command } from "commander";
 
 import fs from "fs";
@@ -13,56 +11,33 @@ import fs from "fs";
 import {
   CliConfig,
   confirmOperation,
-  parseMintJson,
-  parseStateJson,
+  fundJsonToStateModel,
   parseTxError,
   validatePublicKey,
 } from "./utils";
 import { VersionedTransaction } from "@solana/web3.js";
 import { installDriftCommands } from "./cmds/drift";
 import { installDriftVaultsCommands } from "./cmds/drift-vaults";
-// import { installMintCommands } from "./cmds/mint";
+import { installMintCommands } from "./cmds/mint";
+import { installMeteoraCommands } from "./cmds/meteora";
 import { installLstCommands } from "./cmds/lst";
 import { installMarinadeCommands } from "./cmds/marinade";
 import { installKLendCommands } from "./cmds/klend";
 import { installKVaultsCommands } from "./cmds/kvaults";
+import { installJupCommands } from "./cmds/jup";
 import { installIntegrationCommands } from "./cmds/integration";
 import { installDelegateCommands } from "./cmds/delegate";
-import { installJupiterCommands } from "./cmds/jupiter";
+import { installSwapCommands } from "./cmds/swap";
 import { installInvestCommands } from "./cmds/invest";
 import { installAltCommands } from "./cmds/alt";
 import { installStakeCommands } from "./cmds/stake";
 import { installVaultCommands } from "./cmds/vault";
+import { installValidatorCommands } from "./cmds/validator";
 import { idlCheck } from "./idl";
-import { installManageCommands } from "./cmds/manage";
-// import { installJupCommands } from "./cmds/jup";
-// import { installMeteoraCommands } from "./cmds/meteora";
-// import { installValidatorCommands } from "./cmds/validator";
 
 let cliConfig: CliConfig;
 let glamClient: GlamClient;
 let txOptions: TxOptions;
-
-// Graceful shutdown handling
-function setupGracefulShutdown() {
-  process.on("SIGINT", () => {
-    process.exit(0);
-  });
-
-  process.on("SIGTERM", () => {
-    process.exit(0);
-  });
-
-  process.on("uncaughtException", (error) => {
-    console.error("\nUncaught Exception:", error);
-    process.exit(1);
-  });
-
-  process.on("unhandledRejection", (reason, promise) => {
-    console.error("\nUnhandled Rejection at:", promise, "reason:", reason);
-    process.exit(1);
-  });
-}
 
 function initialize(configPath?: string) {
   // Load config from the specified path or default
@@ -95,7 +70,6 @@ function initialize(configPath?: string) {
 }
 
 initialize();
-setupGracefulShutdown();
 
 const program = new Command();
 program
@@ -116,10 +90,6 @@ program
     console.log("Wallet connected:", glamClient.getSigner().toBase58());
     console.log("RPC endpoint:", glamClient.provider.connection.rpcEndpoint);
     console.log("Priority fee:", cliConfig.priority_fee);
-    console.log(
-      "GLAM protocol:",
-      glamClient.protocolProgram.programId.toBase58(),
-    );
     if (cliConfig.glam_state) {
       const vault = glamClient.vaultPda;
       console.log("GLAM state:", glamClient.statePda.toBase58());
@@ -156,7 +126,9 @@ program
 
     const states = await glamClient.fetchGlamStates(filterOptions);
     states
-      .sort((a, b) => (a.launchDate > b.launchDate ? -1 : 1))
+      .sort((a, b) =>
+        a.rawOpenfunds.fundLaunchDate > b.rawOpenfunds.fundLaunchDate ? -1 : 1,
+      )
       .forEach((state) => {
         console.log(
           state.productType,
@@ -165,7 +137,7 @@ program
           "\t",
           state.launchDate,
           "\t",
-          charsToName(state.name),
+          state.name,
         );
       });
   });
@@ -182,32 +154,25 @@ program
 program
   .command("update-owner")
   .argument("<new-owner>", "New owner public key", validatePublicKey)
-  .option("-n, --name <name>", "New portfolio manager name")
-  .option("-y, --yes", "Skip confirmation prompt")
   .description("Update the owner of a GLAM instance")
+  .option("-y, --yes", "Skip confirmation prompt")
   .action(async (newOwner: PublicKey, options) => {
-    const newPortfolioManagerName = options?.name
-      ? nameToChars(options.name)
-      : null;
-
-    if (newPortfolioManagerName && !options?.yes) {
-      await confirmOperation(
-        `Confirm updating owner to ${newOwner} and portfolio manager name to ${options.name}?`,
-      );
-    } else {
-      await confirmOperation(`Confirm updating owner to ${newOwner}?`);
-    }
+    options?.yes ||
+      (await confirmOperation(`Confirm updating owner to ${newOwner}?`));
 
     const txSig = await glamClient.state.update({
-      owner: newOwner,
-      portfolioManagerName: newPortfolioManagerName,
+      owner: {
+        portfolioManagerName: null,
+        pubkey: newOwner,
+        kind: { wallet: {} },
+      },
     });
     console.log(`Updated GLAM owner to ${newOwner}: ${txSig}`);
   });
 
 program
   .command("add-asset")
-  .argument("<asset>", "Asset mint public key", validatePublicKey)
+  .argument("<asset>", "New asset public key", validatePublicKey)
   .description("Add a new asset to the GLAM")
   .action(async (asset: PublicKey, options) => {
     const stateModel = await glamClient.fetchStateModel();
@@ -223,36 +188,42 @@ program
   });
 
 program
+  .command("remove-asset")
+  .argument("<asset>", "Asset public key", validatePublicKey)
+  .description("Remove an asset from the GLAM")
+  .action(async (asset: PublicKey) => {
+    const stateModel = await glamClient.fetchStateModel();
+    const newAssetsList = stateModel.assets.filter(
+      (a) => a.toBase58() !== asset.toBase58(),
+    );
+    const txSig = await glamClient.state.update({
+      assets: newAssetsList,
+    });
+    console.log(`Removed asset ${asset}: ${txSig}`);
+  });
+
+program
   .command("set-enabled <enabled>")
   .description("Set GLAM state enabled or disabled")
   .option("-y, --yes", "Skip confirmation prompt")
   .action(async (enabled, options) => {
-    const parseBooleanInput = (input: string): boolean => {
-      const normalized = input.toLowerCase().trim();
-      const truthyValues = ["true", "1", "yes", "y", "on", "enable"];
-      const falsyValues = ["false", "0", "no", "n", "off", "disable"];
-
-      if (truthyValues.includes(normalized)) return true;
-      if (falsyValues.includes(normalized)) return false;
-
-      throw new Error(
-        `Invalid boolean value: "${input}". Use: true/false, yes/no, 1/0, enable/disable`,
-      );
-    };
-    const enabledBool = parseBooleanInput(enabled);
     const glamState = cliConfig.glamState;
+
+    // Convert string input to boolean
+    const enabledBool =
+      enabled === "true" || enabled === "1" || enabled === "yes";
+
     options?.yes ||
       (await confirmOperation(
-        `Confirm ${enabledBool ? "enabling" : "disabling"} ${glamState}?`,
+        `Confirm ${enabledBool ? "enabling" : "disabling"} ${glamState.toBase58()}?`,
       ));
 
     try {
-      const txSig = await glamClient.access.emergencyAccessUpdate(
-        { stateEnabled: enabledBool },
-        txOptions,
-      );
+      const txSig = await glamClient.state.update({
+        enabled: enabledBool,
+      });
       console.log(
-        `Set GLAM state ${glamState} to ${enabledBool ? "enabled" : "disabled"}:`,
+        `Set GLAM state ${glamState.toBase58()} to ${enabledBool ? "enabled" : "disabled"}:`,
         txSig,
       );
     } catch (e) {
@@ -279,38 +250,34 @@ program
 
 program
   .command("create <path>")
-  .description("Create a new GLAM from a json file")
+  .description("Create a new GLAM product from a json file")
   .action(async (file) => {
-    if (!fs.existsSync(file)) {
-      console.error(`File ${file} does not exist`);
-      process.exit(1);
-    }
     const data = fs.readFileSync(file, "utf8");
 
+    let stateModel = null;
     const json = JSON.parse(data);
-    if (!json.state && !json.mint) {
-      throw new Error(
-        "Invalid JSON file: must contain 'state' or 'mint' property",
-      );
-    }
 
-    const mintModel = parseMintJson(json);
-    const stateModel = parseStateJson(json);
-
-    if (!stateModel && !mintModel) {
-      console.error(
-        "Invalid JSON file: must contain 'state' or 'mint' property",
-      );
-      process.exit(1);
+    if (json.accountType === "fund") {
+      stateModel = fundJsonToStateModel(json);
+    } else {
+      stateModel = { ...json };
+      stateModel.mints?.forEach((mint) => {
+        mint.asset = new PublicKey(mint.asset);
+        mint.permanentDelegate = mint.permanentDelegate
+          ? new PublicKey(mint.permanentDelegate)
+          : null;
+      });
+      stateModel.assets = stateModel.assets.map((a) => new PublicKey(a));
+      stateModel.accountType = { [stateModel.accountType]: {} };
     }
 
     try {
-      const txSig = await glamClient.mint.initialize(
-        mintModel,
-        stateModel.accountType,
+      const [txSig] = await glamClient.state.create(
+        stateModel,
+        false,
         txOptions,
       );
-      console.log("GLAM mint initialized:", txSig);
+      console.log("GLAM state created:", txSig);
       console.log("State PDA:", glamClient.statePda.toBase58());
       console.log("Vault PDA:", glamClient.vaultPda.toBase58());
       console.log("Mint PDA:", glamClient.mintPda.toBase58());
@@ -342,48 +309,6 @@ program
   });
 
 program
-  .command("set-protocol-fees")
-  .argument(
-    "<state>",
-    "GLAM state public key for the tokenized vault",
-    validatePublicKey,
-  )
-  .argument("<base-fee-bps>", "Base fee in basis points", parseInt)
-  .argument("<flow-fee-bps>", "Flow fee in basis points", parseInt)
-  .option("-y, --yes", "Skip confirmation prompt")
-  .description("Set protocol fees for a GLAM tokenized vault")
-  .action(
-    async (
-      state: PublicKey,
-      baseFeeBps: number,
-      flowFeeBps: number,
-      options,
-    ) => {
-      options?.yes ||
-        (await confirmOperation(
-          `Confirm setting protocol base fee to ${baseFeeBps} and flow fee to ${flowFeeBps} for ${state}?`,
-        ));
-
-      try {
-        const ix = await glamClient.mintProgram.methods
-          .setProtocolFees(baseFeeBps, flowFeeBps)
-          .accounts({
-            glamState: state,
-          })
-          .instruction();
-        const tx = new Transaction().add(ix);
-        const vTx = await glamClient.intoVersionedTransaction(tx, txOptions);
-        const txSig = await glamClient.sendAndConfirm(vTx);
-
-        console.log(`Set protocol fees for ${state}:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
-    },
-  );
-
-program
   .command("close")
   .argument("[state]", "GLAM state public key", validatePublicKey)
   .description("Close a GLAM product by its state pubkey")
@@ -391,16 +316,17 @@ program
   .action(async (state: PublicKey | null, options) => {
     const statePda = state || cliConfig.glamState;
     const glamClient = new GlamClient({ statePda });
-    const stateModel = await glamClient.fetchStateModel();
 
     options?.yes ||
       (await confirmOperation(
-        `Confirm closing GLAM: ${stateModel.nameStr} (state pubkey ${statePda.toBase58()})?`,
+        `Confirm closing GLAM with state pubkey ${statePda.toBase58()}?`,
       ));
 
     const preInstructions = [];
-    if (!stateModel.mint.equals(PublicKey.default)) {
-      const closeMintIx = await glamClient.mint.txBuilder.closeMintIx();
+    // @ts-ignore
+    const stateAccount = await glamClient.fetchStateAccount();
+    if (stateAccount.mints.length > 0) {
+      const closeMintIx = await glamClient.mint.closeMintIx();
       preInstructions.push(closeMintIx);
     }
     try {
@@ -409,7 +335,7 @@ program
         preInstructions,
       });
 
-      console.log(`${stateModel.nameStr} closed:`, txSig);
+      console.log(`GLAM with state pubkey ${statePda} closed:`, txSig);
       cliConfig.glamState = null;
     } catch (e) {
       console.error(parseTxError(e));
@@ -417,11 +343,8 @@ program
     }
   });
 
-const jupiter = program.command("jupiter").description("Jupiter protocols");
-installJupiterCommands(jupiter, glamClient, cliConfig, txOptions);
-
-const vault = program.command("vault").description("Manage vault");
-installVaultCommands(vault, glamClient, cliConfig, txOptions);
+installSwapCommands(program, glamClient, cliConfig, txOptions);
+installVaultCommands(program, glamClient, cliConfig, txOptions);
 
 const delegate = program.command("delegate").description("Manage delegates");
 installDelegateCommands(delegate, glamClient, cliConfig, txOptions);
@@ -431,13 +354,13 @@ const integration = program
   .description("Manage integrations");
 installIntegrationCommands(integration, glamClient, cliConfig, txOptions);
 
-// const jup = program.command("jup").description("JUP staking");
-// installJupCommands(jup, glamClient, cliConfig, txOptions);
+const jup = program.command("jup").description("JUP staking");
+installJupCommands(jup, glamClient, cliConfig, txOptions);
 
-const klend = program.command("kamino-lend").description("Kamino lending");
+const klend = program.command("klend").description("Kamino lending");
 installKLendCommands(klend, glamClient, cliConfig, txOptions);
 
-const kvaults = program.command("kamino-vaults").description("Kamino vaults");
+const kvaults = program.command("kvaults").description("Kamino vaults");
 installKVaultsCommands(kvaults, glamClient, cliConfig, txOptions);
 
 const marinade = program.command("marinade").description("Marinade staking");
@@ -449,8 +372,8 @@ installLstCommands(lst, glamClient, cliConfig, txOptions);
 const stake = program.command("stake").description("Native staking");
 installStakeCommands(stake, glamClient, cliConfig, txOptions);
 
-// const meteora = program.command("meteora").description("Meteora DLMM");
-// installMeteoraCommands(meteora, glamClient, cliConfig, txOptions);
+const meteora = program.command("meteora").description("Meteora DLMM");
+installMeteoraCommands(meteora, glamClient, cliConfig, txOptions);
 
 const drift = program.command("drift").description("Drift operations");
 installDriftCommands(drift, glamClient, cliConfig, txOptions);
@@ -458,26 +381,21 @@ installDriftCommands(drift, glamClient, cliConfig, txOptions);
 const driftVaults = program.command("drift-vaults").description("Drift vaults");
 installDriftVaultsCommands(driftVaults, glamClient, cliConfig, txOptions);
 
-// const mint = program.command("mint").description("Mint operations");
-// installMintCommands(mint, glamClient, cliConfig, txOptions);
+const mint = program.command("mint").description("Mint operations");
+installMintCommands(mint, glamClient, cliConfig, txOptions);
 
 const invest = program
   .command("invest")
-  .description("Tokenized vault investor operations");
+  .description("Tokenized vault operations");
 installInvestCommands(invest, glamClient, cliConfig, txOptions);
-
-const manage = program
-  .command("manage")
-  .description("Tokenized vault manager operations");
-installManageCommands(manage, glamClient, cliConfig, txOptions);
 
 const alt = program.command("alt").description("Manage address lookup tables");
 installAltCommands(alt, glamClient, cliConfig, txOptions);
 
-// const validator = program
-//   .command("validator")
-//   .description("Validator operations");
-// installValidatorCommands(validator, glamClient, cliConfig, txOptions);
+const validator = program
+  .command("validator")
+  .description("Validator operations");
+installValidatorCommands(validator, glamClient, cliConfig, txOptions);
 
 //
 // Run the CLI in development mode as follows:

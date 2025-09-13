@@ -2,8 +2,9 @@ import { BN } from "@coral-xyz/anchor";
 import {
   GlamClient,
   PriceDenom,
-  RequestType,
   TxOptions,
+  USDC,
+  WSOL,
 } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
 import {
@@ -12,17 +13,17 @@ import {
   parseTxError,
   validatePublicKey,
 } from "../utils";
-import { LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { LAMPORTS_PER_SOL, PublicKey, Transaction } from "@solana/web3.js";
 import tokens from "../tokens-verified.json";
 
 export function installInvestCommands(
-  invest: Command,
+  tokenized: Command,
   glamClient: GlamClient,
   cliConfig: CliConfig,
   txOptions: TxOptions,
 ) {
-  invest
-    .command("subscribe")
+  tokenized
+    .command("sub")
     .argument("<amount>", "Amount to subscribe", parseFloat)
     .argument(
       "[state]",
@@ -39,7 +40,7 @@ export function installInvestCommands(
       }
 
       const stateModel = await glamClient.fetchStateModel();
-      const baseAsset = stateModel.baseAssetMint;
+      const baseAsset = stateModel.baseAsset;
 
       let name, symbol, decimals;
       const metadata = tokens.find((t) => t.address === baseAsset.toString());
@@ -62,14 +63,20 @@ export function installInvestCommands(
           `Confirm ${options?.queued ? "queued" : "instant"} subscription with ${amount} ${symbol} (${name})?`,
         ));
 
-      const priceDenom = PriceDenom.fromAsset(baseAsset);
+      const priceDenom = baseAsset.equals(WSOL)
+        ? PriceDenom.SOL
+        : baseAsset.equals(USDC)
+          ? PriceDenom.USD
+          : PriceDenom.ASSET;
       const amountBN = new BN(amount * 10 ** decimals);
       const preInstructions = await glamClient.price.priceVaultIxs(priceDenom); // this loads lookup tables
       const lookupTables = glamClient.price.lookupTables;
 
       try {
         const txSig = await glamClient.invest.subscribe(
+          stateModel.baseAsset,
           amountBN,
+          0,
           !!options?.queued,
           {
             ...txOptions,
@@ -84,8 +91,57 @@ export function installInvestCommands(
       }
     });
 
-  invest
-    .command("claim-subscription")
+  tokenized
+    .command("price")
+    .option("-d, --denom <denom>", "Price denomination, USD or SOL", "USD")
+    .description("Price vault assets")
+    .action(async (options) => {
+      const priceDenom = PriceDenom.fromString(options?.denom);
+      const ixs = await glamClient.price.priceVaultIxs(priceDenom); // this loads lookup tables
+      const lookupTables = glamClient.price.lookupTables;
+
+      const tx = new Transaction().add(...ixs);
+
+      try {
+        const vTx = await glamClient.intoVersionedTransaction(tx, {
+          ...txOptions,
+          lookupTables,
+        });
+        const txSig = await glamClient.sendAndConfirm(vTx);
+        console.log("Priced vault assets:", txSig);
+      } catch (e) {
+        console.error(parseTxError(e));
+        process.exit(1);
+      }
+    });
+
+  tokenized
+    .command("fulfill")
+    .description("Fulfill queued subscriptions and redemptions")
+    .action(async () => {
+      const stateModel = await glamClient.fetchStateModel();
+      const asset = stateModel.baseAsset!;
+      const priceDenom = PriceDenom.fromAsset(asset);
+
+      const preInstructions = await glamClient.price.priceVaultIxs(priceDenom); // this loads lookup tables
+      const lookupTables = glamClient.price.lookupTables;
+
+      try {
+        const txSig = await glamClient.invest.fulfill(0, {
+          ...txOptions,
+          preInstructions,
+          lookupTables,
+          simulate: true,
+        });
+        console.log(`${glamClient.signer} triggered fulfillment:`, txSig);
+      } catch (e) {
+        console.error(parseTxError(e));
+        throw e;
+      }
+    });
+
+  tokenized
+    .command("claim-sub")
     .description(
       "Claim subscription and receive share tokens. Only needed for queued subscriptions.",
     )
@@ -97,7 +153,7 @@ export function installInvestCommands(
 
       try {
         const glamMint = glamClient.mintPda;
-        const txSig = await glamClient.invest.claim(RequestType.SUBSCRIPTION, {
+        const txSig = await glamClient.invest.claim(glamMint, 0, {
           ...txOptions,
           preInstructions,
           lookupTables,
@@ -109,7 +165,7 @@ export function installInvestCommands(
       }
     });
 
-  invest
+  tokenized
     .command("redeem <amount>")
     .description("Request to redeem share tokens")
     .option("-y, --yes", "Skip confirmation prompt")
@@ -122,7 +178,7 @@ export function installInvestCommands(
         ));
 
       try {
-        const txSig = await glamClient.invest.queuedRedeem(amountBN, {
+        const txSig = await glamClient.invest.queuedRedeem(amountBN, 0, {
           ...txOptions,
         });
         console.log(`${glamClient.signer} requested to redeem:`, txSig);
@@ -132,8 +188,8 @@ export function installInvestCommands(
       }
     });
 
-  invest
-    .command("claim-redemption")
+  tokenized
+    .command("claim-redeem")
     .description("Claim redemption to receive deposit asset")
     .action(async () => {
       const preInstructions = await glamClient.price.priceVaultIxs(
@@ -142,7 +198,7 @@ export function installInvestCommands(
       const lookupTables = glamClient.price.lookupTables;
 
       try {
-        const txSig = await glamClient.invest.claim(RequestType.REDEMPTION, {
+        const txSig = await glamClient.invest.claim(WSOL, 0, {
           ...txOptions,
           preInstructions,
           lookupTables,
@@ -154,15 +210,13 @@ export function installInvestCommands(
       }
     });
 
-  invest
-    .command("cancel")
-    .description(
-      "Cancel a queued subscription or redemption that has not been fulfilled",
-    )
+  tokenized
+    .command("claim-fees")
+    .description("Claim fees collected by tokenized vault")
     .action(async () => {
       try {
-        const txSig = await glamClient.invest.cancel(txOptions);
-        console.log(`${glamClient.signer} cancelled queued request:`, txSig);
+        const txSig = await glamClient.fees.disburseFees();
+        console.log(`${glamClient.signer} claimed fees:`, txSig);
       } catch (e) {
         console.error(parseTxError(e));
         throw e;

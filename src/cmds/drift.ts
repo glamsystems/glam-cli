@@ -24,14 +24,10 @@ export function installDriftCommands(
     .description("Initialize drift user")
     .action(async (options) => {
       const subAccountId = parseInt(options.subAccountId);
-      if (isNaN(subAccountId)) {
-        console.error("Invalid sub-account-id. Must be a valid integer.");
-        process.exit(1);
-      }
 
       options?.yes ||
         (await confirmOperation(
-          `Initializing drift user (sub-account) ${subAccountId}`,
+          `Initializing drift user for sub account ${subAccountId}`,
         ));
 
       try {
@@ -111,51 +107,22 @@ export function installDriftCommands(
     });
 
   drift
-    .command("deposit")
-    .argument("<market_index>", "Market index", parseInt)
-    .argument("<amount>", "Amount", parseFloat)
-    .option("-s, --sub-account-id <sub_account_id>", "Sub-account ID", "0")
-    .option("-y, --yes", "Skip confirmation prompt")
+    .command("deposit <market_index> <amount>")
+    .option("-s, --sub-account-id <sub_account_id>", "Sub account ID")
     .description("Deposit to drift")
-    .action(async (marketIndex, amount, options) => {
-      if (isNaN(marketIndex)) {
-        console.error("Invalid market index");
-        process.exit(1);
-      }
-
-      if (isNaN(amount)) {
-        console.error("Invalid amount");
-        process.exit(1);
-      }
-
-      const subAccountId = parseInt(options.subAccountId);
-      if (isNaN(subAccountId)) {
-        console.error("Invalid sub-account ID");
-        process.exit(1);
-      }
-
+    .action(async (market_index, amount, options) => {
+      const subAccountId = options.subAccountId || 0;
       try {
         const marketConfigs = await glamClient.drift.fetchMarketConfigs();
+
         const marketConfig = marketConfigs.spotMarkets.find(
-          (m) => m.marketIndex === parseInt(marketIndex),
+          (m) => m.marketIndex === parseInt(market_index),
         );
-        if (!marketConfig) {
-          console.error(
-            `Spot market config not found for market index ${marketIndex}`,
-          );
-          process.exit(1);
-        }
+        const amountBn = new BN(Number(amount) * 10 ** marketConfig.decimals);
 
-        const { mint, decimals } = marketConfig;
-        options?.yes ||
-          (await confirmOperation(
-            `Confirm depositing ${amount} ${mint} to ${marketConfig.name} spot market?`,
-          ));
-
-        const amountBn = new BN(Number(amount) * 10 ** decimals);
         const txSig = await glamClient.drift.deposit(
           amountBn,
-          marketIndex,
+          marketConfig.marketIndex,
           subAccountId,
           txOptions,
         );
@@ -421,21 +388,11 @@ export function installDriftCommands(
     });
 
   drift
-    .command("delete-user")
-    .argument("<sub_account_id>", "Sub account ID", parseInt)
-    .option("-y, --yes", "Skip confirmation prompt")
-    .description("Delete a drift user (sub account)")
-    .action(async (subAccountId, options) => {
-      options?.yes ||
-        (await confirmOperation(
-          `Confirm deleting drift user (sub account) ${subAccountId}?`,
-        ));
-
+    .command("delete")
+    .description("Delete a drift user")
+    .action(async () => {
       try {
-        const txSig = await glamClient.drift.deleteUser(
-          subAccountId,
-          txOptions,
-        );
+        const txSig = await glamClient.drift.deleteUser(0, txOptions);
         console.log(`Deleted drift user: ${txSig}`);
       } catch (e) {
         console.error(parseTxError(e));
@@ -443,29 +400,29 @@ export function installDriftCommands(
       }
     });
 
-  //   drift
-  //     .command("claim")
-  //     .description("")
-  //     .action(async () => {
-  //       const response = await fetch(
-  //         `https://airdrop-fuel-1.drift.trade/eligibility/${glamClient.vaultPda}`,
-  //       );
-  //       const data = await response.json();
-  //       const { merkle_tree, proof, claimable_amount, locked_amount } = data;
-  //       const distributor = new PublicKey(merkle_tree);
+  drift
+    .command("claim")
+    .description("")
+    .action(async () => {
+      const response = await fetch(
+        `https://airdrop-fuel-1.drift.trade/eligibility/${glamClient.vaultPda}`,
+      );
+      const data = await response.json();
+      const { merkle_tree, proof, claimable_amount, locked_amount } = data;
+      const distributor = new PublicKey(merkle_tree);
 
-  //       try {
-  //         const txSig = await glamClient.drift.claim(
-  //           distributor,
-  //           new BN(claimable_amount),
-  //           new BN(locked_amount),
-  //           proof,
-  //           txOptions,
-  //         );
-  //         console.log(`${claimable_amount / 1e6} DRIFT claimed: ${txSig}`);
-  //       } catch (e) {
-  //         console.error(e);
-  //         process.exit(1);
-  //       }
-  //     });
+      try {
+        const txSig = await glamClient.drift.claim(
+          distributor,
+          new BN(claimable_amount),
+          new BN(locked_amount),
+          proof,
+          txOptions,
+        );
+        console.log(`${claimable_amount / 1e6} DRIFT claimed: ${txSig}`);
+      } catch (e) {
+        console.error(e);
+        process.exit(1);
+      }
+    });
 }

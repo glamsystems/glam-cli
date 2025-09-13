@@ -1,5 +1,10 @@
 import { AnchorError, BN } from "@coral-xyz/anchor";
-import { nameToChars, PriorityLevel } from "@glamsystems/glam-sdk";
+import {
+  ManagerModel,
+  MintModel,
+  PriorityLevel,
+  StateModel,
+} from "@glamsystems/glam-sdk";
 import {
   PublicKey,
   TransactionExpiredBlockheightExceededError,
@@ -136,123 +141,69 @@ export const parseTxError = (error: any) => {
 };
 
 export async function confirmOperation(message: string) {
-  try {
-    const confirmation = await inquirer.prompt([
-      {
-        type: "confirm",
-        name: "proceed",
-        message,
-        default: false,
-      },
-    ]);
-    if (!confirmation.proceed) {
-      console.log("Aborted.");
-      process.exit(0);
-    }
-  } catch (error) {
-    // Handle Ctrl+C interruption gracefully
-    if (
-      error.name === "ExitPromptError" ||
-      error.message?.includes("force closed")
-    ) {
-      console.log("\nOperation cancelled.");
-      process.exit(0);
-    }
-    throw error;
+  const confirmation = await inquirer.prompt([
+    {
+      type: "confirm",
+      name: "proceed",
+      message,
+      default: false,
+    },
+  ]);
+  if (!confirmation.proceed) {
+    console.log("Aborted.");
+    process.exit(0);
   }
 }
 
-export function parseStateJson(json: any) {
-  if (!json.state) {
-    return null;
+export function fundJsonToStateModel(json: any) {
+  if (json.accountType !== "fund") {
+    throw Error(
+      "Account account not supported. This helper function only supports fund (aka tokenized vault) account type",
+    );
   }
-  const stateModel = {
-    accountType: { [json.state.accountType]: {} },
-    name: json.state.name,
-    enabled: json.state.enabled,
-    assets: (json.state.assets || []).map(
-      (asset: string) => new PublicKey(asset),
-    ),
-    baseAssetMint: json.state.baseAssetMint
-      ? new PublicKey(json.state.baseAssetMint)
-      : null,
-    baseAssetTokenProgram: Number(json.state.baseAssetTokenProgram),
-    portfolioManagerName: json.state.portfolioManagerName
-      ? nameToChars(json.state.portfolioManagerName)
-      : null,
-    timelockDuration: Number(json.state.timelockDuration),
-  };
-
-  return stateModel;
-}
-
-export function parseMintJson(json: any) {
-  if (!json.mint) {
-    return null;
-  }
-  const mintModel = {
-    name: json.mint.name ? nameToChars(json.mint.name) : null,
-    symbol: json.mint.symbol,
-    uri: json.mint.uri,
-    baseAssetMint: new PublicKey(json.mint.baseAssetMint),
-    maxCap: json.mint.maxCap ? new BN(json.mint.maxCap) : null,
-    minSubscription: json.mint.minSubscription
-      ? new BN(json.mint.minSubscription)
-      : null,
-    minRedemption: json.mint.minRedemption
-      ? new BN(json.mint.minRedemption)
-      : null,
-    lockupPeriod: Number(json.mint.lockupPeriod),
-    permanentDelegate: json.mint.permanentDelegate
-      ? new PublicKey(json.mint.permanentDelegate)
-      : null,
-    defaultAccountStateFrozen: json.mint.defaultAccountStateFrozen || false,
-    feeStructure: json.mint.feeStructure
-      ? {
-          ...json.mint.feeStructure,
-          performance: {
-            ...json.mint.feeStructure.performance,
-            hurdleType: {
-              [json.mint.feeStructure.performance.hurdleType]: {},
+  const converted = {
+    ...json,
+    assets: json.assets.map((asset: string) => new PublicKey(asset)),
+    baseAsset: new PublicKey(json.baseAsset),
+    accountType: { [json.accountType]: {} },
+    timeUnit: { [json.timeUnit]: {} },
+    owner: new ManagerModel({
+      portfolioManagerName: json.owner.portfolioManagerName,
+      kind: { wallet: {} },
+    }),
+    mints: json.mints.map(
+      (mintData) =>
+        new MintModel({
+          ...mintData,
+          maxCap: new BN(mintData.maxCap),
+          minSubscription: new BN(mintData.minSubscription),
+          minRedemption: new BN(mintData.minRedemption),
+          feeStructure: {
+            ...mintData.feeStructure,
+            performance: {
+              ...mintData.feeStructure.performance,
+              hurdleType: {
+                [mintData.feeStructure.performance.hurdleType]: {},
+              },
             },
           },
-          protocol: { baseFeeBps: 0, floorFeeBps: 0 },
-        }
-      : null,
-    notifyAndSettle: json.mint.notifyAndSettle
-      ? {
-          ...json.mint.notifyAndSettle,
-          model: { [json.mint.notifyAndSettle.model]: {} },
-          subscribeNoticePeriodType: {
-            [json.mint.notifyAndSettle.subscribeNoticePeriodType]: {},
+          notifyAndSettle: {
+            ...mintData.notifyAndSettle,
+            model: { [mintData.notifyAndSettle.model]: {} },
+            noticePeriod: new BN(mintData.notifyAndSettle.noticePeriod),
+            settlementPeriod: new BN(mintData.notifyAndSettle.settlementPeriod),
+            cancellationWindow: new BN(
+              mintData.notifyAndSettle.cancellationWindow,
+            ),
+            noticePeriodType: {
+              [mintData.notifyAndSettle.noticePeriodType]: {},
+            },
           },
-          subscribeNoticePeriod: new BN(
-            json.mint.notifyAndSettle.subscribeNoticePeriod || 0,
-          ),
-          subscribeSettlementPeriod: new BN(
-            json.mint.notifyAndSettle.subscribeSettlementPeriod || 0,
-          ),
-          subscribeCancellationWindow: new BN(
-            json.mint.notifyAndSettle.subscribeCancellationWindow || 0,
-          ),
-          redeemNoticePeriodType: {
-            [json.mint.notifyAndSettle.redeemNoticePeriodType]: {},
-          },
-          redeemNoticePeriod: new BN(
-            json.mint.notifyAndSettle.redeemNoticePeriod || 0,
-          ),
-          redeemSettlementPeriod: new BN(
-            json.mint.notifyAndSettle.redeemSettlementPeriod || 0,
-          ),
-          redeemCancellationWindow: new BN(
-            json.mint.notifyAndSettle.redeemCancellationWindow || 0,
-          ),
-          timeUnit: { [json.mint.notifyAndSettle.timeUnit]: {} },
-          padding: [0, 0, 0],
-        }
-      : null,
+        }),
+    ),
   };
-  return mintModel;
+
+  return new StateModel(converted);
 }
 
 export function validatePublicKey(value: string) {

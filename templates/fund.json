@@ -1,0 +1,53 @@
+{
+  "accountType": "fund",
+  "name": "GLAM SOL",
+  "enabled": true,
+  "assets": ["So11111111111111111111111111111111111111112"],
+  "owner": { "portfolioManagerName": "glamsystems.sol" },
+  "updateTimelock": 0,
+  "timeUnit": "slot",
+  "company": {
+    "fundGroupName": "GLAM",
+    "manCo": "GLAM",
+    "domicileOfManCo": "US",
+    "emailAddressOfManCo": "hello@glam.systems",
+    "fundWebsiteOfManCo": "https://glam.systems"
+  },
+  "baseAsset": "So11111111111111111111111111111111111111112",
+  "mints": [
+    {
+      "name": "GLAM SOL",
+      "symbol": "gmSOL",
+      "maxCap": 1000000000000,
+      "minSubscription": 1000000000,
+      "minRedemption": 1000000000,
+      "lockUpPeriod": 0,
+      "feeStructure": {
+        "vault": {
+          "subscriptionFeeBps": 0,
+          "redemptionFeeBps": 10
+        },
+        "manager": {
+          "subscriptionFeeBps": 0,
+          "redemptionFeeBps": 0
+        },
+        "management": {
+          "feeBps": 0
+        },
+        "performance": {
+          "feeBps": 2000,
+          "hurdleRateBps": 3,
+          "hurdleType": "hard"
+        }
+      },
+      "notifyAndSettle": {
+        "model": "continuous",
+        "noticePeriod": 432000,
+        "noticePeriodType": "soft",
+        "permissionlessFulfillment": false,
+        "settlementPeriod": 432000,
+        "cancellationWindow": 0
+      }
+    }
+  ]
+}

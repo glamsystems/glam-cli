@@ -58,10 +58,9 @@ export function installVaultCommands(
 
       const { mint } = await glamClient.fetchMintAndTokenProgram(asset);
       try {
-        const txSig = await glamClient.vault.tokenTransfer(
-          asset,
+        const txSig = await glamClient.vault.withdraw(
+          new PublicKey(asset),
           new BN(amount * 10 ** mint.decimals),
-          glamClient.signer,
           txOptions,
         );
         console.log(`Withdrawn ${amount} ${asset}:`, txSig);

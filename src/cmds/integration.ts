@@ -1,6 +1,11 @@
-import { formatBits, GlamClient, TxOptions } from "@glamsystems/glam-sdk";
+import {
+  GlamClient,
+  GlamIntegrations,
+  StateModel,
+  TxOptions,
+} from "@glamsystems/glam-sdk";
 import { Command } from "commander";
-import { CliConfig, parseTxError, validatePublicKey } from "../utils";
+import { CliConfig, parseTxError } from "../utils";
 import { PublicKey } from "@solana/web3.js";
 
 export function installIntegrationCommands(
@@ -11,41 +16,61 @@ export function installIntegrationCommands(
 ) {
   integration
     .command("list")
-    .description("List enabled integration programs and protocols")
+    .description("List enabled integrations")
     .action(async () => {
       const stateModel = await glamClient.fetchStateModel();
-      const cnt = stateModel.integrationAcls.length;
+      const cnt = stateModel.integrations.length;
       console.log(
-        `${stateModel.nameStr} (${glamClient.statePda}) has ${cnt} integration program${
+        `${stateModel.name} (${glamClient.statePda}) has ${cnt} integration${
           cnt > 1 ? "s" : ""
         } enabled`,
       );
-      for (let [i, integ] of stateModel.integrationAcls.entries()) {
-        console.log(
-          `[${i}] ${integ.integrationProgram} protocolsBitmask: ${formatBits(integ.protocolsBitmask)}`,
-        );
+      for (let [i, integ] of stateModel.integrations.entries()) {
+        console.log(`[${i}] ${Object.keys(integ)[0]}`);
       }
     });
 
+  const allowIntegrations = GlamIntegrations.map(
+    (i) => i.slice(0, 1).toLowerCase() + i.slice(1),
+  );
+  const validateIntegration = (input) => {
+    if (!allowIntegrations.includes(input)) {
+      console.error(
+        `Invalid input: "${input}". Allowed values are: ${allowIntegrations.join(", ")}`,
+      );
+      process.exit(1);
+    }
+    return input; // Return validated input
+  };
+
   integration
     .command("enable")
-    .description("Enable protocols for an integration program")
+    .description("Enable an integration")
     .argument(
-      "<integration_program>",
-      "Integration program ID",
-      validatePublicKey,
+      "<integration>",
+      `Integration to enable (must be one of: ${allowIntegrations.join(", ")})`,
+      validateIntegration,
     )
-    .argument("<protocols_bitmask>", "Protocols to eanble", parseInt)
-    .action(async (integrationProgram: PublicKey, protocolsBitmask: number) => {
-      try {
-        const txSig = await glamClient.access.enableProtocols(
-          integrationProgram,
-          protocolsBitmask,
-          txOptions,
-        );
+    .action(async (integration) => {
+      const stateModel = await glamClient.fetchStateModel();
+      const acl = stateModel.integrations.find(
+        (integ) => Object.keys(integ)[0] === integration,
+      );
+      if (acl) {
         console.log(
-          `Enabled ${formatBits(protocolsBitmask)} for ${integrationProgram}: ${txSig}`,
+          `${integration} is already enabled on ${stateModel.name} (${glamClient.statePda})`,
         );
+        process.exit(1);
+      }
+
+      const updated = new StateModel({
+        // @ts-ignore
+        integrations: [...stateModel.integrations, { [integration]: {} }],
+      });
+
+      try {
+        const txSig = await glamClient.state.update(updated, txOptions);
+        console.log(`${integration} enabled: ${txSig}`);
       } catch (e) {
         console.error(parseTxError(e));
         process.exit(1);
@@ -56,54 +81,21 @@ export function installIntegrationCommands(
     .command("disable")
     .description("Disable an integration")
     .argument(
-      "<integration_program>",
-      "Integration program ID",
-      validatePublicKey,
+      "<integration>",
+      `Integration to disable (must be one of: ${allowIntegrations.join(", ")})`,
+      validateIntegration,
     )
-    .argument("<protocols_bitmask>", "Protocols to disable", parseInt)
-    .action(async (integrationProgram: PublicKey, protocolsBitmask: number) => {
-      if (integrationProgram.equals(glamClient.mintProgram.programId)) {
-        console.error(
-          "Disabling protocols for the mint integration is not allowed",
-        );
-        process.exit(1);
-      }
+    .action(async (integration) => {
+      const stateModel = await glamClient.fetchStateModel();
+      const updated = new StateModel({
+        integrations: stateModel.integrations.filter(
+          (integ) => Object.keys(integ)[0] !== integration,
+        ),
+      });
 
       try {
-        const txSig = await glamClient.access.disableProtocols(
-          integrationProgram,
-          protocolsBitmask,
-          txOptions,
-        );
-        console.log(
-          `Disabled ${formatBits(protocolsBitmask)} for ${integrationProgram}: ${txSig}`,
-        );
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
-    });
-
-  integration
-    .command("delete")
-    .argument(
-      "<integration_program>",
-      "Integration program ID",
-      validatePublicKey,
-    )
-    .description("Delete an integration program")
-    .action(async (integrationProgram: PublicKey) => {
-      if (integrationProgram.equals(glamClient.mintProgram.programId)) {
-        console.error("Deleting the mint integration is not allowed");
-        process.exit(1);
-      }
-
-      try {
-        const txSig = await glamClient.access.emergencyAccessUpdate(
-          { disabledIntegrations: [integrationProgram] },
-          txOptions,
-        );
-        console.log(`Deleted ${integrationProgram} access: ${txSig}`);
+        const txSig = await glamClient.state.update(updated, txOptions);
+        console.log(`${integration} disabled: ${txSig}`);
       } catch (e) {
         console.error(parseTxError(e));
         process.exit(1);

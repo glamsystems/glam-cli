@@ -7,7 +7,7 @@ import {
 import { Command } from "commander";
 import { CliConfig, confirmOperation, parseTxError } from "../utils";
 
-export function installJupiterCommands(
+export function installSwapCommands(
   program: Command,
   glamClient: GlamClient,
   cliConfig: CliConfig,

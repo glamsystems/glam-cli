@@ -1,13 +1,32 @@
 {
-  "state": {
-    "accountType": "mint"
+  "accountType": "mint",
+  "name": "GLAM Mint Demo",
+  "enabled": true,
+  "assets": [
+    "So11111111111111111111111111111111111111112",
+    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+  ],
+  "fundDomicileAlpha2": "CH",
+  "legalFundNameIncludingUmbrella": "TBD",
+  "fundLaunchDate": "2024-11-02",
+  "fiscalYearEnd": "12-31",
+  "company": {
+    "fundGroupName": "GLAM",
+    "manCo": "GLAM",
+    "domicileOfManCo": "US",
+    "emailAddressOfManCo": "hello@glam.systems",
+    "fundWebsiteOfManCo": "https://glam.systems"
   },
-  "mint": {
-    "name": "GLAM Token XYZ",
-    "symbol": "GXYZ",
-    "asset": "So11111111111111111111111111111111111111112",
-    "lockupPeriod": 30,
-    "permanentDelegate": "11111111111111111111111111111111",
-    "defaultAccountStateFrozen": true
-  }
+  "mints": [
+    {
+      "name": "GLAM Token XYZ",
+      "symbol": "GXYZ",
+      "asset": "So11111111111111111111111111111111111111112",
+      "lockUpPeriod": 30,
+      "allowlist": null,
+      "blocklist": null,
+      "permanentDelegate": "11111111111111111111111111111111",
+      "defaultAccountStateFrozen": true
+    }
+  ]
 }
