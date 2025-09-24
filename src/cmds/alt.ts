@@ -15,7 +15,7 @@ export function installAltCommands(
     .action(async () => {
       try {
         const response = await fetch(
-          `https://rest2.glam.systems/v0/lut/vault/create?state=${glamClient.statePda}&payer=${glamClient.getSigner()}`,
+          `https://api.glam.systems/v0/lut/vault/create?state=${glamClient.statePda}&payer=${glamClient.getSigner()}`,
         );
         const data = await response.json();
         const table = data.tables[0];

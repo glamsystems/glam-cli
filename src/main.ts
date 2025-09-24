@@ -81,7 +81,7 @@ program
       await idlCheck(glamClient);
     },
   )
-  .version("0.1.33");
+  .version("0.1.35");
 
 program
   .command("env")

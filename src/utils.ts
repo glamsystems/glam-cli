@@ -105,6 +105,7 @@ export class CliConfig {
 
       process.env.ANCHOR_PROVIDER_URL = cliConfig.json_rpc_url;
       process.env.ANCHOR_WALLET = cliConfig.keypair_path;
+      process.env.HELIUS_API_KEY = cliConfig.priority_fee?.helius_api_key;
 
       return cliConfig;
     } catch (err) {

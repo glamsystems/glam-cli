@@ -167,21 +167,36 @@ export function installInvestCommands(
 
   tokenized
     .command("redeem <amount>")
+    .option("-i, --instant", "Redeem share tokens instantly", false)
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Request to redeem share tokens")
-    .option("-y, --yes", "Skip confirmation prompt")
-    .action(async (amount, options) => {
+    .action(async (amount, { instant, yes }) => {
       const amountBN = new BN(parseFloat(amount) * LAMPORTS_PER_SOL);
 
-      options?.yes ||
+      yes ||
         (await confirmOperation(
-          `Confirm queued redemption of ${amount} shares?`,
+          `Confirm ${instant ? "instant" : "queued"} redemption of ${amount} shares?`,
         ));
 
       try {
-        const txSig = await glamClient.invest.queuedRedeem(amountBN, 0, {
-          ...txOptions,
-        });
-        console.log(`${glamClient.signer} requested to redeem:`, txSig);
+        let txSig;
+        if (instant) {
+          const preInstructions = await glamClient.price.priceVaultIxs(
+            PriceDenom.SOL,
+          );
+          const lookupTables = glamClient.price.lookupTables;
+          txSig = await glamClient.invest.instantRedeem(amountBN, 0, {
+            ...txOptions,
+            preInstructions,
+            lookupTables,
+          });
+        } else {
+          txSig = await glamClient.invest.queuedRedeem(amountBN, 0, txOptions);
+        }
+        console.log(
+          `${glamClient.signer} ${instant ? "instantly" : "queued"} redeemed:`,
+          txSig,
+        );
       } catch (e) {
         console.error(parseTxError(e));
         throw e;
@@ -220,6 +235,25 @@ export function installInvestCommands(
       } catch (e) {
         console.error(parseTxError(e));
         throw e;
+      }
+    });
+
+  tokenized
+    .command("set-permissionless-fulfill")
+    .argument(
+      "<enabled>",
+      "Enable or disable permissionless fulfillment",
+      (v) => v === "true" || v === "1",
+      false,
+    )
+    .description("Enable or disable permissionless fulfillment")
+    .action(async (enabled) => {
+      try {
+        const txSig = await glamClient.mint.setPermissionlessFulfill(enabled);
+        console.log(`Permissionless fulfillment set to ${enabled}:`, txSig);
+      } catch (e) {
+        console.error(parseTxError(e));
+        process.exit(1);
       }
     });
 }
