@@ -538,23 +538,4 @@ export function installVaultCommands(program: Command, context: CliContext) {
         }
       });
     });
-
-  program
-    .command("bridge-usdc")
-    .argument("<amount>", "USDC amount to bridge", parseFloat)
-    .description("Bridge USDC to an EVM chain")
-    .action(async (amount) => {
-      const amountBN = new BN(amount * 10 ** 6);
-
-      try {
-        const txSig = await context.glamClient.vault.bridgeUsdc(
-          amountBN,
-          context.txOptions,
-        );
-        console.log(`Deposit for burn:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
-    });
 }
