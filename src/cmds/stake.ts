@@ -1,13 +1,10 @@
 import { Command } from "commander";
-import { GlamClient, TxOptions } from "@glamsystems/glam-sdk";
 import { PublicKey } from "@solana/web3.js";
-import { CliConfig, parseTxError } from "../utils";
+import { CliContext, parseTxError } from "../utils";
 
 export function installStakeCommands(
   stake: Command,
-  glamClient: GlamClient,
-  cliConfig: CliConfig,
-  txOptions: TxOptions = {},
+  context: CliContext,
 ) {
   stake
     .command("list")
@@ -15,7 +12,7 @@ export function installStakeCommands(
     .action(async () => {
       try {
         let stakeAccounts =
-          await glamClient.staking.getStakeAccountsWithStates();
+          await context.glamClient.staking.getStakeAccountsWithStates();
         console.log(
           "Account                                     ",
           "\t",
@@ -47,9 +44,9 @@ export function installStakeCommands(
     .description("Deactivate stake accounts")
     .action(async (accounts: string[]) => {
       try {
-        const txSig = await glamClient.staking.deactivate(
+        const txSig = await context.glamClient.staking.deactivate(
           accounts.map((a: string) => new PublicKey(a)),
-          txOptions,
+          context.txOptions,
         );
         console.log(`Deactivated ${accounts}:`, txSig);
       } catch (e) {
@@ -67,9 +64,9 @@ export function installStakeCommands(
     .description("Withdraw from stake accounts")
     .action(async (accounts) => {
       try {
-        const txSig = await glamClient.staking.withdraw(
+        const txSig = await context.glamClient.staking.withdraw(
           accounts.map((a: string) => new PublicKey(a)),
-          txOptions,
+          context.txOptions,
         );
         console.log(`Withdrew from ${accounts}:`, txSig);
       } catch (e) {

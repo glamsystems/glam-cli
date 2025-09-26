@@ -1,25 +1,393 @@
 import {
-  GlamClient,
-  TxOptions,
   WSOL,
   fetchTokenPrices,
   fetchTokensList,
+  nameToChars,
+  charsToName,
+  GlamClient,
+  StateAccountType,
 } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
+import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+import fs from "fs";
 import {
-  CliConfig,
+  CliContext,
   confirmOperation,
+  parseMintJson,
+  parseStateJson,
   parseTxError,
   validatePublicKey,
 } from "../utils";
-import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import { BN } from "@coral-xyz/anchor";
-export function installVaultCommands(
-  program: Command,
-  glamClient: GlamClient,
-  cliConfig: CliConfig,
-  txOptions: TxOptions = {},
-) {
+
+export function installVaultCommands(program: Command, context: CliContext) {
+  program
+    .command("list")
+    .description("List GLAM vaults")
+    .option(
+      "-o, --owner-only",
+      "Only show vaults owned by the connected wallet",
+      false,
+    )
+    .option("-a, --all", "Show all GLAM vaults", false)
+    .option("-t, --type <type>", "Filter by type: vault or tokenizedVault")
+    .action(async ({ ownerOnly, all, type }) => {
+      if (ownerOnly && all) {
+        console.error(
+          "Options '--owner-only' and '--all' cannot be used together.",
+        );
+        process.exit(1);
+      }
+
+      const signer = context.glamClient.signer;
+      const filterOptions = all
+        ? { type }
+        : ownerOnly
+          ? { owner: signer, type }
+          : { owner: signer, delegate: signer, type };
+
+      const glamStates =
+        await context.glamClient.fetchGlamStates(filterOptions);
+
+      if (glamStates.length === 0) {
+        console.log("No vaults found.");
+        return;
+      }
+
+      // Define column widths for the table
+      const colWidths = [15, 45, 45, 12, 25];
+      const printRow = (items: string[]) => {
+        console.log(
+          items[0].padEnd(colWidths[0]),
+          items[1].padEnd(colWidths[1]),
+          items[2].padEnd(colWidths[2]),
+          items[3].padEnd(colWidths[3]),
+          items[4].padEnd(colWidths[4]),
+        );
+      };
+
+      // Print header
+      printRow(["Type", "Glam State", "Vault Address", "Launch Date", "Name"]);
+      printRow([
+        "-".repeat(colWidths[0]),
+        "-".repeat(colWidths[1]),
+        "-".repeat(colWidths[2]),
+        "-".repeat(colWidths[3]),
+        "-".repeat(colWidths[4]),
+      ]);
+
+      // Print vault data
+      glamStates
+        .sort((a, b) => (a.launchDate > b.launchDate ? -1 : 1))
+        .forEach((stateModel) => {
+          printRow([
+            stateModel.productType,
+            stateModel.idStr,
+            stateModel.vault.toBase58(),
+            stateModel.launchDate,
+            charsToName(stateModel.name),
+          ]);
+        });
+    });
+
+  program
+    .command("set")
+    .argument("<state>", "GLAM state public key", validatePublicKey)
+    .description("Set the active GLAM vault for subsequent CLI operations")
+    .action(async (state: PublicKey) => {
+      try {
+        const stateModel = await context.glamClient.fetchStateModel(state);
+        context.cliConfig.glamState = state;
+        console.log(`Active GLAM state: ${stateModel.idStr}`);
+        console.log(`Vault: ${stateModel.vault}`);
+      } catch (e) {
+        console.error("Invalid GLAM state public key.");
+        process.exit(1);
+      }
+    });
+
+  program
+    .command("update-owner")
+    .argument("<new-owner>", "New owner public key", validatePublicKey)
+    .option("-n, --name <name>", "New portfolio manager name")
+    .option("-y, --yes", "Skip confirmation prompt")
+    .description("Update the owner of a GLAM instance")
+    .action(async (newOwner: PublicKey, options) => {
+      const newPortfolioManagerName = options?.name
+        ? nameToChars(options.name)
+        : null;
+
+      if (!options?.yes) {
+        if (newPortfolioManagerName) {
+          await confirmOperation(
+            `Confirm updating owner to ${newOwner} and portfolio manager name to ${options.name}?`,
+          );
+        } else {
+          await confirmOperation(`Confirm updating owner to ${newOwner}?`);
+        }
+      }
+
+      try {
+        const txSig = await context.glamClient.state.update({
+          owner: newOwner,
+          portfolioManagerName: newPortfolioManagerName,
+        });
+        if (newPortfolioManagerName) {
+          console.log(
+            `GLAM owner and portfolio manager name updated: ${txSig}`,
+          );
+        } else {
+          console.log(`GLAM owner updated: ${txSig}`);
+        }
+      } catch (e) {
+        console.error(parseTxError(e));
+        process.exit(1);
+      }
+    });
+
+  program
+    .command("add-asset")
+    .argument("<asset>", "Asset mint public key", validatePublicKey)
+    .description("Add a new asset to allowlist")
+    .action(async (asset: PublicKey) => {
+      const stateModel = await context.glamClient.fetchStateModel();
+      const assetsSet = new Set(
+        [...stateModel.assets, asset].map((a) => a.toBase58()),
+      );
+      const assets = Array.from(assetsSet).map((a) => new PublicKey(a));
+
+      const txSig = await context.glamClient.state.update(
+        { assets },
+        context.txOptions,
+      );
+      console.log(`Added asset ${asset}: ${txSig}`);
+    });
+
+  program
+    .command("delete-asset")
+    .argument("<asset>", "Asset mint public key", validatePublicKey)
+    .description("Delete an asset from allowlist")
+    .action(async (asset: PublicKey) => {
+      const stateModel = await context.glamClient.fetchStateModel();
+
+      if (asset.equals(stateModel.baseAssetMint)) {
+        console.error("Base asset cannot be deleted from allowlist");
+        process.exit(1);
+      }
+
+      const assetsSet = new Set(stateModel.assets.map((a) => a.toBase58()));
+      let removed = assetsSet.delete(asset.toBase58());
+      if (!removed) {
+        console.error("Asset not found in allowlist, nothing to delete");
+        process.exit(1);
+      }
+
+      const assets = Array.from(assetsSet).map((a) => new PublicKey(a));
+      const txSig = await context.glamClient.state.update(
+        { assets },
+        context.txOptions,
+      );
+      console.log(`Deleted asset ${asset}: ${txSig}`);
+    });
+
+  program
+    .command("set-enabled <enabled>")
+    .description("Set GLAM state enabled or disabled")
+    .option("-y, --yes", "Skip confirmation prompt")
+    .action(async (enabled, options) => {
+      const parseBooleanInput = (input: string): boolean => {
+        const normalized = input.toLowerCase().trim();
+        const truthyValues = ["true", "1", "yes", "y", "on", "enable"];
+        const falsyValues = ["false", "0", "no", "n", "off", "disable"];
+
+        if (truthyValues.includes(normalized)) return true;
+        if (falsyValues.includes(normalized)) return false;
+
+        throw new Error(
+          `Invalid boolean value: "${input}". Use: true/false, yes/no, 1/0, enable/disable`,
+        );
+      };
+      const enabledBool = parseBooleanInput(enabled);
+      const glamState = context.cliConfig.glamState;
+      options?.yes ||
+        (await confirmOperation(
+          `Confirm ${enabledBool ? "enabling" : "disabling"} ${glamState}?`,
+        ));
+
+      try {
+        const txSig = await context.glamClient.access.emergencyAccessUpdate(
+          { stateEnabled: enabledBool },
+          context.txOptions,
+        );
+        console.log(
+          `Set GLAM state ${glamState} to ${enabledBool ? "enabled" : "disabled"}:`,
+          txSig,
+        );
+      } catch (e) {
+        console.error(parseTxError(e));
+        process.exit(1);
+      }
+    });
+
+  program
+    .command("view")
+    .argument("[state]", "GLAM state public key", validatePublicKey)
+    .description("View a GLAM product by its state pubkey")
+    .option("-c, --compact", "Compact output")
+    .action(async (state: PublicKey | null, options) => {
+      const glamStateModel = await context.glamClient.fetchStateModel(
+        state || context.cliConfig.glamState,
+      );
+      console.log(
+        options?.compact
+          ? JSON.stringify(glamStateModel)
+          : JSON.stringify(glamStateModel, null, 2),
+      );
+    });
+
+  program
+    .command("create <path>")
+    .description("Create a new GLAM from a json file")
+    .action(async (file) => {
+      if (!fs.existsSync(file)) {
+        console.error(`File ${file} does not exist`);
+        process.exit(1);
+      }
+      const data = fs.readFileSync(file, "utf8");
+
+      const json = JSON.parse(data);
+      if (!json.state && !json.mint) {
+        throw new Error(
+          "Invalid JSON file: must contain 'state' or 'mint' property",
+        );
+      }
+
+      const stateModel = parseStateJson(json);
+
+      try {
+        if (
+          StateAccountType.equals(
+            stateModel.accountType,
+            StateAccountType.TOKENIZED_VAULT,
+          )
+        ) {
+          const mintModel = parseMintJson(json, stateModel.accountType);
+          const txSig = await context.glamClient.mint.initialize(
+            mintModel,
+            stateModel.accountType,
+            context.txOptions,
+          );
+          console.log("GLAM tokenized vault initialized:", txSig);
+          console.log("State PDA:", context.glamClient.statePda.toBase58());
+          console.log("Vault PDA:", context.glamClient.vaultPda.toBase58());
+          console.log("Mint PDA:", context.glamClient.mintPda.toBase58());
+        } else {
+          const txSig = await context.glamClient.state.create(
+            stateModel,
+            stateModel.baseAssetMint,
+            context.txOptions,
+          );
+          console.log("GLAM vault initialized:", txSig);
+          console.log("State PDA:", context.glamClient.statePda.toBase58());
+          console.log("Vault PDA:", context.glamClient.vaultPda.toBase58());
+        }
+
+        context.cliConfig.glamState = context.glamClient.statePda;
+      } catch (e) {
+        console.error(parseTxError(e));
+        process.exit(1);
+      }
+    });
+
+  program
+    .command("extend")
+    .argument("<bytes>", "New bytes", parseInt)
+    .description("Extend GLAM state account size")
+    .action(async (bytes) => {
+      const statePda = context.cliConfig.glamState;
+      const glamClient = new GlamClient({ statePda });
+      try {
+        const txSig = await glamClient.state.extend(bytes);
+        console.log(
+          `GLAM state account ${statePda} extended by ${bytes} bytes:`,
+          txSig,
+        );
+      } catch (e) {
+        console.error(parseTxError(e));
+        process.exit(1);
+      }
+    });
+
+  program
+    .command("set-protocol-fees")
+    .argument(
+      "<state>",
+      "GLAM state public key for the tokenized vault",
+      validatePublicKey,
+    )
+    .argument("<base-fee-bps>", "Base fee in basis points", parseInt)
+    .argument("<flow-fee-bps>", "Flow fee in basis points", parseInt)
+    .option("-y, --yes", "Skip confirmation prompt")
+    .description("Set protocol fees for a GLAM tokenized vault")
+    .action(
+      async (
+        state: PublicKey,
+        baseFeeBps: number,
+        flowFeeBps: number,
+        options,
+      ) => {
+        options?.yes ||
+          (await confirmOperation(
+            `Confirm setting protocol base fee to ${baseFeeBps} and flow fee to ${flowFeeBps} for ${state}?`,
+          ));
+
+        try {
+          const txSig = await context.glamClient.fees.setProtocolFees(
+            baseFeeBps,
+            flowFeeBps,
+          );
+          console.log(`Protocol fees updated for ${state}:`, txSig);
+        } catch (e) {
+          console.error(parseTxError(e));
+          process.exit(1);
+        }
+      },
+    );
+
+  program
+    .command("close")
+    .argument("[state]", "GLAM state public key", validatePublicKey)
+    .description("Close a GLAM product by its state pubkey")
+    .option("-y, --yes", "Skip confirmation prompt")
+    .action(async (state: PublicKey | null, options) => {
+      const statePda = state || context.cliConfig.glamState;
+      const glamClient = new GlamClient({ statePda });
+      const stateModel = await glamClient.fetchStateModel();
+
+      options?.yes ||
+        (await confirmOperation(
+          `Confirm closing GLAM: ${stateModel.nameStr} (state pubkey ${statePda.toBase58()})?`,
+        ));
+
+      const preInstructions = [];
+      if (!stateModel.mint.equals(PublicKey.default)) {
+        const closeMintIx = await glamClient.mint.txBuilder.closeMintIx();
+        preInstructions.push(closeMintIx);
+      }
+      try {
+        const txSig = await glamClient.state.close({
+          ...context.txOptions,
+          preInstructions,
+        });
+
+        console.log(`${stateModel.nameStr} closed:`, txSig);
+        context.cliConfig.glamState = null;
+      } catch (e) {
+        console.error(parseTxError(e));
+        process.exit(1);
+      }
+    });
+
   program
     .command("withdraw-sol")
     .argument("<amount>", "Amount to withdraw", parseFloat)
@@ -30,10 +398,10 @@ export function installVaultCommands(
         (await confirmOperation(`Confirm withdrawal of ${amount} SOL?`));
 
       try {
-        const txSig = await glamClient.vault.systemTransfer(
+        const txSig = await context.glamClient.vault.systemTransfer(
           new BN(amount * LAMPORTS_PER_SOL),
-          glamClient.signer,
-          txOptions,
+          context.glamClient.signer,
+          context.txOptions,
         );
         console.log(`Withdrawn ${amount} SOL:`, txSig);
       } catch (e) {
@@ -56,12 +424,13 @@ export function installVaultCommands(
       options?.yes ||
         (await confirmOperation(`Confirm withdrawal of ${amount} ${asset}?`));
 
-      const { mint } = await glamClient.fetchMintAndTokenProgram(asset);
+      const { mint } = await context.glamClient.fetchMintAndTokenProgram(asset);
       try {
-        const txSig = await glamClient.vault.withdraw(
-          new PublicKey(asset),
+        const txSig = await context.glamClient.vault.tokenTransfer(
+          asset,
           new BN(amount * 10 ** mint.decimals),
-          txOptions,
+          context.glamClient.signer,
+          context.txOptions,
         );
         console.log(`Withdrawn ${amount} ${asset}:`, txSig);
       } catch (e) {
@@ -83,7 +452,10 @@ export function installVaultCommands(
       }
 
       try {
-        const txSig = await glamClient.vault.wrap(lamports, txOptions);
+        const txSig = await context.glamClient.vault.wrap(
+          lamports,
+          context.txOptions,
+        );
         console.log(`Wrapped ${amount} SOL:`, txSig);
       } catch (e) {
         console.error(parseTxError(e));
@@ -96,7 +468,7 @@ export function installVaultCommands(
     .description("Unwrap wSOL")
     .action(async () => {
       try {
-        const txSig = await glamClient.vault.unwrap(txOptions);
+        const txSig = await context.glamClient.vault.unwrap(context.txOptions);
         console.log(`All wSOL unwrapped:`, txSig);
       } catch (e) {
         console.error(parseTxError(e));
@@ -113,9 +485,9 @@ export function installVaultCommands(
     )
     .action(async (options) => {
       const { all } = options;
-      const vault = glamClient.vaultPda;
+      const vault = context.glamClient.vaultPda;
       const { uiAmount: solUiAmount, tokenAccounts } =
-        await glamClient.getSolAndTokenBalances(vault);
+        await context.glamClient.getSolAndTokenBalances(vault);
 
       const mints = tokenAccounts.map((ta) => ta.mint.toBase58());
       if (!mints.includes(WSOL.toBase58())) {
@@ -165,5 +537,24 @@ export function installVaultCommands(
           ]);
         }
       });
+    });
+
+  program
+    .command("bridge-usdc")
+    .argument("<amount>", "USDC amount to bridge", parseFloat)
+    .description("Bridge USDC to an EVM chain")
+    .action(async (amount) => {
+      const amountBN = new BN(amount * 10 ** 6);
+
+      try {
+        const txSig = await context.glamClient.vault.bridgeUsdc(
+          amountBN,
+          context.txOptions,
+        );
+        console.log(`Deposit for burn:`, txSig);
+      } catch (e) {
+        console.error(parseTxError(e));
+        process.exit(1);
+      }
     });
 }

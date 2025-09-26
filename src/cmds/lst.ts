@@ -1,24 +1,21 @@
 import { BN } from "@coral-xyz/anchor";
 import { Command } from "commander";
-import { GlamClient, TxOptions } from "@glamsystems/glam-sdk";
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
-import { CliConfig, parseTxError, validatePublicKey } from "../utils";
+import { CliContext, parseTxError, validatePublicKey } from "../utils";
 
 export function installLstCommands(
   lst: Command,
-  glamClient: GlamClient,
-  cliConfig: CliConfig,
-  txOptions: TxOptions = {},
+  context: CliContext,
 ) {
   lst
     .command("stake <stakepool> <amount>")
     .description("Stake <amount> SOL into <stakepool>")
     .action(async (stakepool, amount) => {
       try {
-        const txSig = await glamClient.staking.stakePoolDepositSol(
+        const txSig = await context.glamClient.staking.stakePoolDepositSol(
           new PublicKey(stakepool),
           new BN(parseFloat(amount) * LAMPORTS_PER_SOL), // TODO: better decimals (even though all LSTs have 9 right now)
-          txOptions,
+          context.txOptions,
         );
         console.log("txSig", txSig);
         console.log(`Staked ${amount} SOL into ${stakepool}`);
@@ -37,11 +34,11 @@ export function installLstCommands(
       const amountBN = new BN(amount * LAMPORTS_PER_SOL);
 
       try {
-        const txSig = await glamClient.staking.unstake(
+        const txSig = await context.glamClient.staking.unstake(
           asset,
           amountBN,
           options.deactivate,
-          txOptions,
+          context.txOptions,
         );
         console.log(`Unstaked ${amount} ${asset}:`, txSig);
       } catch (e) {

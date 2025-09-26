@@ -1,9 +1,11 @@
 import { AnchorError, BN } from "@coral-xyz/anchor";
 import {
-  ManagerModel,
-  MintModel,
+  GlamClient,
+  nameToChars,
   PriorityLevel,
+  StateAccountType,
   StateModel,
+  TxOptions,
 } from "@glamsystems/glam-sdk";
 import {
   PublicKey,
@@ -13,6 +15,12 @@ import fs from "fs";
 import inquirer from "inquirer";
 import os from "os";
 import path from "path";
+
+export interface CliContext {
+  cliConfig: CliConfig;
+  glamClient: GlamClient;
+  txOptions: TxOptions;
+}
 
 export class CliConfig {
   cluster: string;
@@ -100,7 +108,7 @@ export class CliConfig {
       }
 
       if (cliConfig.glam_api) {
-        process.env.GLAM_API = cliConfig.glam_api;
+        process.env.GLAM_API = cliConfig.glam_api || "https://api.glam.systems";
       }
 
       process.env.ANCHOR_PROVIDER_URL = cliConfig.json_rpc_url;
@@ -142,69 +150,149 @@ export const parseTxError = (error: any) => {
 };
 
 export async function confirmOperation(message: string) {
-  const confirmation = await inquirer.prompt([
-    {
-      type: "confirm",
-      name: "proceed",
-      message,
-      default: false,
-    },
-  ]);
-  if (!confirmation.proceed) {
-    console.log("Aborted.");
-    process.exit(0);
+  try {
+    const confirmation = await inquirer.prompt([
+      {
+        type: "confirm",
+        name: "proceed",
+        message,
+        default: false,
+      },
+    ]);
+    if (!confirmation.proceed) {
+      console.log("Aborted.");
+      process.exit(0);
+    }
+  } catch (error) {
+    // Handle Ctrl+C interruption gracefully
+    if (
+      error.name === "ExitPromptError" ||
+      error.message?.includes("force closed")
+    ) {
+      console.log("\nOperation cancelled.");
+      process.exit(0);
+    }
+    throw error;
   }
 }
 
-export function fundJsonToStateModel(json: any) {
-  if (json.accountType !== "fund") {
-    throw Error(
-      "Account account not supported. This helper function only supports fund (aka tokenized vault) account type",
-    );
+export function parseStateJson(json: any): Partial<StateModel> {
+  if (!json.state) {
+    throw new Error("Invalid JSON file: must contain 'state' property");
   }
-  const converted = {
-    ...json,
-    assets: json.assets.map((asset: string) => new PublicKey(asset)),
-    baseAsset: new PublicKey(json.baseAsset),
-    accountType: { [json.accountType]: {} },
-    timeUnit: { [json.timeUnit]: {} },
-    owner: new ManagerModel({
-      portfolioManagerName: json.owner.portfolioManagerName,
-      kind: { wallet: {} },
-    }),
-    mints: json.mints.map(
-      (mintData) =>
-        new MintModel({
-          ...mintData,
-          maxCap: new BN(mintData.maxCap),
-          minSubscription: new BN(mintData.minSubscription),
-          minRedemption: new BN(mintData.minRedemption),
-          feeStructure: {
-            ...mintData.feeStructure,
-            performance: {
-              ...mintData.feeStructure.performance,
-              hurdleType: {
-                [mintData.feeStructure.performance.hurdleType]: {},
-              },
-            },
-          },
-          notifyAndSettle: {
-            ...mintData.notifyAndSettle,
-            model: { [mintData.notifyAndSettle.model]: {} },
-            noticePeriod: new BN(mintData.notifyAndSettle.noticePeriod),
-            settlementPeriod: new BN(mintData.notifyAndSettle.settlementPeriod),
-            cancellationWindow: new BN(
-              mintData.notifyAndSettle.cancellationWindow,
-            ),
-            noticePeriodType: {
-              [mintData.notifyAndSettle.noticePeriodType]: {},
-            },
-          },
-        }),
+  const requiredFields =
+    json.state.accountType === "vault"
+      ? [
+          "accountType",
+          "name",
+          "enabled",
+          "assets",
+          "baseAssetMint",
+          "baseAssetTokenProgram",
+        ]
+      : ["accountType"];
+  requiredFields.forEach((field) => {
+    if (json.state?.[field] === undefined) {
+      throw new Error(`Missing required state field: ${field}`);
+    }
+  });
+
+  const stateModel = {
+    accountType: { [json.state.accountType]: {} },
+    name: json.state.name ? nameToChars(json.state.name) : null,
+    enabled: json.state.enabled !== false,
+    assets: (json.state.assets || []).map(
+      (asset: string) => new PublicKey(asset),
     ),
+    baseAssetMint: json.state.baseAssetMint
+      ? new PublicKey(json.state.baseAssetMint)
+      : null,
+    baseAssetTokenProgram: Number(json.state.baseAssetTokenProgram),
+    portfolioManagerName: json.state.portfolioManagerName
+      ? nameToChars(json.state.portfolioManagerName)
+      : null,
+    timelockDuration: Number(json.state.timelockDuration),
   };
 
-  return new StateModel(converted);
+  return stateModel;
+}
+
+export function parseMintJson(json: any, accountType: StateAccountType) {
+  if (StateAccountType.equals(accountType, StateAccountType.VAULT)) {
+    return null;
+  }
+
+  if (
+    StateAccountType.equals(accountType, StateAccountType.TOKENIZED_VAULT) &&
+    !json.mint
+  ) {
+    throw new Error(
+      "Invalid JSON file: must contain 'mint' property for tokenized vault",
+    );
+  }
+  const mintModel = {
+    name: json.mint.name ? nameToChars(json.mint.name) : null,
+    symbol: json.mint.symbol,
+    uri: json.mint.uri,
+    baseAssetMint: new PublicKey(json.mint.baseAssetMint),
+    maxCap: json.mint.maxCap ? new BN(json.mint.maxCap) : null,
+    minSubscription: json.mint.minSubscription
+      ? new BN(json.mint.minSubscription)
+      : null,
+    minRedemption: json.mint.minRedemption
+      ? new BN(json.mint.minRedemption)
+      : null,
+    lockupPeriod: Number(json.mint.lockupPeriod),
+    permanentDelegate: json.mint.permanentDelegate
+      ? new PublicKey(json.mint.permanentDelegate)
+      : null,
+    defaultAccountStateFrozen: json.mint.defaultAccountStateFrozen || false,
+    feeStructure: json.mint.feeStructure
+      ? {
+          ...json.mint.feeStructure,
+          performance: {
+            ...json.mint.feeStructure.performance,
+            hurdleType: {
+              [json.mint.feeStructure.performance.hurdleType]: {},
+            },
+          },
+          protocol: { baseFeeBps: 0, floorFeeBps: 0 },
+        }
+      : null,
+    notifyAndSettle: json.mint.notifyAndSettle
+      ? {
+          ...json.mint.notifyAndSettle,
+          model: { [json.mint.notifyAndSettle.model]: {} },
+          subscribeNoticePeriodType: {
+            [json.mint.notifyAndSettle.subscribeNoticePeriodType]: {},
+          },
+          subscribeNoticePeriod: new BN(
+            json.mint.notifyAndSettle.subscribeNoticePeriod || 0,
+          ),
+          subscribeSettlementPeriod: new BN(
+            json.mint.notifyAndSettle.subscribeSettlementPeriod || 0,
+          ),
+          subscribeCancellationWindow: new BN(
+            json.mint.notifyAndSettle.subscribeCancellationWindow || 0,
+          ),
+          redeemNoticePeriodType: {
+            [json.mint.notifyAndSettle.redeemNoticePeriodType]: {},
+          },
+          redeemNoticePeriod: new BN(
+            json.mint.notifyAndSettle.redeemNoticePeriod || 0,
+          ),
+          redeemSettlementPeriod: new BN(
+            json.mint.notifyAndSettle.redeemSettlementPeriod || 0,
+          ),
+          redeemCancellationWindow: new BN(
+            json.mint.notifyAndSettle.redeemCancellationWindow || 0,
+          ),
+          timeUnit: { [json.mint.notifyAndSettle.timeUnit]: {} },
+          padding: [0, 0, 0],
+        }
+      : null,
+  };
+  return mintModel;
 }
 
 export function validatePublicKey(value: string) {
@@ -214,4 +302,13 @@ export function validatePublicKey(value: string) {
     console.error("Not a valid pubkey:", value);
     process.exit(1);
   }
+}
+
+export function validateSubAccountId(subAccountId: string): number {
+  const parsed = parseInt(subAccountId);
+  if (isNaN(parsed) || parsed < 0) {
+    console.error("Invalid sub-account-id. Must be a valid integer.");
+    process.exit(1);
+  }
+  return parsed;
 }

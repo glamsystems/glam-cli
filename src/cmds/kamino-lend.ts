@@ -1,21 +1,17 @@
-import { ASSETS_MAINNET, GlamClient, TxOptions } from "@glamsystems/glam-sdk";
+import { ASSETS_MAINNET } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
-import { CliConfig, confirmOperation, parseTxError } from "../utils";
+import { CliContext, confirmOperation, parseTxError } from "../utils";
 import { PublicKey } from "@solana/web3.js";
 
-export function installKLendCommands(
-  klend: Command,
-  glamClient: GlamClient,
-  cliConfig: CliConfig,
-  txOptions: TxOptions = {},
-) {
+export function installKaminoLendCommands(klend: Command, context: CliContext) {
   klend
     .command("init")
     .description("Initialize Kamino user")
     .action(async () => {
       try {
-        const txSig =
-          await glamClient.kaminoLending.initUserMetadata(txOptions);
+        const txSig = await context.glamClient.kaminoLending.initUserMetadata(
+          context.txOptions,
+        );
         console.log(`Initialized Kamino user:`, txSig);
       } catch (e) {
         console.error(parseTxError(e));
@@ -27,11 +23,11 @@ export function installKLendCommands(
     .command("list [market]")
     .description("List Kamino deposits and borrows")
     .action(async (market: string | null) => {
-      const vault = glamClient.vaultPda;
+      const vault = context.glamClient.vaultPda;
       const lendingMarket = market ? new PublicKey(market) : null;
 
       const obligations =
-        await glamClient.kaminoLending.findAndParseObligations(
+        await context.glamClient.kaminoLending.findAndParseObligations(
           vault,
           lendingMarket,
         );
@@ -57,11 +53,11 @@ export function installKLendCommands(
       }
 
       try {
-        const txSig = await glamClient.kaminoLending.deposit(
+        const txSig = await context.glamClient.kaminoLending.deposit(
           market,
           asset,
           parseFloat(amount) * 10 ** decimals,
-          txOptions,
+          context.txOptions,
         );
         console.log(`Deposit ${amount} ${asset} to Kamino from vault:`, txSig);
       } catch (e) {
@@ -85,11 +81,11 @@ export function installKLendCommands(
       }
 
       try {
-        const txSig = await glamClient.kaminoLending.withdraw(
+        const txSig = await context.glamClient.kaminoLending.withdraw(
           market,
           asset,
           parseFloat(amount) * 10 ** decimals,
-          txOptions,
+          context.txOptions,
         );
         console.log(`Withdraw ${amount} ${asset} from Kamino:`, txSig);
       } catch (e) {
@@ -113,11 +109,11 @@ export function installKLendCommands(
       }
 
       try {
-        const txSig = await glamClient.kaminoLending.borrow(
+        const txSig = await context.glamClient.kaminoLending.borrow(
           market,
           asset,
           parseFloat(amount) * 10 ** decimals,
-          txOptions,
+          context.txOptions,
         );
         console.log(`Borrowed ${amount} ${asset} from Kamino:`, txSig);
       } catch (e) {
@@ -141,26 +137,13 @@ export function installKLendCommands(
       }
 
       try {
-        const txSig = await glamClient.kaminoLending.repay(
+        const txSig = await context.glamClient.kaminoLending.repay(
           market,
           asset,
           parseFloat(amount) * 10 ** decimals,
-          txOptions,
+          context.txOptions,
         );
         console.log(`Repaid ${amount} ${asset} to Kamino:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        throw e;
-      }
-    });
-
-  klend
-    .command("harvest")
-    .description("Harvest Kamino farms rewards")
-    .action(async () => {
-      try {
-        const txSig = await glamClient.kaminoFarm.harvest(txOptions);
-        console.log(`Harvested farm rewards:`, txSig);
       } catch (e) {
         console.error(parseTxError(e));
         throw e;

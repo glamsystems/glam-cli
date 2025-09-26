@@ -1,0 +1,46 @@
+{
+  "state": {
+    "accountType": "tokenizedVault",
+    "enabled": true
+  },
+  "mint": {
+    "name": "GLAM SOL",
+    "symbol": "gmSOL",
+    "baseAssetMint": "So11111111111111111111111111111111111111112",
+    "maxCap": 1000000000000,
+    "minSubscription": 100000000,
+    "minRedemption": 100000000,
+    "lockupPeriod": 0,
+    "feeStructure": {
+      "vault": {
+        "subscriptionFeeBps": 10,
+        "redemptionFeeBps": 10
+      },
+      "manager": {
+        "subscriptionFeeBps": 0,
+        "redemptionFeeBps": 0
+      },
+      "management": {
+        "feeBps": 0
+      },
+      "performance": {
+        "feeBps": 2000,
+        "hurdleRateBps": 5,
+        "hurdleType": "hard"
+      }
+    },
+    "notifyAndSettle": {
+      "model": "continuous",
+      "permissionlessFulfillment": false,
+      "subscribeNoticePeriodType": "soft",
+      "subscribeNoticePeriod": 0,
+      "subscribeSettlementPeriod": 0,
+      "subscribeCancellationWindow": 0,
+      "redeemNoticePeriodType": "soft",
+      "redeemNoticePeriod": 0,
+      "redeemSettlementPeriod": 0,
+      "redeemCancellationWindow": 0,
+      "timeUnit": "slot"
+    }
+  }
+}

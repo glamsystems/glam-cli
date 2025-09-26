@@ -1,43 +1,54 @@
 import { BN } from "@coral-xyz/anchor";
-import { GlamClient, TxOptions } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
-import { CliConfig, confirmOperation, validatePublicKey } from "../utils";
+import {
+  CliContext,
+  confirmOperation,
+  parseTxError,
+  validatePublicKey,
+} from "../utils";
 import tokens from "../tokens-verified.json";
 
 export function installDriftVaultsCommands(
   driftVaults: Command,
-  glamClient: GlamClient,
-  cliConfig: CliConfig,
-  txOptions: TxOptions = {},
+  context: CliContext,
 ) {
   driftVaults
     .command("list-depositors")
-    .description("List vault depositors")
+    .description("List Drift vault depositors owned by the GLAM vault")
     .action(async () => {
       const parsedVaultDepositors =
-        await glamClient.driftVaults.findAndParseVaultDepositors();
+        await context.glamClient.driftVaults.findAndParseVaultDepositors();
+
+      const parsedDriftVaults =
+        await context.glamClient.driftVaults.parseDriftVaults(
+          parsedVaultDepositors.map(({ driftVault }) => driftVault),
+        );
+
+      const spotMarkets =
+        await context.glamClient.drift.fetchAndParseSpotMarkets(
+          parsedDriftVaults.map(({ spotMarketIndex }) => spotMarketIndex),
+        );
+      const spotMarketMap = new Map(
+        spotMarkets.map((spotMarket) => [spotMarket.marketIndex, spotMarket]),
+      );
+
       parsedVaultDepositors.map(({ address, driftVault, shares }, i) => {
+        const { pubkey, spotMarketIndex, nameStr } = parsedDriftVaults[i];
+
+        if (!driftVault.equals(pubkey)) {
+          throw new Error(
+            `Depositor vault ${driftVault} does not match parsed drift vault ${pubkey}`,
+          );
+        }
+
+        const { mint, decimals } = spotMarketMap.get(spotMarketIndex)!;
+        const tokenInfo = tokens.find((t) => t.address === mint.toBase58());
+        const depositAsset = tokenInfo?.symbol || mint.toBase58();
+
         console.log(
-          `[${i}] Depositor: ${address}, vault: ${driftVault}, shares: ${shares}`,
+          `[${i}] Depositor: ${address}, vault: ${nameStr}, shares: ${shares / 10 ** decimals}, deposit asset: ${depositAsset}`,
         );
       });
-    });
-
-  driftVaults
-    .command("init-depositor")
-    .argument("<vault>", "Drift vault public key", validatePublicKey)
-    .description("Initialize vault depositor")
-    .action(async (vault) => {
-      try {
-        const txSig = await glamClient.driftVaults.initializeVaultDepositor(
-          vault,
-          txOptions,
-        );
-        console.log(`Vault depositor initialized: ${txSig}`);
-      } catch (e) {
-        console.error(e);
-        process.exit(1);
-      }
     });
 
   driftVaults
@@ -47,11 +58,10 @@ export function installDriftVaultsCommands(
     .option("-y, --yes", "Skip confirmation prompt")
     .description("Deposit to a drift vault")
     .action(async (vault, amount, options) => {
-      // Get decimals of deposit asset
       const { spotMarketIndex } =
-        await glamClient.driftVaults.parseDriftVault(vault);
+        await context.glamClient.driftVaults.parseDriftVault(vault);
       const { mint, decimals } =
-        await glamClient.drift.fetchAndParseSpotMarket(spotMarketIndex);
+        await context.glamClient.drift.fetchAndParseSpotMarket(spotMarketIndex);
       const amountBN = new BN(amount * 10 ** decimals);
 
       const tokenInfo = tokens.find((t) => t.address === mint.toBase58());
@@ -62,18 +72,18 @@ export function installDriftVaultsCommands(
 
       options?.yes ||
         (await confirmOperation(
-          `Confirm depositing ${amount} ${tokenInfo.symbol} (${tokenInfo.name}) to drift vault ${vault}?`,
+          `Confirm depositing ${amount} ${tokenInfo.symbol} (${mint}) to drift vault ${vault}?`,
         ));
 
       try {
-        const txSig = await glamClient.driftVaults.deposit(
+        const txSig = await context.glamClient.driftVaults.deposit(
           vault,
           amountBN,
-          txOptions,
+          context.txOptions,
         );
         console.log(`Deposit to drift vault ${vault}: ${txSig}`);
       } catch (e) {
-        console.error(e);
+        console.error(parseTxError(e));
         process.exit(1);
       }
     });
@@ -85,21 +95,28 @@ export function installDriftVaultsCommands(
     .option("-y, --yes", "Skip confirmation prompt")
     .description("Request to withdraw from a drift vault")
     .action(async (vault, amount, options) => {
+      const { spotMarketIndex, nameStr } =
+        await context.glamClient.driftVaults.parseDriftVault(vault);
       options?.yes ||
         (await confirmOperation(
-          `Confirm requesting to withdraw ${amount} vault shares from ${vault}?`,
+          `Confirm requesting to withdraw ${amount} vault shares from ${nameStr} (${vault})?`,
         ));
 
-      const amountBN = new BN(amount * 10 ** 6);
+      const { decimals } =
+        await context.glamClient.drift.fetchAndParseSpotMarket(spotMarketIndex);
+
+      const amountBN = new BN(amount * 10 ** decimals);
       try {
-        const txSig = await glamClient.driftVaults.requestWithdraw(
+        const txSig = await context.glamClient.driftVaults.requestWithdraw(
           vault,
           amountBN,
-          txOptions,
+          context.txOptions,
         );
-        console.log(`Request to withdraw from drift vault ${vault}: ${txSig}`);
+        console.log(
+          `Withdrawal request submitted for drift vault ${nameStr} (${vault}): ${txSig}`,
+        );
       } catch (e) {
-        console.error(e);
+        console.error(parseTxError(e));
         process.exit(1);
       }
     });
@@ -110,13 +127,14 @@ export function installDriftVaultsCommands(
     .description("Cancel the pending withdraw request")
     .action(async (vault) => {
       try {
-        const txSig = await glamClient.driftVaults.cancelWithdrawRequest(
-          vault,
-          txOptions,
-        );
-        console.log(`Withdraw request cancelled: ${txSig}`);
+        const txSig =
+          await context.glamClient.driftVaults.cancelWithdrawRequest(
+            vault,
+            context.txOptions,
+          );
+        console.log(`Withdrawal request cancelled: ${txSig}`);
       } catch (e) {
-        console.error(e);
+        console.error(parseTxError(e));
         process.exit(1);
       }
     });
@@ -127,10 +145,13 @@ export function installDriftVaultsCommands(
     .description("Claim withdrawal")
     .action(async (vault) => {
       try {
-        const txSig = await glamClient.driftVaults.withdraw(vault, txOptions);
+        const txSig = await context.glamClient.driftVaults.withdraw(
+          vault,
+          context.txOptions,
+        );
         console.log(`Confirmed withdrawal from drift vault ${vault}: ${txSig}`);
       } catch (e) {
-        console.error(e);
+        console.error(parseTxError(e));
         process.exit(1);
       }
     });

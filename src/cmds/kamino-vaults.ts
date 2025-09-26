@@ -1,19 +1,15 @@
-import { ASSETS_MAINNET, GlamClient, TxOptions } from "@glamsystems/glam-sdk";
 import { BN } from "@coral-xyz/anchor";
 import { Command } from "commander";
 import {
-  CliConfig,
+  CliContext,
   confirmOperation,
   parseTxError,
   validatePublicKey,
 } from "../utils";
-import { PublicKey } from "@solana/web3.js";
 
-export function installKVaultsCommands(
+export function installKaminoVaultsCommands(
   kvaults: Command,
-  glamClient: GlamClient,
-  cliConfig: CliConfig,
-  txOptions: TxOptions = {},
+  context: CliContext,
 ) {
   kvaults
     .command("deposit")
@@ -23,7 +19,7 @@ export function installKVaultsCommands(
     .description("Deposit to a Kamino vault")
     .action(async (vault, amount, options) => {
       const vaultState =
-        await glamClient.kaminoVaults.fetchAndParseVaultState(vault);
+        await context.glamClient.kaminoVaults.fetchAndParseVaultState(vault);
       const { tokenMint, tokenMintDecimals } = vaultState;
 
       options?.yes ||
@@ -33,10 +29,10 @@ export function installKVaultsCommands(
 
       try {
         const amountBN = new BN(amount * 10 ** tokenMintDecimals);
-        const txSig = await glamClient.kaminoVaults.deposit(
+        const txSig = await context.glamClient.kaminoVaults.deposit(
           vault,
           amountBN,
-          txOptions,
+          context.txOptions,
         );
         console.log(`Deposit successful: ${txSig}`);
       } catch (e) {
@@ -57,7 +53,7 @@ export function installKVaultsCommands(
     .description("Deposit to a Kamino vault")
     .action(async (vault, amount, options) => {
       const vaultState =
-        await glamClient.kaminoVaults.fetchAndParseVaultState(vault);
+        await context.glamClient.kaminoVaults.fetchAndParseVaultState(vault);
       const { sharesMintDecimals } = vaultState;
 
       options?.yes ||
@@ -67,10 +63,10 @@ export function installKVaultsCommands(
 
       try {
         const amountBN = new BN(amount * 10 ** sharesMintDecimals);
-        const txSig = await glamClient.kaminoVaults.withdraw(
+        const txSig = await context.glamClient.kaminoVaults.withdraw(
           vault,
           amountBN,
-          txOptions,
+          context.txOptions,
         );
         console.log(`Withdraw successful: ${txSig}`);
       } catch (e) {

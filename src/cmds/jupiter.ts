@@ -1,17 +1,13 @@
 import {
   fetchTokensList,
-  GlamClient,
   QuoteParams,
-  TxOptions,
 } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
-import { CliConfig, confirmOperation, parseTxError } from "../utils";
+import { CliContext, confirmOperation, parseTxError } from "../utils";
 
-export function installSwapCommands(
+export function installJupiterCommands(
   program: Command,
-  glamClient: GlamClient,
-  cliConfig: CliConfig,
-  txOptions: TxOptions = {},
+  context: CliContext,
 ) {
   program
     .command("swap <from> <to> <amount>")
@@ -68,9 +64,9 @@ export function installSwapCommands(
         ));
 
       try {
-        const txSig = await glamClient.jupiterSwap.swap(
+        const txSig = await context.glamClient.jupiterSwap.swap(
           { quoteParams },
-          txOptions,
+          context.txOptions,
         );
         console.log(`Swapped ${amount} ${from} to ${to}: ${txSig}`);
       } catch (e) {

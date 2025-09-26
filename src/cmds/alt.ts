@@ -1,21 +1,20 @@
-import { GlamClient, TxOptions } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
-import { CliConfig, parseTxError } from "../utils";
+import { CliContext, confirmOperation, parseTxError } from "../utils";
 import { Transaction, VersionedTransaction } from "@solana/web3.js";
 
-export function installAltCommands(
-  alt: Command,
-  glamClient: GlamClient,
-  cliConfig: CliConfig,
-  txOptions: TxOptions = {},
-) {
+export function installAltCommands(alt: Command, context: CliContext) {
   alt
     .command("create")
     .description("Create address lookup table (ALT) for the active GLAM")
-    .action(async () => {
+    .option("-y, --yes", "Skip confirmation prompt")
+    .action(async (options) => {
+      if (!process.env.GLAM_API) {
+        console.error("GLAM_API is not defined in the environment");
+        process.exit(1);
+      }
       try {
         const response = await fetch(
-          `https://api.glam.systems/v0/lut/vault/create?state=${glamClient.statePda}&payer=${glamClient.getSigner()}`,
+          `${process.env.GLAM_API}/v0/lut/vault/create?state=${context.glamClient.statePda}&payer=${context.glamClient.signer}`,
         );
         const data = await response.json();
         const table = data.tables[0];
@@ -25,6 +24,10 @@ export function installAltCommands(
             new Uint8Array(Buffer.from(b64Tx, "base64")),
           ),
         );
+        options?.yes ||
+          (await confirmOperation(
+            `Confirm creating address lookup table ${table}?`,
+          ));
         const txSigs = [];
         for (const vTx of vTxs) {
           const instructions = vTx.message.compiledInstructions.map((ix) => {
@@ -38,11 +41,11 @@ export function installAltCommands(
               data: Buffer.from(ix.data),
             };
           });
-          const tx = await glamClient.intoVersionedTransaction(
+          const tx = await context.glamClient.intoVersionedTransaction(
             new Transaction().add(...instructions),
-            txOptions,
+            context.txOptions,
           );
-          const txSig = await glamClient.sendAndConfirm(tx);
+          const txSig = await context.glamClient.sendAndConfirm(tx);
           txSigs.push(txSig);
         }
         console.log(`Address lookup table ${table} created:`, txSigs);
@@ -56,11 +59,9 @@ export function installAltCommands(
     .command("list")
     .description("List lookup table(s) created for the active GLAM")
     .action(async () => {
-      const lookupTableAccountss = await glamClient.findLookupTables();
+      const lookupTableAccountss = await context.glamClient.findLookupTables();
 
-      console.log(
-        "Lookup tables:",
-        lookupTableAccountss.map((t) => t.key.toBase58()),
-      );
+      console.log("Lookup tables:");
+      lookupTableAccountss.map((t, i) => console.log(`[${i}] ${t.key}`));
     });
 }
