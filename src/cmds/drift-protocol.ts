@@ -1,5 +1,6 @@
 import { BN } from "@coral-xyz/anchor";
 import {
+  DriftProtocolPolicy,
   getOrderParams,
   MarketType,
   OrderType,
@@ -13,10 +14,113 @@ import {
   validateSubAccountId,
 } from "../utils";
 
+async function fetchDriftProtocolPolicy(
+  context: CliContext,
+): Promise<DriftProtocolPolicy | null> {
+  const programId = context.glamClient.extDriftProgram.programId;
+  const protocolBitflag = 0b01;
+
+  const stateAccount = await context.glamClient.fetchStateAccount();
+  const integrationPolicy = stateAccount.integrationAcls?.find(
+    (acl) => acl.integrationProgram.toString() === programId.toString(),
+  );
+  const policyData = integrationPolicy?.protocolPolicies?.find(
+    (policy) => policy.protocolBitflag === protocolBitflag,
+  )?.data;
+  if (policyData) {
+    return DriftProtocolPolicy.decode(policyData);
+  }
+  return null;
+}
+
 export function installDriftProtocolCommands(
   drift: Command,
   context: CliContext,
 ) {
+  drift
+    .command("view-policy")
+    .description("View drift policy")
+    .action(async () => {
+      const policy = await fetchDriftProtocolPolicy(context);
+      console.log(policy);
+    });
+
+  drift
+    .command("add-market")
+    .argument("<market_type>", "Market type", (v) => {
+      if (v !== "spot" && v !== "perp") {
+        console.error("Invalid market type, must be 'spot' or 'perp'");
+        process.exit(1);
+      }
+      return v;
+    })
+    .argument("<market_index>", "Spot or perp market index", parseInt)
+    .description("Add a market to the allowlist")
+    .action(async (marketType, marketIndex) => {
+      const policy =
+        (await fetchDriftProtocolPolicy(context)) ??
+        new DriftProtocolPolicy([], [], []);
+
+      if (marketType === "spot") {
+        policy.spotMarketsAllowlist.push(marketIndex);
+      } else {
+        policy.perpMarketsAllowlist.push(marketIndex);
+      }
+      try {
+        const txSig = await context.glamClient.access.setProtocolPolicy(
+          context.glamClient.extDriftProgram.programId,
+          0b01,
+          policy.encode(),
+          context.txOptions,
+        );
+        console.log(`Drift policy updated:`, txSig);
+      } catch (e) {
+        console.error(parseTxError(e));
+        process.exit(1);
+      }
+    });
+
+  drift
+    .command("delete-market")
+    .argument("<market_type>", "Market type", (v) => {
+      if (v !== "spot" && v !== "perp") {
+        console.error("Invalid market type, must be 'spot' or 'perp'");
+        process.exit(1);
+      }
+      return v;
+    })
+    .argument("<market_index>", "Spot or perp market index", parseInt)
+    .description("Remove a market from the allowlist")
+    .action(async (marketType, marketIndex) => {
+      const policy = await fetchDriftProtocolPolicy(context);
+      if (!policy) {
+        console.error("Drift policy not found");
+        process.exit(1);
+      }
+
+      if (marketType === "spot") {
+        policy.spotMarketsAllowlist = policy.spotMarketsAllowlist.filter(
+          (m) => m !== marketIndex,
+        );
+      } else {
+        policy.perpMarketsAllowlist = policy.perpMarketsAllowlist.filter(
+          (m) => m !== marketIndex,
+        );
+      }
+      try {
+        const txSig = await context.glamClient.access.setProtocolPolicy(
+          context.glamClient.extDriftProgram.programId,
+          0b01,
+          policy.encode(),
+          context.txOptions,
+        );
+        console.log(`Drift policy updated:`, txSig);
+      } catch (e) {
+        console.error(parseTxError(e));
+        process.exit(1);
+      }
+    });
+
   drift
     .command("init")
     .option(
@@ -186,57 +290,66 @@ export function installDriftProtocolCommands(
       0,
     )
     .option("-y, --yes", "Skip confirmation prompt")
-    .action(async (direction, marketIndex, amount, priceLimit, { subAccountId, yes }) => {
-      if (!["long", "short"].includes(direction)) {
-        console.error("Invalid direction. Must be 'long' or 'short'");
-        process.exit(1);
-      }
+    .action(
+      async (
+        direction,
+        marketIndex,
+        amount,
+        priceLimit,
+        { subAccountId, yes },
+      ) => {
+        if (!["long", "short"].includes(direction)) {
+          console.error("Invalid direction. Must be 'long' or 'short'");
+          process.exit(1);
+        }
 
-      const marketConfigs = await context.glamClient.drift.fetchMarketConfigs();
-      const spotMarket = marketConfigs?.spotMarkets?.find(
-        (m) => m.marketIndex === parseInt(marketIndex),
-      );
-
-      if (!spotMarket) {
-        console.error(`Invalid market index: ${marketIndex}`);
-        process.exit(1);
-      }
-      const baseAssetAmount = new BN(
-        Number(amount) * 10 ** spotMarket.decimals,
-      );
-      const price = new BN(
-        Number(priceLimit) * 10 ** marketConfigs.orderConstants.quoteScale,
-      );
-
-      const orderParams = getOrderParams({
-        orderType: OrderType.LIMIT,
-        marketType: MarketType.SPOT,
-        direction:
-          direction === "long"
-            ? PositionDirection.LONG
-            : PositionDirection.SHORT,
-        marketIndex: spotMarket.marketIndex,
-        baseAssetAmount,
-        price,
-      });
-
-      yes ||
-        (await confirmOperation(
-          `Confirm placing ${direction} order for ${amount} ${spotMarket.name} at ${priceLimit} USD?`,
-        ));
-
-      try {
-        const txSig = await context.glamClient.drift.placeOrder(
-          orderParams,
-          subAccountId,
-          context.txOptions,
+        const marketConfigs =
+          await context.glamClient.drift.fetchMarketConfigs();
+        const spotMarket = marketConfigs?.spotMarkets?.find(
+          (m) => m.marketIndex === parseInt(marketIndex),
         );
-        console.log(`Spot order placed: ${txSig}`);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
-    });
+
+        if (!spotMarket) {
+          console.error(`Invalid market index: ${marketIndex}`);
+          process.exit(1);
+        }
+        const baseAssetAmount = new BN(
+          Number(amount) * 10 ** spotMarket.decimals,
+        );
+        const price = new BN(
+          Number(priceLimit) * 10 ** marketConfigs.orderConstants.quoteScale,
+        );
+
+        const orderParams = getOrderParams({
+          orderType: OrderType.LIMIT,
+          marketType: MarketType.SPOT,
+          direction:
+            direction === "long"
+              ? PositionDirection.LONG
+              : PositionDirection.SHORT,
+          marketIndex: spotMarket.marketIndex,
+          baseAssetAmount,
+          price,
+        });
+
+        yes ||
+          (await confirmOperation(
+            `Confirm placing ${direction} order for ${amount} ${spotMarket.name} at ${priceLimit} USD?`,
+          ));
+
+        try {
+          const txSig = await context.glamClient.drift.placeOrder(
+            orderParams,
+            subAccountId,
+            context.txOptions,
+          );
+          console.log(`Spot order placed: ${txSig}`);
+        } catch (e) {
+          console.error(parseTxError(e));
+          process.exit(1);
+        }
+      },
+    );
 
   drift
     .command("perp <direction> <market_index> <amount> <price_limit>")
@@ -248,57 +361,66 @@ export function installDriftProtocolCommands(
       0,
     )
     .option("-y, --yes", "Skip confirmation prompt")
-    .action(async (direction, marketIndex, amount, priceLimit, { subAccountId, yes }) => {
-      if (!["long", "short"].includes(direction)) {
-        console.error("Invalid direction. Must be 'long' or 'short'");
-        process.exit(1);
-      }
+    .action(
+      async (
+        direction,
+        marketIndex,
+        amount,
+        priceLimit,
+        { subAccountId, yes },
+      ) => {
+        if (!["long", "short"].includes(direction)) {
+          console.error("Invalid direction. Must be 'long' or 'short'");
+          process.exit(1);
+        }
 
-      const marketConfigs = await context.glamClient.drift.fetchMarketConfigs();
-      const perpMarket = marketConfigs?.perpMarkets?.find(
-        (m) => m.marketIndex === parseInt(marketIndex),
-      );
-
-      if (!perpMarket) {
-        console.error(`Invalid market index: ${marketIndex}`);
-        process.exit(1);
-      }
-      const baseAssetAmount = new BN(
-        Number(amount) * 10 ** marketConfigs.orderConstants.perpBaseScale,
-      );
-      const price = new BN(
-        Number(priceLimit) * 10 ** marketConfigs.orderConstants.quoteScale,
-      );
-
-      const orderParams = getOrderParams({
-        orderType: OrderType.LIMIT,
-        marketType: MarketType.PERP,
-        direction:
-          direction === "long"
-            ? PositionDirection.LONG
-            : PositionDirection.SHORT,
-        marketIndex: perpMarket.marketIndex,
-        baseAssetAmount,
-        price,
-      });
-
-      yes ||
-        (await confirmOperation(
-          `Confirm placing ${direction} order for ${amount} ${perpMarket.name} at ${priceLimit} USD?`,
-        ));
-
-      try {
-        const txSig = await context.glamClient.drift.placeOrder(
-          orderParams,
-          subAccountId,
-          context.txOptions,
+        const marketConfigs =
+          await context.glamClient.drift.fetchMarketConfigs();
+        const perpMarket = marketConfigs?.perpMarkets?.find(
+          (m) => m.marketIndex === parseInt(marketIndex),
         );
-        console.log(`Perp order placed: ${txSig}`);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
-    });
+
+        if (!perpMarket) {
+          console.error(`Invalid market index: ${marketIndex}`);
+          process.exit(1);
+        }
+        const baseAssetAmount = new BN(
+          Number(amount) * 10 ** marketConfigs.orderConstants.perpBaseScale,
+        );
+        const price = new BN(
+          Number(priceLimit) * 10 ** marketConfigs.orderConstants.quoteScale,
+        );
+
+        const orderParams = getOrderParams({
+          orderType: OrderType.LIMIT,
+          marketType: MarketType.PERP,
+          direction:
+            direction === "long"
+              ? PositionDirection.LONG
+              : PositionDirection.SHORT,
+          marketIndex: perpMarket.marketIndex,
+          baseAssetAmount,
+          price,
+        });
+
+        yes ||
+          (await confirmOperation(
+            `Confirm placing ${direction} order for ${amount} ${perpMarket.name} at ${priceLimit} USD?`,
+          ));
+
+        try {
+          const txSig = await context.glamClient.drift.placeOrder(
+            orderParams,
+            subAccountId,
+            context.txOptions,
+          );
+          console.log(`Perp order placed: ${txSig}`);
+        } catch (e) {
+          console.error(parseTxError(e));
+          process.exit(1);
+        }
+      },
+    );
 
   drift
     .command("orders")
@@ -310,7 +432,6 @@ export function installDriftProtocolCommands(
     )
     .description("List open orders")
     .action(async ({ subAccountId }) => {
-
       const driftUser =
         await context.glamClient.drift.fetchDriftUser(subAccountId);
       if (!driftUser) {
@@ -379,7 +500,6 @@ export function installDriftProtocolCommands(
     )
     .description("Cancel order")
     .action(async (orderIds, { subAccountId }) => {
-
       try {
         const txSig = await context.glamClient.drift.cancelOrdersByIds(
           orderIds.map((id: string) => Number(id)),
@@ -403,7 +523,6 @@ export function installDriftProtocolCommands(
     )
     .description("Enable margin trading")
     .action(async (enabled, { subAccountId }) => {
-
       let shouldEnable = false;
       if (["true", "1", "yes", "y", "enabled"].includes(enabled)) {
         shouldEnable = true;
@@ -452,7 +571,6 @@ export function installDriftProtocolCommands(
     )
     .description("Settle PnL for the specified perp market")
     .action(async (marketIndex, { subAccountId }) => {
-
       const marketConfigs = await context.glamClient.drift.fetchMarketConfigs();
       const perpMarket = marketConfigs.perpMarkets.find(
         (m) => m.marketIndex === parseInt(marketIndex),
