@@ -185,9 +185,10 @@ export function installDriftProtocolCommands(
       validateSubAccountId,
       0,
     )
+    .option("-p, --pool-id <pool_id>", "Isolated pool ID", parseInt, 0)
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Initialize drift user")
-    .action(async ({ subAccountId, yes }) => {
+    .action(async ({ subAccountId, poolId, yes }) => {
       yes ||
         (await confirmOperation(
           `Initializing drift user (sub-account ${subAccountId})`,
