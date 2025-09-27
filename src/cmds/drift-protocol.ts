@@ -14,6 +14,7 @@ import {
   validatePublicKey,
   validateSubAccountId,
 } from "../utils";
+import { Transaction } from "@solana/web3.js";
 
 async function fetchDriftProtocolPolicy(
   context: CliContext,
@@ -668,6 +669,31 @@ export function installDriftProtocolCommands(
           context.txOptions,
         );
         console.log(`Deleted drift user: ${txSig}`);
+      } catch (e) {
+        console.error(parseTxError(e));
+        process.exit(1);
+      }
+    });
+
+  drift
+    .command("update-user-pool-id")
+    .argument("<sub_account_id>", "Sub account ID", parseInt)
+    .argument("<pool_id>", "Isolated pool ID", parseInt)
+    .description("Update a drift user's pool ID")
+    .action(async (subAccountId, poolId) => {
+      try {
+        const tx = new Transaction().add(
+          await context.glamClient.drift.updateUserPoolIdIx(
+            subAccountId,
+            poolId,
+          ),
+        );
+        const vTx = await context.glamClient.intoVersionedTransaction(
+          tx,
+          context.txOptions,
+        );
+        const txSig = await context.glamClient.sendAndConfirm(vTx);
+        console.log(`Updated drift user's pool ID: ${txSig}`);
       } catch (e) {
         console.error(parseTxError(e));
         process.exit(1);
