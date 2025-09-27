@@ -11,6 +11,7 @@ import {
   CliContext,
   confirmOperation,
   parseTxError,
+  validatePublicKey,
   validateSubAccountId,
 } from "../utils";
 
@@ -122,7 +123,62 @@ export function installDriftProtocolCommands(
     });
 
   drift
-    .command("init")
+    .command("add-borrowable-asset")
+    .argument("<token_mint>", "Token mint public key", validatePublicKey)
+    .description("Add a borrowable asset")
+    .action(async (tokenMint) => {
+      const policy =
+        (await fetchDriftProtocolPolicy(context)) ||
+        new DriftProtocolPolicy([], [], []);
+      if (!policy) {
+        console.error("Drift policy not found");
+        process.exit(1);
+      }
+      policy.borrowAllowlist.push(tokenMint);
+
+      try {
+        const txSig = await context.glamClient.access.setProtocolPolicy(
+          context.glamClient.extDriftProgram.programId,
+          0b01,
+          policy.encode(),
+          context.txOptions,
+        );
+        console.log(`Drift policy updated:`, txSig);
+      } catch (e) {
+        console.error(parseTxError(e));
+        process.exit(1);
+      }
+    });
+
+  drift
+    .command("delete-borrowable-asset")
+    .argument("<token_mint>", "Token mint public key", validatePublicKey)
+    .action(async (tokenMint) => {
+      const policy = await fetchDriftProtocolPolicy(context);
+      if (!policy) {
+        console.error("Drift policy not found");
+        process.exit(1);
+      }
+
+      policy.borrowAllowlist = policy.borrowAllowlist.filter(
+        (m) => !m.equals(tokenMint),
+      );
+      try {
+        const txSig = await context.glamClient.access.setProtocolPolicy(
+          context.glamClient.extDriftProgram.programId,
+          0b01,
+          policy.encode(),
+          context.txOptions,
+        );
+        console.log(`Drift policy updated:`, txSig);
+      } catch (e) {
+        console.error(parseTxError(e));
+        process.exit(1);
+      }
+    });
+
+  drift
+    .command("init-user")
     .option(
       "-s, --sub-account-id <sub_account_id>",
       "Sub account ID",
