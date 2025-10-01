@@ -356,8 +356,8 @@ export function installVaultCommands(program: Command, context: CliContext) {
 
   program
     .command("close")
-    .argument("[state]", "GLAM state public key", validatePublicKey)
-    .description("Close a GLAM product by its state pubkey")
+    .argument("[state]", "Vault state public key", validatePublicKey)
+    .description("Close a GLAM vault by its state pubkey")
     .option("-y, --yes", "Skip confirmation prompt")
     .action(async (state: PublicKey | null, options) => {
       const statePda = state || context.cliConfig.glamState;
