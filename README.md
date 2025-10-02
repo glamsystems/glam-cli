@@ -2,7 +2,9 @@
 
 ![NPM Version](https://img.shields.io/npm/v/%40glamsystems%2Fglam-cli)
 
-A convenient way of interacting with the GLAM program.
+A powerful command-line interface for managing GLAM vaults.
+
+**Note:** This repository is automatically synced from GLAM's private monorepo. Pull requests cannot be accepted here, but we welcome bug reports and feature requests through GitHub Issues.
 
 ## Installation
 
