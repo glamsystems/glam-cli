@@ -96,11 +96,13 @@ export function installVaultCommands(program: Command, context: CliContext) {
     .description("Set the active GLAM vault for subsequent CLI operations")
     .action(async (state: PublicKey) => {
       try {
-        const stateModel = await context.glamClient.fetchStateModel(state);
+        context.glamClient.statePda = state;
+        const stateModel = await context.glamClient.fetchStateModel();
         context.cliConfig.glamState = state;
         console.log(`Active GLAM state: ${stateModel.idStr}`);
         console.log(`Vault: ${stateModel.vault}`);
       } catch (e) {
+        context.glamClient.statePda = null;
         console.error("Invalid GLAM state public key.");
         process.exit(1);
       }

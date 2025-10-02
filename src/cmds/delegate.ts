@@ -1,8 +1,12 @@
 import { BN } from "@coral-xyz/anchor";
-import { formatBits } from "@glamsystems/glam-sdk";
+import {
+  formatBits,
+  parseProtocolPermissionsBitmask,
+} from "@glamsystems/glam-sdk";
 import { Command } from "commander";
 import {
   CliContext,
+  confirmOperation,
   parseTxError,
   validatePublicKey,
 } from "../utils";
@@ -19,20 +23,31 @@ export function installDelegateCommands(
       const stateModel = await context.glamClient.fetchStateModel();
       const cnt = stateModel.delegateAcls.length;
       console.log(
-        `${stateModel.nameStr} (${context.glamClient.statePda}) has ${cnt} delegate${cnt > 1 ? "s" : ""}`,
+        `${stateModel.nameStr} (${context.glamClient.statePda}) has ${cnt} delegate${cnt > 1 ? "s" : ""}:`,
       );
       for (let [i, acl] of stateModel.delegateAcls.entries()) {
         console.log(`[${i}] ${acl.pubkey}`);
 
-        acl.integrationPermissions.forEach((p) => {
-          console.log(`  ${p.integrationProgram}`);
+        acl.integrationPermissions.forEach(
+          ({ integrationProgram, protocolPermissions }) => {
+            console.log(`  Integration: ${integrationProgram}`);
 
-          p.protocolPermissions.forEach((pp) => {
-            console.log(
-              `    Protocol: ${formatBits(pp.protocolBitflag)}, Permissions: ${formatBits(pp.permissionsBitmask)}`,
+            protocolPermissions.forEach(
+              ({ protocolBitflag, permissionsBitmask }) => {
+                const { protocol, permissions } =
+                  parseProtocolPermissionsBitmask(
+                    integrationProgram,
+                    protocolBitflag,
+                    permissionsBitmask,
+                  );
+                const permissionNames =
+                  permissions.map((perm) => perm.name).join(", ") ||
+                  formatBits(permissionsBitmask);
+                console.log(`    ${protocol}: ${permissionNames}`);
+              },
             );
-          });
-        });
+          },
+        );
       }
     });
 
@@ -46,6 +61,7 @@ export function installDelegateCommands(
     )
     .argument("<protocol_bitflag>", "Protocol bitflag", parseInt)
     .argument("<permissions_bitmask>", "Permissions bitmask", parseInt)
+    .option("-y, --yes", "Skip confirmation prompt")
     .description("Grant delegate permissions to integration programs")
     .action(
       async (
@@ -53,7 +69,22 @@ export function installDelegateCommands(
         integrationProgram: PublicKey,
         protocolBitflag: number,
         permissionsBitmask: number,
+        { yes },
       ) => {
+        const { protocol, permissions } = parseProtocolPermissionsBitmask(
+          integrationProgram,
+          protocolBitflag,
+          permissionsBitmask,
+        );
+        const permissionNames =
+          permissions.map((perm) => perm.name).join(", ") ||
+          formatBits(permissionsBitmask);
+
+        yes ||
+          (await confirmOperation(
+            `Confirm granting ${delegate} "${permissionNames}" permissions for protocol "${protocol}"?`,
+          ));
+
         try {
           const txSig =
             await context.glamClient.access.grantDelegatePermissions(
@@ -64,7 +95,7 @@ export function installDelegateCommands(
               context.txOptions,
             );
           console.log(
-            `Granted ${delegate} permissions ${formatBits(permissionsBitmask)} to ${integrationProgram} for protocol ${formatBits(protocolBitflag)}: ${txSig}`,
+            `Granted ${delegate} "${permissionNames}" permissions to ${integrationProgram} for protocol "${protocol}": ${txSig}`,
           );
         } catch (e) {
           console.error(parseTxError(e));
@@ -83,6 +114,7 @@ export function installDelegateCommands(
     )
     .argument("<protocol_bitflag>", "Protocol bitflag", parseInt)
     .argument("<permissions_bitmask>", "Permissions bitmask", parseInt)
+    .option("-y, --yes", "Skip confirmation prompt")
     .description(
       "Revoke delegate permissions to specified integration programs",
     )
@@ -92,7 +124,22 @@ export function installDelegateCommands(
         integrationProgram: PublicKey,
         protocolBitflag: number,
         permissionsBitmask: number,
+        { yes },
       ) => {
+        const { protocol, permissions } = parseProtocolPermissionsBitmask(
+          integrationProgram,
+          protocolBitflag,
+          permissionsBitmask,
+        );
+        const permissionNames =
+          permissions.map((perm) => perm.name).join(", ") ||
+          formatBits(permissionsBitmask);
+
+        yes ||
+          (await confirmOperation(
+            `Confirm revoking ${delegate} "${permissionNames}" permissions for protocol "${protocol}"?`,
+          ));
+
         try {
           const txSig =
             await context.glamClient.access.revokeDelegatePermissions(
@@ -103,7 +150,7 @@ export function installDelegateCommands(
               context.txOptions,
             );
           console.log(
-            `Revoked ${delegate} permissions ${formatBits(permissionsBitmask)} to ${integrationProgram} for protocol ${formatBits(protocolBitflag)}: ${txSig}`,
+            `Revoked ${delegate} "${permissionNames}" permissions from ${integrationProgram} for protocol "${protocol}": ${txSig}`,
           );
         } catch (e) {
           console.error(parseTxError(e));
@@ -113,10 +160,16 @@ export function installDelegateCommands(
     );
 
   delegate
-    .command("delete")
+    .command("revoke-all")
     .argument("<pubkey>", "Delegate pubkey", validatePublicKey)
+    .option("-y, --yes", "Skip confirmation prompt")
     .description("Revoke delegate access entirely")
-    .action(async (delegate: PublicKey) => {
+    .action(async (delegate: PublicKey, { yes }) => {
+      yes ||
+        (await confirmOperation(
+          `Confirm revoking ${delegate} access to the vault?`,
+        ));
+
       try {
         const txSig = await context.glamClient.access.emergencyAccessUpdate(
           { disabledDelegates: [delegate] },
