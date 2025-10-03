@@ -5,26 +5,114 @@ import { CctpPolicy, publicKeyToEvmAddress } from "@glamsystems/glam-sdk";
 import { evmAddressToPublicKey } from "@glamsystems/glam-sdk";
 import { PublicKey } from "@solana/web3.js";
 
-async function fetchCctpPolicy(
-  context: CliContext,
-): Promise<CctpPolicy | null> {
-  const cctpProgramId = context.glamClient.extCctpProgram.programId;
-  const cctpProtocolBitflag = 0b01;
-
-  const stateAccount = await context.glamClient.fetchStateAccount();
-  const cctpIntegrationPolicy = stateAccount.integrationAcls?.find(
-    (acl) => acl.integrationProgram.toString() === cctpProgramId.toString(),
-  );
-  const cctpPolicyData = cctpIntegrationPolicy?.protocolPolicies?.find(
-    (policy) => policy.protocolBitflag === cctpProtocolBitflag,
-  )?.data;
-  if (cctpPolicyData) {
-    return CctpPolicy.decode(cctpPolicyData);
-  }
-  return null;
-}
-
 export function installCctpCommands(program: Command, context: CliContext) {
+  program
+    .command("view-policy")
+    .description("View CCTP policy")
+    .action(async () => {
+      const cctpPolicy = await context.glamClient.fetchProtocolPolicy(
+        context.glamClient.extCctpProgram.programId,
+        0b01,
+        CctpPolicy,
+      );
+      if (!cctpPolicy) {
+        console.error("CCTP policy not found");
+        process.exit(1);
+      }
+      console.log("CCTP allowed destinations:");
+      for (const destination of cctpPolicy.allowedDestinations) {
+        console.log(
+          `\t${destination.domain}: ${publicKeyToEvmAddress(destination.address)}`,
+        );
+      }
+    });
+
+  program
+    .command("allowlist-destination")
+    .argument("<domain>", "CCTP domain", parseInt)
+    .argument("<destination_address>", "Destination address")
+    .option("--base58", "Address is a base58 string")
+    .description("Add a destination to the allowlist")
+    .action(async (domain, destinationAddress, { base58 }) => {
+      const recipientPubkey = base58
+        ? new PublicKey(destinationAddress)
+        : evmAddressToPublicKey(destinationAddress);
+
+      const cctpPolicy =
+        (await context.glamClient.fetchProtocolPolicy(
+          context.glamClient.extCctpProgram.programId,
+          0b01,
+          CctpPolicy,
+        )) ?? new CctpPolicy([]);
+      if (
+        cctpPolicy.allowedDestinations.find(
+          (d) => d.domain === domain && d.address.equals(recipientPubkey),
+        )
+      ) {
+        console.error(
+          `Destination address ${destinationAddress} is already in the allowlist`,
+        );
+        process.exit(1);
+      }
+
+      cctpPolicy.allowedDestinations.push({ domain, address: recipientPubkey });
+      try {
+        const txSig = await context.glamClient.access.setProtocolPolicy(
+          context.glamClient.extCctpProgram.programId,
+          0b01,
+          cctpPolicy.encode(),
+          context.txOptions,
+        );
+        console.log(
+          `Destination ${destinationAddress} (domain ${domain}) added to allowlist:`,
+          txSig,
+        );
+      } catch (e) {
+        console.error(parseTxError(e));
+        process.exit(1);
+      }
+    });
+
+  program
+    .command("remove-destination")
+    .argument("<domain>", "CCTP domain", parseInt)
+    .argument("<destination_address>", "Destination address")
+    .option("--base58", "Address is a base58 string")
+    .description("Remove a destination from the allowlist")
+    .action(async (domain, destinationAddress, { base58 }) => {
+      const recipientPubkey = base58
+        ? new PublicKey(destinationAddress)
+        : evmAddressToPublicKey(destinationAddress);
+
+      const cctpPolicy = await context.glamClient.fetchProtocolPolicy(
+        context.glamClient.extCctpProgram.programId,
+        0b01,
+        CctpPolicy,
+      );
+      if (!cctpPolicy) {
+        console.error(`CCTP policy not found`);
+        process.exit(1);
+      }
+      cctpPolicy.allowedDestinations = cctpPolicy.allowedDestinations.filter(
+        (d) => !(d.domain === domain && d.address.equals(recipientPubkey)),
+      );
+      try {
+        const txSig = await context.glamClient.access.setProtocolPolicy(
+          context.glamClient.extCctpProgram.programId,
+          0b01,
+          cctpPolicy.encode(),
+          context.txOptions,
+        );
+        console.log(
+          `Destination ${destinationAddress} (domain ${domain}) removed from allowlist:`,
+          txSig,
+        );
+      } catch (e) {
+        console.error(parseTxError(e));
+        process.exit(1);
+      }
+    });
+
   // https://developers.circle.com/cctp/cctp-supported-blockchains#cctp-v2-supported-domains
   program
     .command("bridge-usdc")
@@ -39,7 +127,11 @@ export function installCctpCommands(program: Command, context: CliContext) {
         ? new PublicKey(destinationAddress)
         : evmAddressToPublicKey(destinationAddress);
 
-      const cctpPolicy = await fetchCctpPolicy(context);
+      const cctpPolicy = await context.glamClient.fetchProtocolPolicy(
+        context.glamClient.extCctpProgram.programId,
+        0b01,
+        CctpPolicy,
+      );
       if (
         cctpPolicy &&
         !cctpPolicy.allowedDestinations.find(
@@ -47,7 +139,7 @@ export function installCctpCommands(program: Command, context: CliContext) {
         )
       ) {
         console.error(
-          `Destination (${domain}, ${destinationAddress}) not whitelisted`,
+          `Destination (${domain}, ${destinationAddress}) not in allowlist`,
         );
         process.exit(1);
       }
@@ -70,94 +162,6 @@ export function installCctpCommands(program: Command, context: CliContext) {
           context.txOptions,
         );
         console.log(`Deposit for burn:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
-    });
-
-  program
-    .command("view-policy")
-    .description("View CCTP policy")
-    .action(async () => {
-      const cctpPolicy = await fetchCctpPolicy(context);
-      if (!cctpPolicy) {
-        console.error("CCTP policy not found");
-        process.exit(1);
-      }
-      console.log("CCTP allowed destinations:");
-      for (const destination of cctpPolicy.allowedDestinations) {
-        console.log(
-          `\t${destination.domain}: ${publicKeyToEvmAddress(destination.address)}`,
-        );
-      }
-    });
-
-  program
-    .command("add-destination")
-    .argument("<domain>", "CCTP domain", parseInt)
-    .argument("<destination_address>", "Destination address")
-    .option("--base58", "Address is a base58 string")
-    .description("Whitelist a destination")
-    .action(async (domain, destinationAddress, { base58 }) => {
-      const recipientPubkey = base58
-        ? new PublicKey(destinationAddress)
-        : evmAddressToPublicKey(destinationAddress);
-
-      const cctpPolicy = (await fetchCctpPolicy(context)) ?? new CctpPolicy([]);
-      if (
-        cctpPolicy.allowedDestinations.find(
-          (d) => d.domain === domain && d.address.equals(recipientPubkey),
-        )
-      ) {
-        console.error(
-          `Destination address ${destinationAddress} already whitelisted`,
-        );
-        process.exit(1);
-      }
-
-      cctpPolicy.allowedDestinations.push({ domain, address: recipientPubkey });
-      try {
-        const txSig = await context.glamClient.access.setProtocolPolicy(
-          context.glamClient.extCctpProgram.programId,
-          0b01,
-          cctpPolicy.encode(),
-          context.txOptions,
-        );
-        console.log(`CCTP policy updated:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
-    });
-
-  program
-    .command("delete-destination")
-    .argument("<domain>", "CCTP domain", parseInt)
-    .argument("<destination_address>", "Destination address")
-    .option("--base58", "Address is a base58 string")
-    .description("Remove a destination address from whitelist")
-    .action(async (domain, destinationAddress, { base58 }) => {
-      const recipientPubkey = base58
-        ? new PublicKey(destinationAddress)
-        : evmAddressToPublicKey(destinationAddress);
-
-      const cctpPolicy = await fetchCctpPolicy(context);
-      if (!cctpPolicy) {
-        console.error(`CCTP policy not found`);
-        process.exit(1);
-      }
-      cctpPolicy.allowedDestinations = cctpPolicy.allowedDestinations.filter(
-        (d) => !(d.domain === domain && d.address.equals(recipientPubkey)),
-      );
-      try {
-        const txSig = await context.glamClient.access.setProtocolPolicy(
-          context.glamClient.extCctpProgram.programId,
-          0b01,
-          cctpPolicy.encode(),
-          context.txOptions,
-        );
-        console.log(`CCTP policy updated:`, txSig);
       } catch (e) {
         console.error(parseTxError(e));
         process.exit(1);

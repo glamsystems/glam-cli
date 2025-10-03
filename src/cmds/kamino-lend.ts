@@ -1,9 +1,167 @@
-import { ASSETS_MAINNET } from "@glamsystems/glam-sdk";
+import { ASSETS_MAINNET, KaminoLendingPolicy } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
-import { CliContext, confirmOperation, parseTxError } from "../utils";
+import { CliContext, confirmOperation, parseTxError, validatePublicKey } from "../utils";
 import { PublicKey } from "@solana/web3.js";
 
 export function installKaminoLendCommands(klend: Command, context: CliContext) {
+  klend
+    .command("view-policy")
+    .description("View Kamino lending policy")
+    .action(async () => {
+      const policy = await context.glamClient.fetchProtocolPolicy(
+        context.glamClient.extKaminoProgram.programId,
+        0b01,
+        KaminoLendingPolicy,
+      );
+      if (!policy) {
+        console.log("No policy found");
+        return;
+      }
+      console.log("Kamino lending markets allowlist:");
+      for (let i = 0; i < policy.marketsAllowlist.length; i++) {
+        console.log(`[${i}] ${policy.marketsAllowlist[i]}`);
+      }
+      console.log("Kamino lending borrowable assets allowlist:");
+      for (let i = 0; i < policy.borrowAllowlist.length; i++) {
+        console.log(`[${i}] ${policy.borrowAllowlist[i]}`);
+      }
+    });
+
+  klend
+    .command("allowlist-market")
+    .argument("<market>", "Kamino lending market public key", validatePublicKey)
+    .description("Add a market to the allowlist")
+    .action(async (market) => {
+      const policy =
+        (await context.glamClient.fetchProtocolPolicy(
+          context.glamClient.extKaminoProgram.programId,
+          0b01,
+          KaminoLendingPolicy,
+        )) ?? new KaminoLendingPolicy([], []);
+      if (policy.marketsAllowlist.find((m) => m.equals(market))) {
+        console.error(`Kamino market ${market} is already in the allowlist`);
+        process.exit(1);
+      }
+
+      policy.marketsAllowlist.push(market);
+      try {
+        const txSig = await context.glamClient.access.setProtocolPolicy(
+          context.glamClient.extKaminoProgram.programId,
+          0b01,
+          policy.encode(),
+          context.txOptions,
+        );
+        console.log(`Kamino market ${market} added to allowlist:`, txSig);
+      } catch (e) {
+        console.error(parseTxError(e));
+        process.exit(1);
+      }
+    });
+
+  klend
+    .command("remove-market")
+    .argument("<market>", "Kamino lending market public key", validatePublicKey)
+    .description("Remove a market from the allowlist")
+    .action(async (market) => {
+      const policy = await context.glamClient.fetchProtocolPolicy(
+        context.glamClient.extKaminoProgram.programId,
+        0b01,
+        KaminoLendingPolicy,
+      );
+      if (!policy) {
+        console.error("No policy found");
+        process.exit(1);
+      }
+      if (!policy.marketsAllowlist.find((m) => m.equals(market))) {
+        console.error("Market not in allowlist. Removal not needed.");
+        process.exit(1);
+      }
+
+      policy.marketsAllowlist = policy.marketsAllowlist.filter(
+        (m) => !m.equals(market),
+      );
+      try {
+        const txSig = await context.glamClient.access.setProtocolPolicy(
+          context.glamClient.extKaminoProgram.programId,
+          0b01,
+          policy.encode(),
+          context.txOptions,
+        );
+        console.log(`Kamino market ${market} removed from allowlist:`, txSig);
+      } catch (e) {
+        console.error(parseTxError(e));
+        process.exit(1);
+      }
+    });
+
+  klend
+    .command("allowlist-borrowable-asset")
+    .argument("<asset>", "Borrowable asset public key", validatePublicKey)
+    .description("Add a borrowable asset to the allowlist")
+    .action(async (asset) => {
+      const policy =
+        (await context.glamClient.fetchProtocolPolicy(
+          context.glamClient.extKaminoProgram.programId,
+          0b01,
+          KaminoLendingPolicy,
+        )) ?? new KaminoLendingPolicy([], []);
+
+      if (policy.borrowAllowlist.find((a) => a.equals(asset))) {
+        console.error(`Borrowable asset ${asset} is already in the allowlist`);
+        process.exit(1);
+      }
+
+      policy.borrowAllowlist.push(asset);
+      try {
+        const txSig = await context.glamClient.access.setProtocolPolicy(
+          context.glamClient.extKaminoProgram.programId,
+          0b01,
+          policy.encode(),
+          context.txOptions,
+        );
+        console.log(`Borrowable asset ${asset} added to allowlist:`, txSig);
+      } catch (e) {
+        console.error(parseTxError(e));
+        process.exit(1);
+      }
+    });
+
+  klend
+    .command("remove-borrowable-asset")
+    .argument("<asset>", "Borrowable asset public key", validatePublicKey)
+    .description("Remove a borrowable asset from the allowlist")
+    .action(async (asset) => {
+      const policy = await context.glamClient.fetchProtocolPolicy(
+        context.glamClient.extKaminoProgram.programId,
+        0b01,
+        KaminoLendingPolicy,
+      );
+      if (!policy) {
+        console.error("No policy found");
+        process.exit(1);
+      }
+      if (!policy.borrowAllowlist.find((a) => a.equals(asset))) {
+        console.error("Borrowable asset not in allowlist. Removal not needed.");
+        process.exit(1);
+      }
+
+      policy.borrowAllowlist = policy.borrowAllowlist.filter(
+        (a) => !a.equals(asset),
+      );
+      try {
+        const txSig = await context.glamClient.access.setProtocolPolicy(
+          context.glamClient.extKaminoProgram.programId,
+          0b01,
+          policy.encode(),
+          context.txOptions,
+        );
+        console.log(`Borrowable asset ${asset} removed from allowlist:`, txSig);
+      } catch (e) {
+        console.error(parseTxError(e));
+        process.exit(1);
+      }
+    });
+
   klend
     .command("init")
     .description("Initialize Kamino user")

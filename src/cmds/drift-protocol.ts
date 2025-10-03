@@ -16,25 +16,6 @@ import {
 } from "../utils";
 import { Transaction } from "@solana/web3.js";
 
-async function fetchDriftProtocolPolicy(
-  context: CliContext,
-): Promise<DriftProtocolPolicy | null> {
-  const programId = context.glamClient.extDriftProgram.programId;
-  const protocolBitflag = 0b01;
-
-  const stateAccount = await context.glamClient.fetchStateAccount();
-  const integrationPolicy = stateAccount.integrationAcls?.find(
-    (acl) => acl.integrationProgram.toString() === programId.toString(),
-  );
-  const policyData = integrationPolicy?.protocolPolicies?.find(
-    (policy) => policy.protocolBitflag === protocolBitflag,
-  )?.data;
-  if (policyData) {
-    return DriftProtocolPolicy.decode(policyData);
-  }
-  return null;
-}
-
 export function installDriftProtocolCommands(
   drift: Command,
   context: CliContext,
@@ -43,12 +24,16 @@ export function installDriftProtocolCommands(
     .command("view-policy")
     .description("View drift policy")
     .action(async () => {
-      const policy = await fetchDriftProtocolPolicy(context);
+      const policy = await context.glamClient.fetchProtocolPolicy(
+        context.glamClient.extDriftProgram.programId,
+        0b01,
+        DriftProtocolPolicy,
+      );
       console.log(policy);
     });
 
   drift
-    .command("add-market")
+    .command("allowlist-market")
     .argument("<market_type>", "Market type", (v) => {
       if (v !== "spot" && v !== "perp") {
         console.error("Invalid market type, must be 'spot' or 'perp'");
@@ -60,8 +45,11 @@ export function installDriftProtocolCommands(
     .description("Add a market to the allowlist")
     .action(async (marketType, marketIndex) => {
       const policy =
-        (await fetchDriftProtocolPolicy(context)) ??
-        new DriftProtocolPolicy([], [], []);
+        (await context.glamClient.fetchProtocolPolicy(
+          context.glamClient.extDriftProgram.programId,
+          0b01,
+          DriftProtocolPolicy,
+        )) ?? new DriftProtocolPolicy([], [], []);
 
       if (marketType === "spot") {
         policy.spotMarketsAllowlist.push(marketIndex);
@@ -75,7 +63,10 @@ export function installDriftProtocolCommands(
           policy.encode(),
           context.txOptions,
         );
-        console.log(`Drift policy updated:`, txSig);
+        console.log(
+          `${marketType} market ${marketIndex} added to allowlist:`,
+          txSig,
+        );
       } catch (e) {
         console.error(parseTxError(e));
         process.exit(1);
@@ -83,7 +74,7 @@ export function installDriftProtocolCommands(
     });
 
   drift
-    .command("delete-market")
+    .command("remove-market")
     .argument("<market_type>", "Market type", (v) => {
       if (v !== "spot" && v !== "perp") {
         console.error("Invalid market type, must be 'spot' or 'perp'");
@@ -94,7 +85,11 @@ export function installDriftProtocolCommands(
     .argument("<market_index>", "Spot or perp market index", parseInt)
     .description("Remove a market from the allowlist")
     .action(async (marketType, marketIndex) => {
-      const policy = await fetchDriftProtocolPolicy(context);
+      const policy = await context.glamClient.fetchProtocolPolicy(
+        context.glamClient.extDriftProgram.programId,
+        0b01,
+        DriftProtocolPolicy,
+      );
       if (!policy) {
         console.error("Drift policy not found");
         process.exit(1);
@@ -116,7 +111,10 @@ export function installDriftProtocolCommands(
           policy.encode(),
           context.txOptions,
         );
-        console.log(`Drift policy updated:`, txSig);
+        console.log(
+          `${marketType} market ${marketIndex} removed from allowlist:`,
+          txSig,
+        );
       } catch (e) {
         console.error(parseTxError(e));
         process.exit(1);
@@ -124,17 +122,17 @@ export function installDriftProtocolCommands(
     });
 
   drift
-    .command("add-borrowable-asset")
+    .command("allowlist-borrowable-asset")
     .argument("<token_mint>", "Token mint public key", validatePublicKey)
-    .description("Add a borrowable asset")
+    .description("Add a borrowable asset to the allowlist")
     .action(async (tokenMint) => {
       const policy =
-        (await fetchDriftProtocolPolicy(context)) ||
-        new DriftProtocolPolicy([], [], []);
-      if (!policy) {
-        console.error("Drift policy not found");
-        process.exit(1);
-      }
+        (await context.glamClient.fetchProtocolPolicy(
+          context.glamClient.extDriftProgram.programId,
+          0b01,
+          DriftProtocolPolicy,
+        )) ?? new DriftProtocolPolicy([], [], []);
+
       policy.borrowAllowlist.push(tokenMint);
 
       try {
@@ -144,7 +142,7 @@ export function installDriftProtocolCommands(
           policy.encode(),
           context.txOptions,
         );
-        console.log(`Drift policy updated:`, txSig);
+        console.log(`Borrowable asset ${tokenMint} added to allowlist:`, txSig);
       } catch (e) {
         console.error(parseTxError(e));
         process.exit(1);
@@ -152,10 +150,15 @@ export function installDriftProtocolCommands(
     });
 
   drift
-    .command("delete-borrowable-asset")
+    .command("remove-borrowable-asset")
     .argument("<token_mint>", "Token mint public key", validatePublicKey)
+    .description("Remove a borrowable asset from the allowlist")
     .action(async (tokenMint) => {
-      const policy = await fetchDriftProtocolPolicy(context);
+      const policy = await context.glamClient.fetchProtocolPolicy(
+        context.glamClient.extDriftProgram.programId,
+        0b01,
+        DriftProtocolPolicy,
+      );
       if (!policy) {
         console.error("Drift policy not found");
         process.exit(1);
@@ -171,7 +174,10 @@ export function installDriftProtocolCommands(
           policy.encode(),
           context.txOptions,
         );
-        console.log(`Drift policy updated:`, txSig);
+        console.log(
+          `Borrowable asset ${tokenMint} removed from allowlist:`,
+          txSig,
+        );
       } catch (e) {
         console.error(parseTxError(e));
         process.exit(1);
@@ -699,30 +705,4 @@ export function installDriftProtocolCommands(
         process.exit(1);
       }
     });
-
-  //   drift
-  //     .command("claim")
-  //     .description("")
-  //     .action(async () => {
-  //       const response = await fetch(
-  //         `https://airdrop-fuel-1.drift.trade/eligibility/${context.glamClient.vaultPda}`,
-  //       );
-  //       const data = await response.json();
-  //       const { merkle_tree, proof, claimable_amount, locked_amount } = data;
-  //       const distributor = new PublicKey(merkle_tree);
-
-  //       try {
-  //         const txSig = await context.glamClient.drift.claim(
-  //           distributor,
-  //           new BN(claimable_amount),
-  //           new BN(locked_amount),
-  //           proof,
-  //           context.txOptions,
-  //         );
-  //         console.log(`${claimable_amount / 1e6} DRIFT claimed: ${txSig}`);
-  //       } catch (e) {
-  //         console.error(e);
-  //         process.exit(1);
-  //       }
-  //     });
 }

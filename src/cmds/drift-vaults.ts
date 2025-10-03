@@ -9,25 +9,6 @@ import {
 import tokens from "../tokens-verified.json";
 import { DriftVaultsPolicy } from "@glamsystems/glam-sdk";
 
-async function fetchDriftVaultsPolicy(
-  context: CliContext,
-): Promise<DriftVaultsPolicy | null> {
-  const programId = context.glamClient.extDriftProgram.programId;
-  const protocolBitflag = 0b10;
-
-  const stateAccount = await context.glamClient.fetchStateAccount();
-  const integrationPolicy = stateAccount.integrationAcls?.find(
-    (acl) => acl.integrationProgram.toString() === programId.toString(),
-  );
-  const policyData = integrationPolicy?.protocolPolicies?.find(
-    (policy) => policy.protocolBitflag === protocolBitflag,
-  )?.data;
-  if (policyData) {
-    return DriftVaultsPolicy.decode(policyData);
-  }
-  return null;
-}
-
 export function installDriftVaultsCommands(
   driftVaults: Command,
   context: CliContext,
@@ -36,7 +17,11 @@ export function installDriftVaultsCommands(
     .command("view-policy")
     .description("View Drift vaults policy")
     .action(async () => {
-      const policy = await fetchDriftVaultsPolicy(context);
+      const policy = await context.glamClient.fetchProtocolPolicy(
+        context.glamClient.extDriftProgram.programId,
+        0b10,
+        DriftVaultsPolicy,
+      );
       if (!policy) {
         console.log("No policy found");
         return;
@@ -48,14 +33,18 @@ export function installDriftVaultsCommands(
     });
 
   driftVaults
-    .command("add-vault")
+    .command("allowlist-vault")
     .argument("<vault>", "Drift vault public key", validatePublicKey)
-    .description("Add a vault to the Drift vaults allowlist")
+    .description("Add a Drift vault to the allowlist")
     .action(async (vault) => {
       const policy =
-        (await fetchDriftVaultsPolicy(context)) ?? new DriftVaultsPolicy([]);
+        (await context.glamClient.fetchProtocolPolicy(
+          context.glamClient.extDriftProgram.programId,
+          0b10,
+          DriftVaultsPolicy,
+        )) ?? new DriftVaultsPolicy([]);
       if (policy.vaultsAllowlist.find((v) => v.equals(vault))) {
-        console.error("Vault already allowed");
+        console.error(`Drift vault ${vault} is already in the allowlist`);
         process.exit(1);
       }
 
@@ -67,7 +56,7 @@ export function installDriftVaultsCommands(
           policy.encode(),
           context.txOptions,
         );
-        console.log(`Drift vaults policy updated:`, txSig);
+        console.log(`Drift vault ${vault} added to allowlist:`, txSig);
       } catch (e) {
         console.error(parseTxError(e));
         process.exit(1);
@@ -75,17 +64,21 @@ export function installDriftVaultsCommands(
     });
 
   driftVaults
-    .command("delete-vault")
+    .command("remove-vault")
     .argument("<vault>", "Drift vault public key", validatePublicKey)
-    .description("Remove a vault from the Drift vaults allowlist")
+    .description("Remove a Drift vault from the allowlist")
     .action(async (vault) => {
-      const policy = await fetchDriftVaultsPolicy(context);
+      const policy = await context.glamClient.fetchProtocolPolicy(
+        context.glamClient.extDriftProgram.programId,
+        0b10,
+        DriftVaultsPolicy,
+      );
       if (!policy) {
         console.error("No policy found");
         process.exit(1);
       }
       if (!policy.vaultsAllowlist.find((v) => v.equals(vault))) {
-        console.error("Vault not in allowlist.");
+        console.error("Vault not in allowlist. Removal not needed.");
         process.exit(1);
       }
 
@@ -99,7 +92,7 @@ export function installDriftVaultsCommands(
           policy.encode(),
           context.txOptions,
         );
-        console.log(`Drift vaults policy updated:`, txSig);
+        console.log(`Drift vault ${vault} removed from allowlist:`, txSig);
       } catch (e) {
         console.error(parseTxError(e));
         process.exit(1);
