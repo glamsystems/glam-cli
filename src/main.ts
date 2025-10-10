@@ -21,6 +21,7 @@ import { installVaultCommands } from "./cmds/vault";
 import { idlCheck } from "./idl";
 import { installManageCommands } from "./cmds/manage";
 import { installCctpCommands } from "./cmds/cctp";
+import { installTransferCommands } from "./cmds/transfer";
 
 const context = {} as CliContext;
 
@@ -127,6 +128,11 @@ const vault = program
   .command("vault")
   .description("Create, close, manage vault");
 installVaultCommands(vault, context);
+
+const transfer = program
+  .command("transfer")
+  .description("Transfer vault assets out");
+installTransferCommands(transfer, context);
 
 const delegate = program.command("delegate").description("Manage delegates");
 installDelegateCommands(delegate, context);

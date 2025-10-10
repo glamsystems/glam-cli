@@ -2,6 +2,8 @@ import { BN } from "@coral-xyz/anchor";
 import {
   formatBits,
   parseProtocolPermissionsBitmask,
+  PROGRAM_AND_BITFLAG_BY_PROTOCOL_NAME,
+  PROTOCOLS_AND_PERMISSIONS,
 } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
 import {
@@ -54,35 +56,69 @@ export function installDelegateCommands(
   delegate
     .command("grant")
     .argument("<pubkey>", "Delegate pubkey", validatePublicKey)
-    .argument(
-      "<integration_program>",
-      "Integration programs to grant permissions to",
-      validatePublicKey,
+    .requiredOption(
+      "--protocol <name>",
+      "Protocol name (e.g., DriftProtocol, KaminoLend, SplToken)",
+      (protocol) => protocol.replace(/\s+/g, ""),
     )
-    .argument("<protocol_bitflag>", "Protocol bitflag", parseInt)
-    .argument("<permissions_bitmask>", "Permissions bitmask", parseInt)
+    .argument("<permissions...>", "Permission names for the given protocol")
     .option("-y, --yes", "Skip confirmation prompt")
-    .description("Grant delegate permissions to integration programs")
+    .description("Grant delegate permissions for a single protocol")
     .action(
-      async (
-        delegate: PublicKey,
-        integrationProgram: PublicKey,
-        protocolBitflag: number,
-        permissionsBitmask: number,
-        { yes },
-      ) => {
-        const { protocol, permissions } = parseProtocolPermissionsBitmask(
-          integrationProgram,
-          protocolBitflag,
-          permissionsBitmask,
+      async (delegate: PublicKey, permissions: string[], { protocol, yes }) => {
+        const entry = PROGRAM_AND_BITFLAG_BY_PROTOCOL_NAME[protocol];
+        if (!entry) {
+          console.error(
+            `Unknown protocol name: ${protocol}. Please use a valid protocol name (e.g., DriftProtocol, KaminoLend, SplToken).`,
+          );
+          process.exit(1);
+        }
+
+        const [programIdStr, bitflagStr] = entry;
+        const integrationProgram = new PublicKey(programIdStr);
+        const protocolBitflag = parseInt(bitflagStr, 2);
+
+        // Find permissions defined by the protocol
+        const protocolEntry =
+          PROTOCOLS_AND_PERMISSIONS[programIdStr]?.[bitflagStr];
+        if (!protocolEntry) {
+          console.error(
+            `Protocol mapping not found for program ${programIdStr} and bitflag ${bitflagStr}.`,
+          );
+          process.exit(1);
+        }
+
+        const permissionNameToBitflag: Record<string, BN> = {};
+        for (const [permBitflagStr, permName] of Object.entries(
+          protocolEntry.permissions,
+        )) {
+          // keys in constants are strings, convert to BN as permission bitflag is u64
+          permissionNameToBitflag[permName] = new BN(permBitflagStr);
+        }
+
+        // Validate input permissions
+        const unknown = permissions.filter(
+          (p) => permissionNameToBitflag[p] === undefined,
         );
+        if (unknown.length) {
+          const allowed = Object.values(protocolEntry.permissions).join(", ");
+          console.error(
+            `Unknown permission name(s): ${unknown.join(", ")}. Allowed: ${allowed}.`,
+          );
+          process.exit(1);
+        }
+
+        const permissionsBitmask = permissions.reduce(
+          (mask: BN, p) => mask.or(permissionNameToBitflag[p]),
+          new BN(0),
+        );
+
         const permissionNames =
-          permissions.map((perm) => perm.name).join(", ") ||
-          formatBits(permissionsBitmask);
+          permissions.join(", ") || formatBits(permissionsBitmask);
 
         yes ||
           (await confirmOperation(
-            `Confirm granting ${delegate} "${permissionNames}" permissions for protocol "${protocol}"?`,
+            `Confirm granting ${delegate} "${permissionNames}" permissions for protocol "${protocolEntry.name}"?`,
           ));
 
         try {
@@ -91,11 +127,11 @@ export function installDelegateCommands(
               delegate,
               integrationProgram,
               protocolBitflag,
-              new BN(permissionsBitmask),
+              permissionsBitmask,
               context.txOptions,
             );
           console.log(
-            `Granted ${delegate} "${permissionNames}" permissions to ${integrationProgram} for protocol "${protocol}": ${txSig}`,
+            `Granted ${delegate} "${permissionNames}" permissions to ${integrationProgram} for protocol "${protocolEntry.name}": ${txSig}`,
           );
         } catch (e) {
           console.error(parseTxError(e));
@@ -107,37 +143,66 @@ export function installDelegateCommands(
   delegate
     .command("revoke")
     .argument("<pubkey>", "Delegate pubkey", validatePublicKey)
-    .argument(
-      "<integration_program>",
-      "Integration programs to grant permissions to",
-      validatePublicKey,
+    .requiredOption(
+      "--protocol <name>",
+      "Protocol name (e.g., DriftProtocol, KaminoLend, SplToken)",
+      (protocol) => protocol.replace(/\s+/g, ""),
     )
-    .argument("<protocol_bitflag>", "Protocol bitflag", parseInt)
-    .argument("<permissions_bitmask>", "Permissions bitmask", parseInt)
+    .argument("<permissions...>", "Permission names for the given protocol")
     .option("-y, --yes", "Skip confirmation prompt")
-    .description(
-      "Revoke delegate permissions to specified integration programs",
-    )
+    .description("Revoke delegate permissions for a single protocol by name")
     .action(
-      async (
-        delegate: PublicKey,
-        integrationProgram: PublicKey,
-        protocolBitflag: number,
-        permissionsBitmask: number,
-        { yes },
-      ) => {
-        const { protocol, permissions } = parseProtocolPermissionsBitmask(
-          integrationProgram,
-          protocolBitflag,
-          permissionsBitmask,
+      async (delegate: PublicKey, permissions: string[], { protocol, yes }) => {
+        const entry = PROGRAM_AND_BITFLAG_BY_PROTOCOL_NAME[protocol];
+        if (!entry) {
+          console.error(
+            `Unknown protocol name: ${protocol}. Please use a valid protocol name (e.g., DriftProtocol, KaminoLend, SplToken).`,
+          );
+          process.exit(1);
+        }
+
+        const [programIdStr, bitflagStr] = entry;
+        const integrationProgram = new PublicKey(programIdStr);
+        const protocolBitflag = parseInt(bitflagStr, 2);
+
+        const protocolEntry =
+          PROTOCOLS_AND_PERMISSIONS[programIdStr]?.[bitflagStr];
+        if (!protocolEntry) {
+          console.error(
+            `Protocol mapping not found for program ${programIdStr} and bitflag ${bitflagStr}.`,
+          );
+          process.exit(1);
+        }
+
+        const permissionNameToBitflag: Record<string, BN> = {};
+        for (const [permBitflagStr, permName] of Object.entries(
+          protocolEntry.permissions,
+        )) {
+          permissionNameToBitflag[permName] = new BN(permBitflagStr);
+        }
+
+        const unknown = permissions.filter(
+          (p) => permissionNameToBitflag[p] === undefined,
         );
+        if (unknown.length) {
+          const allowed = Object.values(protocolEntry.permissions).join(", ");
+          console.error(
+            `Unknown permission name(s): ${unknown.join(", ")}. Allowed: ${allowed}.`,
+          );
+          process.exit(1);
+        }
+
+        const permissionsBitmask = permissions.reduce(
+          (mask: BN, p) => mask.or(permissionNameToBitflag[p]),
+          new BN(0),
+        );
+
         const permissionNames =
-          permissions.map((perm) => perm.name).join(", ") ||
-          formatBits(permissionsBitmask);
+          permissions.join(", ") || formatBits(permissionsBitmask);
 
         yes ||
           (await confirmOperation(
-            `Confirm revoking ${delegate} "${permissionNames}" permissions for protocol "${protocol}"?`,
+            `Confirm revoking ${delegate} "${permissionNames}" permissions for protocol "${protocolEntry.name}"?`,
           ));
 
         try {
@@ -146,11 +211,11 @@ export function installDelegateCommands(
               delegate,
               integrationProgram,
               protocolBitflag,
-              new BN(permissionsBitmask),
+              permissionsBitmask,
               context.txOptions,
             );
           console.log(
-            `Revoked ${delegate} "${permissionNames}" permissions from ${integrationProgram} for protocol "${protocol}": ${txSig}`,
+            `Revoked ${delegate} "${permissionNames}" permissions from ${integrationProgram} for protocol "${protocolEntry.name}": ${txSig}`,
           );
         } catch (e) {
           console.error(parseTxError(e));
@@ -167,7 +232,7 @@ export function installDelegateCommands(
     .action(async (delegate: PublicKey, { yes }) => {
       yes ||
         (await confirmOperation(
-          `Confirm revoking ${delegate} access to the vault?`,
+          `Confirm revoking all ${delegate} permissions to the vault?`,
         ));
 
       try {

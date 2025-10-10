@@ -391,57 +391,6 @@ export function installVaultCommands(program: Command, context: CliContext) {
     });
 
   program
-    .command("withdraw-sol")
-    .argument("<amount>", "Amount to withdraw", parseFloat)
-    .description("Withdraw SOL from the vault")
-    .option("-y, --yes", "Skip confirmation prompt")
-    .action(async (amount, options) => {
-      options?.yes ||
-        (await confirmOperation(`Confirm withdrawal of ${amount} SOL?`));
-
-      try {
-        const txSig = await context.glamClient.vault.systemTransfer(
-          new BN(amount * LAMPORTS_PER_SOL),
-          context.glamClient.signer,
-          context.txOptions,
-        );
-        console.log(`Withdrawn ${amount} SOL:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
-    });
-
-  program
-    .command("withdraw-token")
-    .argument(
-      "<asset>",
-      "Mint pubkey of the asset to withdraw",
-      validatePublicKey,
-    )
-    .argument("<amount>", "Amount to withdraw", parseFloat)
-    .description("Withdraw the specified amount of asset from the vault")
-    .option("-y, --yes", "Skip confirmation prompt")
-    .action(async (asset: PublicKey, amount: number, options) => {
-      options?.yes ||
-        (await confirmOperation(`Confirm withdrawal of ${amount} ${asset}?`));
-
-      const { mint } = await context.glamClient.fetchMintAndTokenProgram(asset);
-      try {
-        const txSig = await context.glamClient.vault.tokenTransfer(
-          asset,
-          new BN(amount * 10 ** mint.decimals),
-          context.glamClient.signer,
-          context.txOptions,
-        );
-        console.log(`Withdrawn ${amount} ${asset}:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
-    });
-
-  program
     .command("wrap")
     .argument("<amount>", "Amount to wrap", parseFloat)
     .description("Wrap SOL")
