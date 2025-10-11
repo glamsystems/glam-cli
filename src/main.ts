@@ -22,6 +22,7 @@ import { idlCheck } from "./idl";
 import { installManageCommands } from "./cmds/manage";
 import { installCctpCommands } from "./cmds/cctp";
 import { installTransferCommands } from "./cmds/transfer";
+import { installTimelockCommands } from "./cmds/timelock";
 
 const context = {} as CliContext;
 
@@ -173,6 +174,9 @@ installManageCommands(manage, context);
 const alt = program.command("alt").description("Manage address lookup tables");
 installAltCommands(alt, context);
 
+const timelock = program.command("timelock").description("Timelock operations");
+installTimelockCommands(timelock, context);
+
 // Commands that use unaudited integrations are disallowed by default
 // Unleash them with --bypass-warning
 const unauditedCommandHook = async (thisCommand: Command) => {
@@ -189,8 +193,6 @@ const cctp = program
   .option("-b, --bypass-warning", "Bypass warning", false)
   .description("[Unaudited] CCTP operations")
   .hook("preSubcommand", unauditedCommandHook);
-installCctpCommands(cctp, context);
-
 const marinade = program
   .command("marinade")
   .option("-b, --bypass-warning", "Bypass warning", false)
@@ -207,6 +209,7 @@ const stake = program
   .description("[Unaudited] Native staking")
   .hook("preSubcommand", unauditedCommandHook);
 
+installCctpCommands(cctp, context);
 installMarinadeCommands(marinade, context);
 installLstCommands(lst, context);
 installStakeCommands(stake, context);
