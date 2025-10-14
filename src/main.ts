@@ -102,7 +102,7 @@ program
 
     await idlCheck(context.glamClient);
   })
-  .version("1.0.0-alpha.0");
+  .version("1.0.0-alpha.1");
 
 program
   .command("env")
