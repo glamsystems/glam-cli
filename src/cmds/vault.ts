@@ -113,7 +113,7 @@ export function installVaultCommands(program: Command, context: CliContext) {
     .argument("<new-owner>", "New owner public key", validatePublicKey)
     .option("-n, --name <name>", "New portfolio manager name")
     .option("-y, --yes", "Skip confirmation prompt")
-    .description("Update the owner of a GLAM instance")
+    .description("Update the owner of a GLAM vault")
     .action(async (newOwner: PublicKey, options) => {
       const newPortfolioManagerName = options?.name
         ? nameToChars(options.name)
@@ -265,6 +265,16 @@ export function installVaultCommands(program: Command, context: CliContext) {
       }
 
       const stateModel = parseStateJson(json);
+      const postInstructions = stateModel.portfolioManagerName
+        ? [
+            await context.glamClient.state.txBuilder.updateIx(
+              {
+                portfolioManagerName: stateModel.portfolioManagerName,
+              },
+              context.txOptions,
+            ),
+          ]
+        : [];
 
       try {
         if (
@@ -277,7 +287,10 @@ export function installVaultCommands(program: Command, context: CliContext) {
           const txSig = await context.glamClient.mint.initialize(
             mintModel,
             stateModel.accountType,
-            context.txOptions,
+            {
+              ...context.txOptions,
+              postInstructions,
+            },
           );
           console.log("GLAM tokenized vault initialized:", txSig);
           console.log("State PDA:", context.glamClient.statePda.toBase58());
