@@ -33,7 +33,7 @@ export function installManageCommands(manage: Command, context: CliContext) {
       const lookupTables = context.glamClient.price.lookupTables;
 
       try {
-        const txSig = await context.glamClient.invest.fulfill({
+        const txSig = await context.glamClient.invest.fulfill(null, {
           ...context.txOptions,
           preInstructions,
           lookupTables,

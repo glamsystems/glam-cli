@@ -89,14 +89,11 @@ export function installInvestCommands(invest: Command, context: CliContext) {
       const lookupTables = context.glamClient.price.lookupTables;
 
       try {
-        const txSig = await context.glamClient.invest.claim(
-          RequestType.SUBSCRIPTION,
-          {
-            ...context.txOptions,
-            preInstructions,
-            lookupTables,
-          },
-        );
+        const txSig = await context.glamClient.invest.claim({
+          ...context.txOptions,
+          preInstructions,
+          lookupTables,
+        });
         console.log(`${context.glamClient.signer} claimed shares:`, txSig);
       } catch (e) {
         console.error(parseTxError(e));
@@ -151,14 +148,11 @@ export function installInvestCommands(invest: Command, context: CliContext) {
       const lookupTables = context.glamClient.price.lookupTables;
 
       try {
-        const txSig = await context.glamClient.invest.claim(
-          RequestType.REDEMPTION,
-          {
-            ...context.txOptions,
-            preInstructions,
-            lookupTables,
-          },
-        );
+        const txSig = await context.glamClient.invest.claim({
+          ...context.txOptions,
+          preInstructions,
+          lookupTables,
+        });
         console.log(`${context.glamClient.signer} claimed tokens:`, txSig);
       } catch (e) {
         console.error(parseTxError(e));
