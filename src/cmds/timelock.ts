@@ -8,8 +8,6 @@ import {
   compareIntegrationAcls,
   compareDelegateAcls,
 } from "@glamsystems/glam-sdk";
-import { PublicKey } from "@solana/web3.js";
-import { BN } from "@coral-xyz/anchor";
 
 export function installTimelockCommands(program: Command, context: CliContext) {
   program

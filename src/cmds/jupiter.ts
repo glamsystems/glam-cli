@@ -10,7 +10,6 @@ import {
   parseTxError,
   validatePublicKey,
 } from "../utils";
-import { PublicKey } from "@solana/web3.js";
 
 export function installJupiterCommands(program: Command, context: CliContext) {
   program

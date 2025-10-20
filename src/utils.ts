@@ -298,7 +298,7 @@ export function parseMintJson(json: any, accountType: StateAccountType) {
 export function validatePublicKey(value: string) {
   try {
     return new PublicKey(value);
-  } catch (e) {
+  } catch {
     console.error("Not a valid pubkey:", value);
     process.exit(1);
   }

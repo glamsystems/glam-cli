@@ -1,7 +1,6 @@
 import { BN } from "@coral-xyz/anchor";
 import {
   GlamClient,
-  RequestType,
   fetchMintAndTokenProgram,
 } from "@glamsystems/glam-sdk";
 import { Command } from "commander";

@@ -101,7 +101,7 @@ export function installVaultCommands(program: Command, context: CliContext) {
         context.cliConfig.glamState = state;
         console.log(`Active GLAM state: ${stateModel.idStr}`);
         console.log(`Vault: ${stateModel.vault}`);
-      } catch (e) {
+      } catch {
         context.glamClient.statePda = null;
         console.error("Invalid GLAM state public key.");
         process.exit(1);
