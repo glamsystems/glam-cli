@@ -1,4 +1,8 @@
-import { WSOL, TransferPolicy } from "@glamsystems/glam-sdk";
+import {
+  WSOL,
+  TransferPolicy,
+  fetchMintAndTokenProgram,
+} from "@glamsystems/glam-sdk";
 import { Command } from "commander";
 import { PublicKey } from "@solana/web3.js";
 import {
@@ -130,8 +134,10 @@ export function installTransferCommands(program: Command, context: CliContext) {
         ));
 
       try {
-        const { mint } =
-          await context.glamClient.fetchMintAndTokenProgram(token);
+        const { mint } = await fetchMintAndTokenProgram(
+          context.glamClient.connection,
+          token,
+        );
         const amountBN = new BN(amount * 10 ** mint.decimals);
         const txSig = await context.glamClient.vault.tokenTransfer(
           token,

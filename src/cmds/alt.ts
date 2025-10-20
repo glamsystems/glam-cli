@@ -59,7 +59,8 @@ export function installAltCommands(alt: Command, context: CliContext) {
     .command("list")
     .description("List lookup table(s) created for the active GLAM")
     .action(async () => {
-      const lookupTableAccountss = await context.glamClient.findLookupTables();
+      const lookupTableAccountss =
+        await context.glamClient.findGlamLookupTables();
 
       console.log("Lookup tables:");
       lookupTableAccountss.map((t, i) => console.log(`[${i}] ${t.key}`));

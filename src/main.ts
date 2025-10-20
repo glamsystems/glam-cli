@@ -113,7 +113,7 @@ program
       "GLAM Protocol program:",
       glamClient.protocolProgram.programId.toBase58(),
     );
-    console.log("Wallet connected:", glamClient.getSigner().toBase58());
+    console.log("Wallet connected:", glamClient.signer.toBase58());
     console.log("RPC endpoint:", glamClient.provider.connection.rpcEndpoint);
     console.log("Priority fee:", cliConfig.priority_fee);
 

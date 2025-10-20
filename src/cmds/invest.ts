@@ -1,5 +1,9 @@
 import { BN } from "@coral-xyz/anchor";
-import { GlamClient, RequestType } from "@glamsystems/glam-sdk";
+import {
+  GlamClient,
+  RequestType,
+  fetchMintAndTokenProgram,
+} from "@glamsystems/glam-sdk";
 import { Command } from "commander";
 import {
   CliContext,
@@ -107,7 +111,8 @@ export function installInvestCommands(invest: Command, context: CliContext) {
     .description("Request to redeem share tokens")
     .option("-y, --yes", "Skip confirmation prompt")
     .action(async (amount, options) => {
-      const { mint } = await context.glamClient.fetchMintAndTokenProgram(
+      const { mint } = await fetchMintAndTokenProgram(
+        context.glamClient.connection,
         context.glamClient.mintPda,
       );
       const decimals = mint.decimals;
