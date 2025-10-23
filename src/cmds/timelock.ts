@@ -230,8 +230,8 @@ export function installTimelockCommands(program: Command, context: CliContext) {
       yes || (await confirmOperation(`Set timelock to ${duration} seconds?`));
 
       try {
-        const txSig = await context.glamClient.state.update(
-          { timelockDuration: duration },
+        const txSig = await context.glamClient.timelock.set(
+          duration,
           context.txOptions,
         );
         console.log(`Timelock updated:`, txSig);
@@ -249,12 +249,30 @@ export function installTimelockCommands(program: Command, context: CliContext) {
       yes || (await confirmOperation("Apply timelocked changes?"));
 
       try {
-        const txSig = await context.glamClient.state.updateApplyTimelock(
+        const txSig = await context.glamClient.timelock.apply(
           context.txOptions,
         );
         console.log(`Timelock applied:`, txSig);
       } catch (error) {
         console.error("Error applying timelock:", parseTxError(error));
+        process.exit(1);
+      }
+    });
+
+  program
+    .command("cancel")
+    .option("-y, --yes", "Skip confirmation prompt", false)
+    .description("Cancel pending timelocked changes")
+    .action(async ({ yes }) => {
+      yes || (await confirmOperation("Cancel pending timelocked changes?"));
+
+      try {
+        const txSig = await context.glamClient.timelock.cancel(
+          context.txOptions,
+        );
+        console.log(`Timelock cancelled:`, txSig);
+      } catch (error) {
+        console.error("Error cancelling timelock:", parseTxError(error));
         process.exit(1);
       }
     });

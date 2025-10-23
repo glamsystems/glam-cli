@@ -6,6 +6,7 @@
   "mint": {
     "name": "GLAM SOL",
     "symbol": "gmSOL",
+    "uri": "https://glam.systems",
     "baseAssetMint": "So11111111111111111111111111111111111111112",
     "maxCap": 1000000000000,
     "minSubscription": 100000000,
@@ -25,7 +26,7 @@
       },
       "performance": {
         "feeBps": 2000,
-        "hurdleRateBps": 5,
+        "hurdleRateBps": 500,
         "hurdleType": "hard"
       }
     },

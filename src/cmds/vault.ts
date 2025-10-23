@@ -255,59 +255,52 @@ export function installVaultCommands(program: Command, context: CliContext) {
         console.error(`File ${file} does not exist`);
         process.exit(1);
       }
-      const data = fs.readFileSync(file, "utf8");
 
-      const json = JSON.parse(data);
+      const json = JSON.parse(fs.readFileSync(file, "utf8"));
       if (!json.state && !json.mint) {
         throw new Error(
           "Invalid JSON file: must contain 'state' or 'mint' property",
         );
       }
 
-      const stateModel = parseStateJson(json);
-      const postInstructions = stateModel.portfolioManagerName
-        ? [
-            await context.glamClient.state.txBuilder.updateIx(
-              {
-                portfolioManagerName: stateModel.portfolioManagerName,
-              },
-              context.txOptions,
-            ),
-          ]
-        : [];
-
-      try {
-        if (
-          StateAccountType.equals(
-            stateModel.accountType,
-            StateAccountType.TOKENIZED_VAULT,
-          )
-        ) {
-          const mintModel = parseMintJson(json, stateModel.accountType);
-          const txSig = await context.glamClient.mint.initialize(
-            mintModel,
-            stateModel.accountType,
-            {
-              ...context.txOptions,
-              postInstructions,
-            },
-          );
-          console.log("GLAM tokenized vault initialized:", txSig);
-          console.log("State PDA:", context.glamClient.statePda.toBase58());
-          console.log("Vault PDA:", context.glamClient.vaultPda.toBase58());
-          console.log("Mint PDA:", context.glamClient.mintPda.toBase58());
-        } else {
-          const txSig = await context.glamClient.state.create(
-            stateModel,
-            stateModel.baseAssetMint,
+      const initStateParams = parseStateJson(json);
+      if (
+        StateAccountType.equals(
+          initStateParams.accountType,
+          StateAccountType.VAULT,
+        )
+      ) {
+        try {
+          const txSig = await context.glamClient.state.initialize(
+            initStateParams,
             context.txOptions,
           );
+          context.cliConfig.glamState = context.glamClient.statePda;
           console.log("GLAM vault initialized:", txSig);
           console.log("State PDA:", context.glamClient.statePda.toBase58());
           console.log("Vault PDA:", context.glamClient.vaultPda.toBase58());
+        } catch (e) {
+          console.error(parseTxError(e));
+          process.exit(1);
         }
+        return;
+      }
 
+      const initMintParams = parseMintJson(json, initStateParams.accountType);
+      try {
+        // mint.initialize creates state with default setup
+        // we update state with input after mint initialization
+        const updateStateIx =
+          await context.glamClient.state.txBuilder.updateIx(initStateParams);
+        const txSig = await context.glamClient.mint.initialize(initMintParams, {
+          ...context.txOptions,
+          postInstructions: [updateStateIx],
+        });
         context.cliConfig.glamState = context.glamClient.statePda;
+        console.log("GLAM tokenized vault initialized:", txSig);
+        console.log("State PDA:", context.glamClient.statePda.toBase58());
+        console.log("Vault PDA:", context.glamClient.vaultPda.toBase58());
+        console.log("Mint PDA:", context.glamClient.mintPda.toBase58());
       } catch (e) {
         console.error(parseTxError(e));
         process.exit(1);
@@ -322,7 +315,7 @@ export function installVaultCommands(program: Command, context: CliContext) {
       const statePda = context.cliConfig.glamState;
       const glamClient = new GlamClient({ statePda });
       try {
-        const txSig = await glamClient.state.extend(bytes);
+        const txSig = await context.glamClient.state.extend(bytes);
         console.log(
           `GLAM state account ${statePda} extended by ${bytes} bytes:`,
           txSig,
@@ -381,11 +374,11 @@ export function installVaultCommands(program: Command, context: CliContext) {
 
       options?.yes ||
         (await confirmOperation(
-          `Confirm closing GLAM: ${stateModel.nameStr} (state pubkey ${statePda.toBase58()})?`,
+          `Confirm closing GLAM: ${stateModel.nameStr} (state pubkey ${statePda})?`,
         ));
 
       const preInstructions = [];
-      if (!stateModel.mint.equals(PublicKey.default)) {
+      if (stateModel.mint) {
         const closeMintIx = await glamClient.mint.txBuilder.closeMintIx();
         preInstructions.push(closeMintIx);
       }

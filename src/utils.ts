@@ -11,6 +11,8 @@ import {
   PublicKey,
   TransactionExpiredBlockheightExceededError,
 } from "@solana/web3.js";
+import { InitMintParams } from "anchor/src/client/mint";
+import { InitStateParams } from "anchor/src/client/state";
 import fs from "fs";
 import inquirer from "inquirer";
 import os from "os";
@@ -64,12 +66,15 @@ export class CliConfig {
     fs.writeFileSync(this.configPath, JSON.stringify(updated, null, 2), "utf8");
 
     CliConfig.reset();
-    CliConfig.get();
+    CliConfig.get(this.configPath);
   }
 
-  static get(): CliConfig {
-    if (!this.instance) {
-      this.instance = CliConfig.load();
+  static get(configPath?: string): CliConfig {
+    if (
+      !this.instance ||
+      (configPath && this.instance.configPath !== configPath)
+    ) {
+      this.instance = CliConfig.load(configPath);
     }
     return this.instance;
   }
@@ -176,123 +181,121 @@ export async function confirmOperation(message: string) {
   }
 }
 
-export function parseStateJson(json: any): Partial<StateModel> {
+export function parseStateJson(json: any): InitStateParams {
   if (!json.state) {
     throw new Error("Invalid JSON file: must contain 'state' property");
   }
+  const { state } = json;
   const requiredFields =
-    json.state.accountType === "vault"
-      ? [
-          "accountType",
-          "name",
-          "enabled",
-          "assets",
-          "baseAssetMint",
-          "baseAssetTokenProgram",
-        ]
+    state.accountType === "vault"
+      ? ["accountType", "name", "baseAssetMint"]
       : ["accountType"];
   requiredFields.forEach((field) => {
-    if (json.state?.[field] === undefined) {
+    if (state?.[field] === undefined) {
       throw new Error(`Missing required state field: ${field}`);
     }
   });
 
-  const stateModel = {
-    accountType: { [json.state.accountType]: {} },
-    name: json.state.name ? nameToChars(json.state.name) : null,
-    enabled: json.state.enabled !== false,
-    assets: (json.state.assets || []).map(
-      (asset: string) => new PublicKey(asset),
-    ),
-    baseAssetMint: json.state.baseAssetMint
-      ? new PublicKey(json.state.baseAssetMint)
+  const params = {
+    accountType: { [state.accountType]: {} },
+    name: state.name ? nameToChars(state.name) : null,
+    enabled: state.enabled !== false,
+    assets: (state.assets || []).map((asset: string) => new PublicKey(asset)),
+    baseAssetMint: state.baseAssetMint
+      ? new PublicKey(state.baseAssetMint)
       : null,
-    baseAssetTokenProgram: Number(json.state.baseAssetTokenProgram),
-    portfolioManagerName: json.state.portfolioManagerName
-      ? nameToChars(json.state.portfolioManagerName)
+    portfolioManagerName: state.portfolioManagerName
+      ? nameToChars(state.portfolioManagerName)
       : null,
-    timelockDuration: Number(json.state.timelockDuration),
   };
 
-  return stateModel;
+  return params;
 }
 
-export function parseMintJson(json: any, accountType: StateAccountType) {
+export function parseMintJson(
+  json: any,
+  accountType: StateAccountType,
+): InitMintParams {
   if (StateAccountType.equals(accountType, StateAccountType.VAULT)) {
-    return null;
+    throw new Error(
+      "Invalid JSON file: mint config is not supported for state account type `vault`",
+    );
   }
-
-  if (
-    StateAccountType.equals(accountType, StateAccountType.TOKENIZED_VAULT) &&
-    !json.mint
-  ) {
+  if (!json?.mint) {
     throw new Error(
       "Invalid JSON file: must contain 'mint' property for tokenized vault",
     );
   }
-  const mintModel = {
-    name: json.mint.name ? nameToChars(json.mint.name) : null,
-    symbol: json.mint.symbol,
-    uri: json.mint.uri,
-    baseAssetMint: new PublicKey(json.mint.baseAssetMint),
-    maxCap: json.mint.maxCap ? new BN(json.mint.maxCap) : null,
-    minSubscription: json.mint.minSubscription
-      ? new BN(json.mint.minSubscription)
+
+  const { mint } = json;
+
+  const requiredFields = ["name", "symbol", "uri", "baseAssetMint"];
+  requiredFields.forEach((field) => {
+    if (mint?.[field] === undefined) {
+      throw new Error(`Missing required mint field: ${field}`);
+    }
+  });
+
+  const params = {
+    accountType,
+    name: nameToChars(mint.name),
+    symbol: mint.symbol,
+    uri: mint.uri,
+    baseAssetMint: new PublicKey(mint.baseAssetMint),
+    maxCap: mint.maxCap ? new BN(mint.maxCap) : null,
+    minSubscription: mint.minSubscription ? new BN(mint.minSubscription) : null,
+    minRedemption: mint.minRedemption ? new BN(mint.minRedemption) : null,
+    lockupPeriod: mint.lockupPeriod ? Number(mint.lockupPeriod) : null,
+    permanentDelegate: mint.permanentDelegate
+      ? new PublicKey(mint.permanentDelegate)
       : null,
-    minRedemption: json.mint.minRedemption
-      ? new BN(json.mint.minRedemption)
-      : null,
-    lockupPeriod: Number(json.mint.lockupPeriod),
-    permanentDelegate: json.mint.permanentDelegate
-      ? new PublicKey(json.mint.permanentDelegate)
-      : null,
-    defaultAccountStateFrozen: json.mint.defaultAccountStateFrozen || false,
-    feeStructure: json.mint.feeStructure
+    defaultAccountStateFrozen: mint.defaultAccountStateFrozen || false,
+    feeStructure: mint.feeStructure
       ? {
-          ...json.mint.feeStructure,
+          ...mint.feeStructure,
           performance: {
-            ...json.mint.feeStructure.performance,
+            ...mint.feeStructure.performance,
             hurdleType: {
-              [json.mint.feeStructure.performance.hurdleType]: {},
+              [mint.feeStructure.performance.hurdleType]: {},
             },
           },
           protocol: { baseFeeBps: 0, floorFeeBps: 0 },
         }
       : null,
-    notifyAndSettle: json.mint.notifyAndSettle
+    notifyAndSettle: mint.notifyAndSettle
       ? {
-          ...json.mint.notifyAndSettle,
-          model: { [json.mint.notifyAndSettle.model]: {} },
+          ...mint.notifyAndSettle,
+          model: { [mint.notifyAndSettle.model]: {} },
           subscribeNoticePeriodType: {
-            [json.mint.notifyAndSettle.subscribeNoticePeriodType]: {},
+            [mint.notifyAndSettle.subscribeNoticePeriodType]: {},
           },
           subscribeNoticePeriod: new BN(
-            json.mint.notifyAndSettle.subscribeNoticePeriod || 0,
+            mint.notifyAndSettle.subscribeNoticePeriod || 0,
           ),
           subscribeSettlementPeriod: new BN(
-            json.mint.notifyAndSettle.subscribeSettlementPeriod || 0,
+            mint.notifyAndSettle.subscribeSettlementPeriod || 0,
           ),
           subscribeCancellationWindow: new BN(
-            json.mint.notifyAndSettle.subscribeCancellationWindow || 0,
+            mint.notifyAndSettle.subscribeCancellationWindow || 0,
           ),
           redeemNoticePeriodType: {
-            [json.mint.notifyAndSettle.redeemNoticePeriodType]: {},
+            [mint.notifyAndSettle.redeemNoticePeriodType]: {},
           },
           redeemNoticePeriod: new BN(
-            json.mint.notifyAndSettle.redeemNoticePeriod || 0,
+            mint.notifyAndSettle.redeemNoticePeriod || 0,
           ),
           redeemSettlementPeriod: new BN(
-            json.mint.notifyAndSettle.redeemSettlementPeriod || 0,
+            mint.notifyAndSettle.redeemSettlementPeriod || 0,
           ),
           redeemCancellationWindow: new BN(
-            json.mint.notifyAndSettle.redeemCancellationWindow || 0,
+            mint.notifyAndSettle.redeemCancellationWindow || 0,
           ),
-          timeUnit: { [json.mint.notifyAndSettle.timeUnit]: {} },
+          timeUnit: { [mint.notifyAndSettle.timeUnit]: {} },
           padding: [0, 0, 0],
         }
       : null,
   };
-  return mintModel;
+  return params;
 }
 
 export function validatePublicKey(value: string) {

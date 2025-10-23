@@ -49,7 +49,7 @@ function setupGracefulShutdown() {
 
 function initialize(configPath?: string, skipSimulation = false) {
   // Load config from the specified path or default
-  context.cliConfig = configPath ? CliConfig.load(configPath) : CliConfig.get();
+  context.cliConfig = CliConfig.get(configPath);
   context.glamClient = new GlamClient({
     statePda:
       context.cliConfig.glam_state &&
@@ -83,7 +83,7 @@ function initialize(configPath?: string, skipSimulation = false) {
 }
 
 // Initialize with default config first so subcommands have valid values
-initialize();
+// initialize();
 setupGracefulShutdown();
 
 const program = new Command();
@@ -95,11 +95,7 @@ program
   .hook("preSubcommand", async (thisCommand: Command) => {
     const { config, skipSimulation } = thisCommand.opts();
 
-    // Re-initialize if custom config or skip-simulation is provided
-    if (config || skipSimulation) {
-      initialize(config, skipSimulation);
-    }
-
+    initialize(config, skipSimulation);
     await idlCheck(context.glamClient);
   })
   .version("1.0.0");
