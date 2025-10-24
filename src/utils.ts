@@ -200,7 +200,7 @@ export function parseStateJson(json: any): InitStateParams {
     accountType: { [state.accountType]: {} },
     name: state.name ? nameToChars(state.name) : null,
     enabled: state.enabled !== false,
-    assets: (state.assets || []).map((asset: string) => new PublicKey(asset)),
+    assets: state.assets?.map((asset: string) => new PublicKey(asset)) || null,
     baseAssetMint: state.baseAssetMint
       ? new PublicKey(state.baseAssetMint)
       : null,

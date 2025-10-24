@@ -290,12 +290,11 @@ export function installVaultCommands(program: Command, context: CliContext) {
       try {
         // mint.initialize creates state with default setup
         // we update state with input after mint initialization
-        const updateStateIx =
-          await context.glamClient.state.txBuilder.updateIx(initStateParams);
-        const txSig = await context.glamClient.mint.initialize(initMintParams, {
-          ...context.txOptions,
-          postInstructions: [updateStateIx],
-        });
+        const txSig = await context.glamClient.mint.initializeWithStateParams(
+          initMintParams,
+          initStateParams,
+          context.txOptions,
+        );
         context.cliConfig.glamState = context.glamClient.statePda;
         console.log("GLAM tokenized vault initialized:", txSig);
         console.log("State PDA:", context.glamClient.statePda.toBase58());
