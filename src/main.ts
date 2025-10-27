@@ -173,42 +173,41 @@ installAltCommands(alt, context);
 const timelock = program.command("timelock").description("Timelock operations");
 installTimelockCommands(timelock, context);
 
-// Commands that use unaudited integrations are disallowed by default
-// Unleash them with --bypass-warning
-const unauditedCommandHook = async (thisCommand: Command) => {
-  const { bypassWarning } = thisCommand.opts();
-  if (!bypassWarning) {
-    console.error(
-      "Unaudited integration. Use with caution. Use --bypass-warning to bypass this warning.",
-    );
-    process.exit(1);
-  }
-};
-const cctp = program
-  .command("cctp")
-  .option("-b, --bypass-warning", "Bypass warning", false)
-  .description("[Unaudited] CCTP operations")
-  .hook("preSubcommand", unauditedCommandHook);
-const marinade = program
-  .command("marinade")
-  .option("-b, --bypass-warning", "Bypass warning", false)
-  .description("[Unaudited] Marinade staking")
-  .hook("preSubcommand", unauditedCommandHook);
-const lst = program
-  .command("lst")
-  .option("-b, --bypass-warning", "Bypass warning", false)
-  .description("[Unaudited] Liquid staking")
-  .hook("preSubcommand", unauditedCommandHook);
-const stake = program
-  .command("stake")
-  .option("-b, --bypass-warning", "Bypass warning", false)
-  .description("[Unaudited] Native staking")
-  .hook("preSubcommand", unauditedCommandHook);
-
+const cctp = program.command("cctp").description("CCTP operations");
 installCctpCommands(cctp, context);
-installMarinadeCommands(marinade, context);
-installLstCommands(lst, context);
-installStakeCommands(stake, context);
+
+if (process.env.NODE_ENV === "development") {
+  // Commands that use unaudited integrations are disallowed by default
+  // Unleash them with --bypass-warning
+  const unauditedCommandHook = async (thisCommand: Command) => {
+    const { bypassWarning } = thisCommand.opts();
+    if (!bypassWarning) {
+      console.error(
+        "Unaudited integration. Use with caution. Use --bypass-warning to bypass this warning.",
+      );
+      process.exit(1);
+    }
+  };
+  const marinade = program
+    .command("marinade")
+    .option("-b, --bypass-warning", "Bypass warning", false)
+    .description("[Unaudited] Marinade staking")
+    .hook("preSubcommand", unauditedCommandHook);
+  const lst = program
+    .command("lst")
+    .option("-b, --bypass-warning", "Bypass warning", false)
+    .description("[Unaudited] Liquid staking")
+    .hook("preSubcommand", unauditedCommandHook);
+  const stake = program
+    .command("stake")
+    .option("-b, --bypass-warning", "Bypass warning", false)
+    .description("[Unaudited] Native staking")
+    .hook("preSubcommand", unauditedCommandHook);
+
+  installMarinadeCommands(marinade, context);
+  installLstCommands(lst, context);
+  installStakeCommands(stake, context);
+}
 
 //
 // Run the CLI in development mode as follows:
