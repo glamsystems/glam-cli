@@ -155,19 +155,4 @@ export function installManageCommands(manage: Command, context: CliContext) {
         throw e;
       }
     });
-
-  manage
-    .command("reset-priced-protocols")
-    .description("Reset priced protocols")
-    .action(async () => {
-      try {
-        const txSig = await context.glamClient.price.resetPricedProtocols(
-          context.txOptions,
-        );
-        console.log(`Reset priced protocols:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        throw e;
-      }
-    });
 }
