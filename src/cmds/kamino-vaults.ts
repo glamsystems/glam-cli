@@ -107,7 +107,7 @@ export function installKaminoVaultsCommands(
     .action(async (vault, amount, options) => {
       const vaultState =
         await context.glamClient.kaminoVaults.fetchAndParseVaultState(vault);
-      const { tokenMint, tokenMintDecimals } = vaultState;
+      const { tokenMint, tokenMintDecimals, vaultLookupTable } = vaultState;
 
       options?.yes ||
         (await confirmOperation(
@@ -119,7 +119,10 @@ export function installKaminoVaultsCommands(
         const txSig = await context.glamClient.kaminoVaults.deposit(
           vault,
           amountBN,
-          context.txOptions,
+          {
+            ...context.txOptions,
+            lookupTables: [vaultLookupTable],
+          },
         );
         console.log(`Deposit successful: ${txSig}`);
       } catch (e) {
@@ -141,7 +144,7 @@ export function installKaminoVaultsCommands(
     .action(async (vault, amount, options) => {
       const vaultState =
         await context.glamClient.kaminoVaults.fetchAndParseVaultState(vault);
-      const { sharesMintDecimals } = vaultState;
+      const { sharesMintDecimals, vaultLookupTable } = vaultState;
 
       options?.yes ||
         (await confirmOperation(
@@ -153,7 +156,10 @@ export function installKaminoVaultsCommands(
         const txSig = await context.glamClient.kaminoVaults.withdraw(
           vault,
           amountBN,
-          context.txOptions,
+          {
+            ...context.txOptions,
+            lookupTables: [vaultLookupTable],
+          },
         );
         console.log(`Withdraw successful: ${txSig}`);
       } catch (e) {
