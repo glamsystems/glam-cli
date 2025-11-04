@@ -1,7 +1,21 @@
-import { ASSETS_MAINNET, KaminoLendingPolicy } from "@glamsystems/glam-sdk";
+import {
+  ASSETS_MAINNET,
+  bfToDecimal,
+  Fraction,
+  KaminoLendingPolicy,
+  PkMap,
+  PkSet,
+} from "@glamsystems/glam-sdk";
 import { Command } from "commander";
-import { CliContext, confirmOperation, parseTxError, validatePublicKey } from "../utils";
+import {
+  CliContext,
+  confirmOperation,
+  parseTxError,
+  validatePublicKey,
+} from "../utils";
 import { PublicKey } from "@solana/web3.js";
+import { Decimal } from "decimal.js";
+import { Obligation } from "anchor/src/deser/kaminoLayouts";
 
 export function installKaminoLendCommands(klend: Command, context: CliContext) {
   klend
@@ -190,10 +204,52 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
           lendingMarket,
         );
 
-      console.log(
-        "Obligations:",
-        obligations.map((o) => o.address.toBase58()),
+      const reservesSet = new PkSet();
+      for (const { deposits, borrows } of obligations) {
+        deposits.forEach((d) => reservesSet.add(d.reserve));
+        borrows.forEach((b) => reservesSet.add(b.reserve));
+      }
+      const reserves =
+        await context.glamClient.kaminoLending.fetchAndParseReserves(
+          Array.from(reservesSet),
+        );
+      const reservesMap = new PkMap<(typeof reserves)[0]>(
+        reserves.map((r) => [r.address, r]),
       );
+
+      for (const { address, deposits, borrows } of obligations) {
+        console.log(`Obligation: ${address}`);
+
+        let i = 0;
+        for (const { reserve, depositedAmount } of deposits) {
+          const parsedReserve = reservesMap.get(reserve);
+          const supplyAmount = new Decimal(depositedAmount.toString()).div(
+            parsedReserve.collateralExchangeRate,
+          );
+          console.log(
+            ` - deposit[${i++}]: ${supplyAmount.toString()} ${parsedReserve.liquidityMint}`,
+          );
+        }
+
+        i = 0;
+        for (const {
+          reserve,
+          borrowedAmountSf,
+          cumulativeBorrowRateBsf,
+        } of borrows) {
+          const parsedReserve = reservesMap.get(reserve);
+          const obligationCumulativeBorrowRate = bfToDecimal(
+            cumulativeBorrowRateBsf,
+          );
+          const borrowAmount = new Fraction(borrowedAmountSf)
+            .toDecimal()
+            .mul(parsedReserve.cumulativeBorrowRate)
+            .div(obligationCumulativeBorrowRate);
+          console.log(
+            ` - borrow[${i++}]: ${borrowAmount.toString()} ${parsedReserve.liquidityMint}`,
+          );
+        }
+      }
     });
 
   klend

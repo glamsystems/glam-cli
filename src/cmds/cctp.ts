@@ -151,7 +151,7 @@ export function installCctpCommands(program: Command, context: CliContext) {
       const minFinalityThreshold = fast ? 1000 : 2000;
 
       try {
-        const txSig = await context.glamClient.vault.bridgeUsdc(
+        const txSig = await context.glamClient.cctp.bridgeUsdc(
           amountBN,
           domain,
           recipientPubkey,
@@ -167,4 +167,15 @@ export function installCctpCommands(program: Command, context: CliContext) {
         process.exit(1);
       }
     });
+
+  // program
+  //   .command("list")
+  //   .description("Find CCTP messages sent from the vault")
+  //   .action(async () => {
+  //     // const sender = context.glamClient.vaultPda;
+  //     const sender = new PublicKey(
+  //       "ApgsxNeZbi9P2pCAjzYR8VauqnWZpNkbN1iRWH1QsSwH",
+  //     );
+  //     await context.glamClient.cctp.findAndParseMessages(sender);
+  //   });
 }

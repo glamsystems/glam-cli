@@ -1,7 +1,7 @@
 import { BN } from "@coral-xyz/anchor";
 import { Command } from "commander";
 import { CliContext, confirmOperation, parseTxError } from "../utils";
-import { Transaction } from "@solana/web3.js";
+import { PublicKey, Transaction } from "@solana/web3.js";
 export function installManageCommands(manage: Command, context: CliContext) {
   manage
     .command("price")
@@ -154,5 +154,14 @@ export function installManageCommands(manage: Command, context: CliContext) {
         console.error(parseTxError(e));
         throw e;
       }
+    });
+
+  manage
+    .command("holdings")
+    .description("Get vault holdings")
+    .action(async () => {
+      const holdings =
+        await context.glamClient.price.getVaultHoldings("confirmed");
+      console.log(JSON.stringify(holdings, null, 2));
     });
 }
