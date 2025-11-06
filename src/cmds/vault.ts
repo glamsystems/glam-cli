@@ -494,4 +494,13 @@ export function installVaultCommands(program: Command, context: CliContext) {
         }
       });
     });
+
+  program
+    .command("holdings")
+    .description("Get vault holdings")
+    .action(async () => {
+      const holdings =
+        await context.glamClient.price.getVaultHoldings("confirmed");
+      console.log(holdings.toJson());
+    });
 }

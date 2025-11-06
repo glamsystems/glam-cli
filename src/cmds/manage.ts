@@ -155,13 +155,4 @@ export function installManageCommands(manage: Command, context: CliContext) {
         throw e;
       }
     });
-
-  manage
-    .command("holdings")
-    .description("Get vault holdings")
-    .action(async () => {
-      const holdings =
-        await context.glamClient.price.getVaultHoldings("confirmed");
-      console.log(JSON.stringify(holdings, null, 2));
-    });
 }

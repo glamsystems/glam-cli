@@ -120,7 +120,7 @@ export function installCctpCommands(program: Command, context: CliContext) {
     .argument("<domain>", "CCTP domain", parseInt)
     .argument("<destination_address>", "EVM address")
     .option("--base58", "Address is a base58 string")
-    .option("--fast", "Fast transfer", false)
+    .option("--fast", "Fast transfer (lower finality threshold)", false)
     .description("Bridge USDC to an EVM chain")
     .action(async (amount, domain, destinationAddress, { base58, fast }) => {
       const recipientPubkey = base58
@@ -168,14 +168,31 @@ export function installCctpCommands(program: Command, context: CliContext) {
       }
     });
 
-  // program
-  //   .command("list")
-  //   .description("Find CCTP messages sent from the vault")
-  //   .action(async () => {
-  //     // const sender = context.glamClient.vaultPda;
-  //     const sender = new PublicKey(
-  //       "ApgsxNeZbi9P2pCAjzYR8VauqnWZpNkbN1iRWH1QsSwH",
-  //     );
-  //     await context.glamClient.cctp.findAndParseMessages(sender);
-  //   });
+  program
+    .command("list")
+    .description("List CCTP events of incoming & outgoing bridge transfers")
+    .action(async () => {
+      const incomingEvents =
+        await context.glamClient.cctp.getIncomingBridgeEvents({
+          batchSize: 5,
+          commitment: "confirmed",
+        });
+      const outgoingEvents =
+        await context.glamClient.cctp.getOutgoingBridgeEvents({
+          batchSize: 5,
+          commitment: "confirmed",
+        });
+      console.log(
+        JSON.stringify(
+          {
+            vaultState: context.glamClient.statePda,
+            vaultPda: context.glamClient.vaultPda,
+            incoming: incomingEvents,
+            outgoing: outgoingEvents,
+          },
+          null,
+          2,
+        ),
+      );
+    });
 }
