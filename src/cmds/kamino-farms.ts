@@ -26,7 +26,7 @@ export function installKaminoFarmsCommands(
           farmState,
           unclaimedRewards,
         } = farmStates[i];
-        const { rewards } = parsedFarms.get(farmState.toBase58());
+        const { rewards } = parsedFarms.get(farmState);
         for (const { index, mint } of rewards) {
           console.log(
             `vaultFarmUser: ${userState}, reward token: ${mint}, unclaimed: ${unclaimedRewards[index]}`,
@@ -64,7 +64,7 @@ export function installKaminoFarmsCommands(
       const farms = await context.glamClient.kaminoFarm.fetchAndParseFarmStates(
         [farmState],
       );
-      const parsedFarmState = farms.get(farmState.toBase58());
+      const parsedFarmState = farms.get(farmState);
       if (!parsedFarmState) {
         throw new Error("Farm state not found");
       }
@@ -93,7 +93,7 @@ export function installKaminoFarmsCommands(
       const farms = await context.glamClient.kaminoFarm.fetchAndParseFarmStates(
         [farmState],
       );
-      const parsedFarmState = farms.get(farmState.toBase58());
+      const parsedFarmState = farms.get(farmState);
       if (!parsedFarmState) {
         throw new Error("Farm state not found");
       }
