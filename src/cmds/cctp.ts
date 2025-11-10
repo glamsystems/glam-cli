@@ -169,18 +169,52 @@ export function installCctpCommands(program: Command, context: CliContext) {
     });
 
   program
+    .command("receive")
+    .argument("<source_domain>", "USDC amount to receive", parseInt)
+    .option(
+      "-t, --txHash <txHash>",
+      "Transaction hash hex string (start with 0x)",
+    )
+    .option("-n, --nonce <nonce>", "Nonce hex string (start with 0x)")
+    .description(
+      "Receive USDC from an EVM chain. Either txHash or nonce is required.",
+    )
+    .action(async (sourceDomain, { txHash, nonce }) => {
+      await context.glamClient.cctp.receiveUsdc(
+        sourceDomain,
+        {
+          txHash,
+          nonce,
+        },
+        {
+          ...context.txOptions,
+          lookupTables: [
+            new PublicKey("qj4EYgsGpnRdt9rvQW3wWZR8JVaKPg9rG9EB8DNgfz8"), // CCTP lookup table
+          ],
+        },
+      );
+    });
+
+  program
     .command("list")
+    .option(
+      "-s, --since-slot <slot>",
+      "Only fetch events since this slot",
+      parseInt,
+    )
     .description("List CCTP events of incoming & outgoing bridge transfers")
-    .action(async () => {
+    .action(async ({ sinceSlot }) => {
       const incomingEvents =
         await context.glamClient.cctp.getIncomingBridgeEvents({
           batchSize: 5,
           commitment: "confirmed",
+          minSlot: sinceSlot,
         });
       const outgoingEvents =
         await context.glamClient.cctp.getOutgoingBridgeEvents({
           batchSize: 5,
           commitment: "confirmed",
+          minSlot: sinceSlot,
         });
       console.log(
         JSON.stringify(
