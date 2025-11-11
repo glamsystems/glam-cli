@@ -197,23 +197,25 @@ export function installCctpCommands(program: Command, context: CliContext) {
 
   program
     .command("list")
+    .option("-s, --since-slot <slot>", "Fetch events since this slot", parseInt)
     .option(
-      "-s, --since-slot <slot>",
-      "Only fetch events since this slot",
+      "-b, --batch-size <size>",
+      "Batch size of RPC requests. Higher values reduce latency but need higher RPC limits",
       parseInt,
     )
-    .description("List CCTP events of incoming & outgoing bridge transfers")
-    .action(async ({ sinceSlot }) => {
+    .option("-c, --commitment <commitment>", "Commitment level", "confirmed")
+    .description("List CCTP events of incoming and outgoing bridge transfers")
+    .action(async ({ sinceSlot, commitment, batchSize }) => {
       const incomingEvents =
         await context.glamClient.cctp.getIncomingBridgeEvents({
-          batchSize: 5,
-          commitment: "confirmed",
+          batchSize,
+          commitment,
           minSlot: sinceSlot,
         });
       const outgoingEvents =
         await context.glamClient.cctp.getOutgoingBridgeEvents({
-          batchSize: 5,
-          commitment: "confirmed",
+          batchSize,
+          commitment,
           minSlot: sinceSlot,
         });
       console.log(
