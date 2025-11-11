@@ -28,6 +28,7 @@ export class CliConfig {
   cluster: string;
   json_rpc_url: string;
   tx_rpc_url: string;
+  websocket_disabled: boolean;
   keypair_path: string;
   glam_api?: string;
   priority_fee?: {
@@ -44,6 +45,7 @@ export class CliConfig {
     this.cluster = config.cluster || "";
     this.json_rpc_url = config.json_rpc_url || "";
     this.tx_rpc_url = config.tx_rpc_url || "";
+    this.websocket_disabled = config.websocket_disabled || false;
     this.keypair_path = config.keypair_path || "";
     this.glam_api = config.glam_api;
     this.priority_fee = config.priority_fee;
@@ -110,6 +112,10 @@ export class CliConfig {
 
       if (cliConfig.tx_rpc_url) {
         process.env.TX_RPC = cliConfig.tx_rpc_url;
+      }
+
+      if (cliConfig.websocket_disabled) {
+        process.env.WEBSOCKET_DISABLED = "1";
       }
 
       if (cliConfig.glam_api) {
