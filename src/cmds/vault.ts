@@ -6,6 +6,8 @@ import {
   charsToName,
   GlamClient,
   StateAccountType,
+  fetchMintsAndTokenPrograms,
+  PkSet,
 } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
@@ -145,51 +147,6 @@ export function installVaultCommands(program: Command, context: CliContext) {
         console.error(parseTxError(e));
         process.exit(1);
       }
-    });
-
-  program
-    .command("add-asset")
-    .argument("<asset>", "Asset mint public key", validatePublicKey)
-    .description("Add a new asset to allowlist")
-    .action(async (asset: PublicKey) => {
-      const stateModel = await context.glamClient.fetchStateModel();
-      const assetsSet = new Set(
-        [...stateModel.assets, asset].map((a) => a.toBase58()),
-      );
-      const assets = Array.from(assetsSet).map((a) => new PublicKey(a));
-
-      const txSig = await context.glamClient.state.update(
-        { assets },
-        context.txOptions,
-      );
-      console.log(`Added asset ${asset}: ${txSig}`);
-    });
-
-  program
-    .command("delete-asset")
-    .argument("<asset>", "Asset mint public key", validatePublicKey)
-    .description("Delete an asset from allowlist")
-    .action(async (asset: PublicKey) => {
-      const stateModel = await context.glamClient.fetchStateModel();
-
-      if (asset.equals(stateModel.baseAssetMint)) {
-        console.error("Base asset cannot be deleted from allowlist");
-        process.exit(1);
-      }
-
-      const assetsSet = new Set(stateModel.assets.map((a) => a.toBase58()));
-      let removed = assetsSet.delete(asset.toBase58());
-      if (!removed) {
-        console.error("Asset not found in allowlist, nothing to delete");
-        process.exit(1);
-      }
-
-      const assets = Array.from(assetsSet).map((a) => new PublicKey(a));
-      const txSig = await context.glamClient.state.update(
-        { assets },
-        context.txOptions,
-      );
-      console.log(`Deleted asset ${asset}: ${txSig}`);
     });
 
   program
@@ -493,6 +450,81 @@ export function installVaultCommands(program: Command, context: CliContext) {
           ]);
         }
       });
+    });
+
+  program
+    .command("asset-allowlist")
+    .description("Get asset allowlist and corresponding token account")
+    .action(async () => {
+      const state = await context.glamClient.fetchStateAccount();
+      const mints = await fetchMintsAndTokenPrograms(
+        context.glamClient.connection,
+        state.assets,
+      );
+
+      const data = mints.map(
+        ({ mint: { address, decimals }, tokenProgram }) => {
+          const tokenAccount = context.glamClient.getVaultAta(
+            address,
+            tokenProgram,
+          );
+          return {
+            assetMint: address,
+            decimals,
+            tokenAccount,
+            tokenProgram,
+          };
+        },
+      );
+      console.log(JSON.stringify(data, null, 2));
+    });
+
+  program
+    .command("add-asset")
+    .argument("<asset>", "Asset mint public key", validatePublicKey)
+    .description("Add a new asset to allowlist")
+    .action(async (asset: PublicKey) => {
+      const state = await context.glamClient.fetchStateAccount();
+      const assetsSet = new PkSet(state.assets);
+
+      if (assetsSet.has(asset)) {
+        console.error(`Asset ${asset} already allowlisted`);
+        process.exit(1);
+      }
+
+      const assets = Array.from(assetsSet.add(asset));
+      const txSig = await context.glamClient.state.update(
+        { assets },
+        context.txOptions,
+      );
+      console.log(`Allowlisted asset ${asset}: ${txSig}`);
+    });
+
+  program
+    .command("delete-asset")
+    .argument("<asset>", "Asset mint public key", validatePublicKey)
+    .description("Delete an asset from allowlist")
+    .action(async (asset: PublicKey) => {
+      const state = await context.glamClient.fetchStateAccount();
+
+      if (asset.equals(state.baseAssetMint)) {
+        console.error("Base asset should not be deleted from allowlist");
+        process.exit(1);
+      }
+
+      const assetsSet = new PkSet(state.assets);
+      let removed = assetsSet.delete(asset);
+      if (!removed) {
+        console.error(`${asset} not found in allowlist, nothing to delete`);
+        process.exit(1);
+      }
+
+      const assets = Array.from(assetsSet);
+      const txSig = await context.glamClient.state.update(
+        { assets },
+        context.txOptions,
+      );
+      console.log(`Deleted asset ${asset} from allowlist: ${txSig}`);
     });
 
   program

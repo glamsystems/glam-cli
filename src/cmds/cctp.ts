@@ -180,19 +180,24 @@ export function installCctpCommands(program: Command, context: CliContext) {
       "Receive USDC from an EVM chain. Either txHash or nonce is required.",
     )
     .action(async (sourceDomain, { txHash, nonce }) => {
-      await context.glamClient.cctp.receiveUsdc(
-        sourceDomain,
-        {
-          txHash,
-          nonce,
-        },
-        {
-          ...context.txOptions,
-          lookupTables: [
-            new PublicKey("qj4EYgsGpnRdt9rvQW3wWZR8JVaKPg9rG9EB8DNgfz8"), // CCTP lookup table
-          ],
-        },
-      );
+      try {
+        await context.glamClient.cctp.receiveUsdc(
+          sourceDomain,
+          {
+            txHash,
+            nonce,
+          },
+          {
+            ...context.txOptions,
+            lookupTables: [
+              new PublicKey("qj4EYgsGpnRdt9rvQW3wWZR8JVaKPg9rG9EB8DNgfz8"), // CCTP lookup table
+            ],
+          },
+        );
+      } catch (e) {
+        console.error(parseTxError(e));
+        process.exit(1);
+      }
     });
 
   program
