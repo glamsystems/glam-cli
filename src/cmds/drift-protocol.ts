@@ -689,7 +689,7 @@ export function installDriftProtocolCommands(
     .action(async (subAccountId, poolId) => {
       try {
         const tx = new Transaction().add(
-          await context.glamClient.drift.updateUserPoolIdIx(
+          await context.glamClient.drift.txBuilder.updateUserPoolIdIx(
             subAccountId,
             poolId,
           ),
