@@ -3,18 +3,15 @@ import { Command } from "commander";
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import { CliContext, parseTxError, validatePublicKey } from "../utils";
 
-export function installLstCommands(
-  lst: Command,
-  context: CliContext,
-) {
+export function installLstCommands(lst: Command, context: CliContext) {
   lst
     .command("stake <stakepool> <amount>")
     .description("Stake <amount> SOL into <stakepool>")
     .action(async (stakepool, amount) => {
       try {
-        const txSig = await context.glamClient.staking.stakePoolDepositSol(
+        const txSig = await context.glamClient.stakePool.depositSol(
           new PublicKey(stakepool),
-          new BN(parseFloat(amount) * LAMPORTS_PER_SOL), // TODO: better decimals (even though all LSTs have 9 right now)
+          new BN(parseFloat(amount) * LAMPORTS_PER_SOL),
           context.txOptions,
         );
         console.log("txSig", txSig);
@@ -34,7 +31,7 @@ export function installLstCommands(
       const amountBN = new BN(amount * LAMPORTS_PER_SOL);
 
       try {
-        const txSig = await context.glamClient.staking.unstake(
+        const txSig = await context.glamClient.stakePool.unstake(
           asset,
           amountBN,
           options.deactivate,

@@ -1,18 +1,18 @@
 import { Command } from "commander";
 import { PublicKey } from "@solana/web3.js";
 import { CliContext, parseTxError } from "../utils";
+import { getStakeAccountsWithStates } from "@glamsystems/glam-sdk";
 
-export function installStakeCommands(
-  stake: Command,
-  context: CliContext,
-) {
+export function installStakeCommands(stake: Command, context: CliContext) {
   stake
     .command("list")
     .description("List all stake accounts")
     .action(async () => {
       try {
-        let stakeAccounts =
-          await context.glamClient.staking.getStakeAccountsWithStates();
+        const stakeAccounts = await getStakeAccountsWithStates(
+          context.glamClient.connection,
+          context.glamClient.vaultPda,
+        );
         console.log(
           "Account                                     ",
           "\t",
@@ -44,7 +44,7 @@ export function installStakeCommands(
     .description("Deactivate stake accounts")
     .action(async (accounts: string[]) => {
       try {
-        const txSig = await context.glamClient.staking.deactivate(
+        const txSig = await context.glamClient.stake.deactivate(
           accounts.map((a: string) => new PublicKey(a)),
           context.txOptions,
         );
@@ -64,7 +64,7 @@ export function installStakeCommands(
     .description("Withdraw from stake accounts")
     .action(async (accounts) => {
       try {
-        const txSig = await context.glamClient.staking.withdraw(
+        const txSig = await context.glamClient.stake.withdraw(
           accounts.map((a: string) => new PublicKey(a)),
           context.txOptions,
         );

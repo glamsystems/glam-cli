@@ -15,7 +15,6 @@ import {
 } from "../utils";
 import { PublicKey } from "@solana/web3.js";
 import { Decimal } from "decimal.js";
-import { Obligation } from "anchor/src/deser/kaminoLayouts";
 
 export function installKaminoLendCommands(klend: Command, context: CliContext) {
   klend
