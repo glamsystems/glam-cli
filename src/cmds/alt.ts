@@ -1,6 +1,33 @@
 import { Command } from "commander";
-import { CliContext, confirmOperation, parseTxError } from "../utils";
-import { Transaction, VersionedTransaction } from "@solana/web3.js";
+import {
+  CliContext,
+  confirmOperation,
+  parseTxError,
+  validatePublicKey,
+} from "../utils";
+import { PublicKey, Transaction, VersionedTransaction } from "@solana/web3.js";
+import {
+  getCreateLookupTableTx,
+  getExtendLookupTableTx,
+} from "@glamsystems/glam-sdk";
+
+function buildLegacyTxFromBase64(b64Tx: string) {
+  const vTx = VersionedTransaction.deserialize(
+    new Uint8Array(Buffer.from(b64Tx, "base64")),
+  );
+  const instructions = vTx.message.compiledInstructions.map((ix) => {
+    return {
+      programId: vTx.message.staticAccountKeys[ix.programIdIndex],
+      keys: ix.accountKeyIndexes.map((idx) => ({
+        pubkey: vTx.message.staticAccountKeys[idx],
+        isSigner: vTx.message.isAccountSigner(idx),
+        isWritable: vTx.message.isAccountWritable(idx),
+      })),
+      data: Buffer.from(ix.data),
+    };
+  });
+  return new Transaction().add(...instructions);
+}
 
 export function installAltCommands(alt: Command, context: CliContext) {
   alt
@@ -12,43 +39,88 @@ export function installAltCommands(alt: Command, context: CliContext) {
         console.error("GLAM_API is not defined in the environment");
         process.exit(1);
       }
+
+      const result = await getCreateLookupTableTx(
+        context.glamClient.statePda,
+        context.glamClient.signer,
+      );
+      if (!result) {
+        console.error("Failed to get lookup table transaction");
+        process.exit(1);
+      }
+      const { tables, tx: b64Txs } = result;
+
+      const table = tables[0];
+      options?.yes ||
+        (await confirmOperation(
+          `Confirm creating address lookup table ${table}?`,
+        ));
+
+      // It might need multiple txs to set up tables[0]
+      // Build and send txs
       try {
-        const response = await fetch(
-          `${process.env.GLAM_API}/v0/lut/vault/create?state=${context.glamClient.statePda}&payer=${context.glamClient.signer}`,
-        );
-        const data = await response.json();
-        const table = data.tables[0];
-        const b64Txs = data.tx as string[];
-        const vTxs = b64Txs.map((b64Tx) =>
-          VersionedTransaction.deserialize(
-            new Uint8Array(Buffer.from(b64Tx, "base64")),
-          ),
-        );
-        options?.yes ||
-          (await confirmOperation(
-            `Confirm creating address lookup table ${table}?`,
-          ));
         const txSigs = [];
-        for (const vTx of vTxs) {
-          const instructions = vTx.message.compiledInstructions.map((ix) => {
-            return {
-              programId: vTx.message.staticAccountKeys[ix.programIdIndex],
-              keys: ix.accountKeyIndexes.map((idx) => ({
-                pubkey: vTx.message.staticAccountKeys[idx],
-                isSigner: vTx.message.isAccountSigner(idx),
-                isWritable: vTx.message.isAccountWritable(idx),
-              })),
-              data: Buffer.from(ix.data),
-            };
-          });
-          const tx = await context.glamClient.intoVersionedTransaction(
-            new Transaction().add(...instructions),
+        for (const b64Tx of b64Txs) {
+          const vTx = await context.glamClient.intoVersionedTransaction(
+            buildLegacyTxFromBase64(b64Tx),
             context.txOptions,
           );
-          const txSig = await context.glamClient.sendAndConfirm(tx);
+          const txSig = await context.glamClient.sendAndConfirm(vTx);
           txSigs.push(txSig);
         }
+
         console.log(`Address lookup table ${table} created:`, txSigs);
+      } catch (e) {
+        console.error(parseTxError(e));
+        process.exit(1);
+      }
+    });
+
+  alt
+    .command("extend")
+    .argument("<table>", "Address lookup table to extend", validatePublicKey)
+    .description("Extend an address lookup table")
+    .option("-y, --yes", "Skip confirmation prompt")
+    .action(async (tableToExtend: PublicKey, options) => {
+      if (!process.env.GLAM_API) {
+        console.error("GLAM_API is not defined in the environment");
+        process.exit(1);
+      }
+
+      const result = await getExtendLookupTableTx(
+        context.glamClient.statePda,
+        context.glamClient.signer,
+      );
+      if (!result) {
+        console.error("Failed to get lookup table transaction");
+        process.exit(1);
+      }
+      const { tables, tx: b64Txs } = result;
+
+      const table = tables[0];
+      if (!new PublicKey(table).equals(tableToExtend)) {
+        throw new Error(
+          `Address lookup table ${table} from api.glam.systems does not match`,
+        );
+      }
+      options?.yes ||
+        (await confirmOperation(
+          `Confirm extending address lookup table ${table}?`,
+        ));
+
+      // Build and send txs
+      try {
+        const txSigs = [];
+        for (const b64Tx of b64Txs) {
+          const vTx = await context.glamClient.intoVersionedTransaction(
+            buildLegacyTxFromBase64(b64Tx),
+            context.txOptions,
+          );
+          const txSig = await context.glamClient.sendAndConfirm(vTx);
+          txSigs.push(txSig);
+        }
+
+        console.log(`Address lookup table ${table} extended:`, txSigs);
       } catch (e) {
         console.error(parseTxError(e));
         process.exit(1);

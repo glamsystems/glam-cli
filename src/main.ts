@@ -1,4 +1,8 @@
-import { getPriorityFeeEstimate, GlamClient } from "@glamsystems/glam-sdk";
+import {
+  charsToName,
+  getPriorityFeeEstimate,
+  GlamClient,
+} from "@glamsystems/glam-sdk";
 import { PublicKey } from "@solana/web3.js";
 import { Command } from "commander";
 
@@ -110,14 +114,21 @@ program
       glamClient.protocolProgram.programId.toBase58(),
     );
     console.log("Wallet connected:", glamClient.signer.toBase58());
-    console.log("RPC endpoint:", glamClient.provider.connection.rpcEndpoint);
+    console.log("RPC endpoint:", glamClient.connection.rpcEndpoint);
     console.log("Priority fee:", cliConfig.priority_fee);
 
     if (cliConfig.glam_state) {
       console.log(`GLAM state: ${glamClient.statePda}`);
-      console.log(`Vault: ${glamClient.vaultPda}`);
+      console.log(`Vault PDA: ${glamClient.vaultPda}`);
+
+      const stateAccount = await glamClient.fetchStateAccount();
+      if (!stateAccount) {
+        console.log("Invalid GLAM state account.");
+      } else {
+        console.log("Vault name:", charsToName(stateAccount.name));
+      }
     } else {
-      console.log("No active GLAM specified");
+      console.log("No active GLAM vault configured.");
     }
   });
 
