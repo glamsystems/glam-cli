@@ -7,7 +7,8 @@ import {
 } from "../utils";
 import { PublicKey, Transaction, VersionedTransaction } from "@solana/web3.js";
 import {
-  getCreateLookupTableTx,
+  fetchCreateLookupTableTx,
+  findGlamLookupTables,
   getExtendLookupTableTx,
 } from "@glamsystems/glam-sdk";
 
@@ -32,7 +33,9 @@ function buildLegacyTxFromBase64(b64Tx: string) {
 export function installAltCommands(alt: Command, context: CliContext) {
   alt
     .command("create")
-    .description("Create address lookup table (ALT) for the active GLAM")
+    .description(
+      "Create address lookup table (ALT) for the connected GLAM vault",
+    )
     .option("-y, --yes", "Skip confirmation prompt")
     .action(async (options) => {
       if (!process.env.GLAM_API) {
@@ -40,7 +43,7 @@ export function installAltCommands(alt: Command, context: CliContext) {
         process.exit(1);
       }
 
-      const result = await getCreateLookupTableTx(
+      const result = await fetchCreateLookupTableTx(
         context.glamClient.statePda,
         context.glamClient.signer,
       );
@@ -129,12 +132,23 @@ export function installAltCommands(alt: Command, context: CliContext) {
 
   alt
     .command("list")
-    .description("List lookup table(s) created for the active GLAM")
+    .description(
+      "List address lookup table(s) created for the connected GLAM vault",
+    )
     .action(async () => {
-      const lookupTableAccountss =
-        await context.glamClient.findGlamLookupTables();
+      if (!context.glamClient.isVaultConnected) {
+        console.error("GlamClient is not connected to a vault");
+        process.exit(1);
+      }
 
-      console.log("Lookup tables:");
+      const { statePda, vaultPda, connection } = context.glamClient;
+      const lookupTableAccountss = await findGlamLookupTables(
+        statePda,
+        vaultPda,
+        connection,
+      );
+
+      console.log("GLAM address lookup tables:");
       lookupTableAccountss.map((t, i) => console.log(`[${i}] ${t.key}`));
     });
 }

@@ -1,10 +1,10 @@
 import { AnchorError, BN } from "@coral-xyz/anchor";
 import {
+  ClusterNetwork,
   GlamClient,
   nameToChars,
   PriorityLevel,
   StateAccountType,
-  StateModel,
   TxOptions,
 } from "@glamsystems/glam-sdk";
 import {
@@ -25,7 +25,7 @@ export interface CliContext {
 }
 
 export class CliConfig {
-  cluster: string;
+  cluster: ClusterNetwork;
   json_rpc_url: string;
   tx_rpc_url: string;
   websocket_disabled: boolean;
@@ -42,7 +42,7 @@ export class CliConfig {
   private configPath: string;
 
   constructor(config: Partial<CliConfig> = {}, configPath?: string) {
-    this.cluster = config.cluster || "";
+    this.cluster = ClusterNetwork.fromStr(config.cluster);
     this.json_rpc_url = config.json_rpc_url || "";
     this.tx_rpc_url = config.tx_rpc_url || "";
     this.websocket_disabled = config.websocket_disabled || false;
@@ -98,16 +98,6 @@ export class CliConfig {
 
       if (!cliConfig.keypair_path) {
         throw new Error("Missing keypair_path in config.json");
-      }
-
-      if (
-        !["mainnet-beta", "devnet", "localnet"].includes(
-          cliConfig.cluster.toLowerCase(),
-        )
-      ) {
-        throw new Error(
-          `Unsupported cluster: ${cliConfig.cluster}, must be mainnet-beta, devnet or localnet`,
-        );
       }
 
       if (cliConfig.tx_rpc_url) {

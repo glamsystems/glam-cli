@@ -52,14 +52,15 @@ function setupGracefulShutdown() {
 }
 
 function initialize(configPath?: string, skipSimulation = false) {
-  // Load config from the specified path or default
-  context.cliConfig = CliConfig.get(configPath);
+  const cliConfig = CliConfig.get(configPath);
+  const { cluster, glam_state } = cliConfig;
+
   context.glamClient = new GlamClient({
-    statePda:
-      context.cliConfig.glam_state &&
-      new PublicKey(context.cliConfig.glam_state),
+    cluster,
+    statePda: glam_state && new PublicKey(glam_state),
   });
 
+  context.cliConfig = cliConfig;
   context.txOptions = {
     simulate: !skipSimulation,
     getPriorityFeeMicroLamports: async (tx: VersionedTransaction) => {
