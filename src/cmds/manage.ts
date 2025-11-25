@@ -1,14 +1,26 @@
 import { BN } from "@coral-xyz/anchor";
 import { Command } from "commander";
 import { CliContext, confirmOperation, parseTxError } from "../utils";
-import { PublicKey, Transaction } from "@solana/web3.js";
+import { Transaction } from "@solana/web3.js";
+import { findGlamLookupTables } from "@glamsystems/glam-sdk";
+
 export function installManageCommands(manage: Command, context: CliContext) {
   manage
     .command("price")
     .description("Price vault assets")
     .action(async () => {
       const ixs = await context.glamClient.price.priceVaultIxs(); // this loads lookup tables
-      const lookupTables = context.glamClient.price.lookupTables;
+
+      const glamLookupTables = await findGlamLookupTables(
+        context.glamClient.statePda,
+        context.glamClient.vaultPda,
+        context.glamClient.connection,
+      );
+
+      const lookupTables = [
+        ...context.glamClient.price.lookupTables,
+        ...glamLookupTables.map((t) => t.key),
+      ];
 
       const tx = new Transaction().add(...ixs);
 
