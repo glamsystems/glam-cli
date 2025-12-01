@@ -31,6 +31,7 @@ export class CliConfig {
   websocket_disabled: boolean;
   keypair_path: string;
   glam_api?: string;
+  glam_staging?: boolean;
   priority_fee?: {
     micro_lamports?: number;
     level?: PriorityLevel;
@@ -48,6 +49,7 @@ export class CliConfig {
     this.websocket_disabled = config.websocket_disabled || false;
     this.keypair_path = config.keypair_path || "";
     this.glam_api = config.glam_api;
+    this.glam_staging = config.glam_staging;
     this.priority_fee = config.priority_fee;
     this.glam_state = config.glam_state;
 
@@ -110,6 +112,10 @@ export class CliConfig {
 
       if (cliConfig.glam_api) {
         process.env.GLAM_API = cliConfig.glam_api || "https://api.glam.systems";
+      }
+
+      if (cliConfig.glam_staging) {
+        process.env.GLAM_STAGING = "1";
       }
 
       process.env.ANCHOR_PROVIDER_URL = cliConfig.json_rpc_url;

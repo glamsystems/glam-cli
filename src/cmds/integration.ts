@@ -1,8 +1,8 @@
 import {
   formatBits,
-  GlamMintIdl,
   PROGRAM_AND_BITFLAG_BY_PROTOCOL_NAME,
   parseProtocolsBitmask,
+  getGlamMintProgramId,
 } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
 import {
@@ -15,7 +15,7 @@ import { PublicKey } from "@solana/web3.js";
 
 const validateIntegrationProgram = (input: string) => {
   const pubkey = validatePublicKey(input);
-  if (pubkey.equals(new PublicKey(GlamMintIdl.address))) {
+  if (pubkey.equals(getGlamMintProgramId())) {
     console.error("Mint integration is not allowed");
     process.exit(1);
   }
@@ -74,7 +74,7 @@ export function installIntegrationCommands(
         }
         const [programIdStr, bitflagStr] = entry;
 
-        if (programIdStr === GlamMintIdl.address) {
+        if (programIdStr === getGlamMintProgramId().toBase58()) {
           console.error("Mint integration is not allowed");
           process.exit(1);
         }
@@ -137,7 +137,7 @@ export function installIntegrationCommands(
         }
         const [programIdStr, bitflagStr] = entry;
 
-        if (programIdStr === GlamMintIdl.address) {
+        if (programIdStr === getGlamMintProgramId().toBase58()) {
           console.error("Mint integration is not allowed");
           process.exit(1);
         }
