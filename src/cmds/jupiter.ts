@@ -2,6 +2,7 @@ import {
   fetchTokensList,
   QuoteParams,
   JupiterSwapPolicy,
+  TokenListItem,
 } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
 import {
@@ -10,6 +11,19 @@ import {
   parseTxError,
   validatePublicKey,
 } from "../utils";
+
+async function findToken(value: string): Promise<TokenListItem> {
+  const tokenList = await fetchTokensList();
+  const tokenInfo = tokenList.find(
+    (t) =>
+      t.address === value || t.symbol.toLowerCase() === value.toLowerCase(),
+  );
+  if (!tokenInfo) {
+    console.error(`Unverified token: ${value}`);
+    process.exit(1);
+  }
+  return tokenInfo;
+}
 
 export function installJupiterCommands(program: Command, context: CliContext) {
   program
@@ -165,53 +179,41 @@ export function installJupiterCommands(program: Command, context: CliContext) {
     });
 
   program
-    .command("swap <from> <to> <amount>")
+    .command("swap")
     .description("Swap assets held in the vault")
+    .argument("<from>", "Source token mint or symbol")
+    .argument("<to>", "Destination token mint or symbol")
+    .argument("<amount>", "Decimal-adjusted UI amount", parseFloat)
     .option("-m, --max-accounts <num>", "Specify max accounts allowed")
-    .option("-s, --slippage-bps <bps>", "Specify slippage bps")
-    .option("-y, --yes", "Skip confirmation")
+    .option(
+      "-s, --slippage-bps <bps>",
+      "Slippage bps, defaults to 5 (0.05%)",
+      "5",
+    )
+    .option("--use-v2", "Use v2 instruction", false)
     .option("-d, --only-direct-routes", "Direct routes only")
+    .option("-y, --yes", "Skip confirmation")
     .action(async (from, to, amount, options) => {
-      const { maxAccounts, slippageBps, onlyDirectRoutes } = options;
+      const tokenFrom = await findToken(from);
+      const tokenTo = await findToken(to);
+      const { maxAccounts, slippageBps, onlyDirectRoutes, useV2 } = options;
 
-      const tokenList = await fetchTokensList();
-      const tokenFrom = tokenList.find(
-        (t) =>
-          t.address === from || t.symbol.toLowerCase() === from.toLowerCase(),
-      );
-      const tokenTo = tokenList.find(
-        (t) => t.address === to || t.symbol.toLowerCase() === to.toLowerCase(),
-      );
-
-      if (!tokenTo) {
-        await confirmOperation(`Token ${to} is unverified. Continue?`);
-      }
-
-      let quoteParams = {
+      const quoteParams = {
         inputMint: tokenFrom.address,
         outputMint: tokenTo.address,
-        amount: Math.floor(parseFloat(amount) * 10 ** tokenFrom.decimals),
+        amount: Math.floor(amount * 10 ** tokenFrom.decimals),
         swapMode: "ExactIn",
-        slippageBps: slippageBps ? parseInt(slippageBps) : 5,
+        slippageBps: parseInt(slippageBps),
         excludeDexes: ["Obric V2"],
         asLegacyTransaction: false,
+        ...(maxAccounts ? { maxAccounts: parseInt(maxAccounts) } : {}),
+        ...(onlyDirectRoutes ? { onlyDirectRoutes } : {}),
+        instructionVersion: useV2 ? "V2" : "V1",
       } as QuoteParams;
-      if (maxAccounts) {
-        quoteParams = {
-          ...quoteParams,
-          maxAccounts: parseInt(maxAccounts),
-        };
-      }
-      if (onlyDirectRoutes) {
-        quoteParams = {
-          ...quoteParams,
-          onlyDirectRoutes,
-        };
-      }
 
       options?.yes ||
         (await confirmOperation(
-          `Confirm swapping ${amount} ${from} to ${to} with quote params: ${JSON.stringify(
+          `Confirm swapping ${amount} ${tokenFrom.symbol} to ${tokenTo.symbol} with quote params: ${JSON.stringify(
             quoteParams,
             null,
             2,
@@ -223,7 +225,9 @@ export function installJupiterCommands(program: Command, context: CliContext) {
           { quoteParams },
           context.txOptions,
         );
-        console.log(`Swapped ${amount} ${from} to ${to}: ${txSig}`);
+        console.log(
+          `Swapped ${amount} ${tokenFrom.symbol} to ${tokenTo.symbol}: ${txSig}`,
+        );
       } catch (e) {
         console.error(parseTxError(e));
         process.exit(1);
