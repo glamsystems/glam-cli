@@ -1,7 +1,5 @@
 import {
   WSOL,
-  fetchTokenPrices,
-  fetchTokensList,
   nameToChars,
   charsToName,
   GlamClient,
@@ -407,11 +405,12 @@ export function installVaultCommands(program: Command, context: CliContext) {
         mints.push(WSOL.toBase58());
       }
 
-      const tokenPrices = await fetchTokenPrices(mints);
+      const jupApi = context.glamClient.jupiterSwap.jupApi;
+      const tokenPrices = await jupApi.fetchTokenPrices(mints);
       const mintToPrice = new Map(
         tokenPrices.map(({ mint, price }) => [mint, price]),
       );
-      const tokenList = await fetchTokensList();
+      const tokenList = await jupApi.fetchTokensList();
 
       // Define column widths
       const colWidths = [12, 45, 15, 20];

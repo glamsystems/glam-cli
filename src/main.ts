@@ -118,6 +118,10 @@ program
     console.log("Wallet connected:", glamClient.signer.toBase58());
     console.log("RPC endpoint:", glamClient.connection.rpcEndpoint);
     console.log("Priority fee:", cliConfig.priority_fee);
+    console.log(
+      "Jupiter API key:",
+      cliConfig.jupiter_api_key ? "configured" : "not configured",
+    );
 
     if (cliConfig.glam_state) {
       console.log(`GLAM state: ${glamClient.statePda}`);

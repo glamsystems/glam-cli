@@ -1,7 +1,7 @@
 import {
-  fetchTokensList,
-  QuoteParams,
+  JupiterApiClient,
   JupiterSwapPolicy,
+  QuoteParams,
   TokenListItem,
 } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
@@ -12,8 +12,11 @@ import {
   validatePublicKey,
 } from "../utils";
 
-async function findToken(value: string): Promise<TokenListItem> {
-  const tokenList = await fetchTokensList();
+async function findToken(
+  jupApi: JupiterApiClient,
+  value: string,
+): Promise<TokenListItem> {
+  const tokenList = await jupApi.fetchTokensList();
   const tokenInfo = tokenList.find(
     (t) =>
       t.address === value || t.symbol.toLowerCase() === value.toLowerCase(),
@@ -194,8 +197,9 @@ export function installJupiterCommands(program: Command, context: CliContext) {
     .option("-d, --only-direct-routes", "Direct routes only")
     .option("-y, --yes", "Skip confirmation")
     .action(async (from, to, amount, options) => {
-      const tokenFrom = await findToken(from);
-      const tokenTo = await findToken(to);
+      const jupApi = context.glamClient.jupiterSwap.jupApi;
+      const tokenFrom = await findToken(jupApi, from);
+      const tokenTo = await findToken(jupApi, to);
       const { maxAccounts, slippageBps, onlyDirectRoutes, useV2 } = options;
 
       const quoteParams = {

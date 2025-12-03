@@ -38,6 +38,7 @@ export class CliConfig {
     helius_api_key?: string;
   };
   glam_state?: string;
+  jupiter_api_key?: string;
 
   private static instance: CliConfig | null = null;
   private configPath: string;
@@ -52,6 +53,7 @@ export class CliConfig {
     this.glam_staging = config.glam_staging;
     this.priority_fee = config.priority_fee;
     this.glam_state = config.glam_state;
+    this.jupiter_api_key = config.jupiter_api_key;
 
     this.configPath = configPath || defaultConfigPath();
   }
@@ -116,6 +118,10 @@ export class CliConfig {
 
       if (cliConfig.glam_staging) {
         process.env.GLAM_STAGING = "1";
+      }
+
+      if (cliConfig.jupiter_api_key) {
+        process.env.JUPITER_API_KEY = cliConfig.jupiter_api_key;
       }
 
       process.env.ANCHOR_PROVIDER_URL = cliConfig.json_rpc_url;
