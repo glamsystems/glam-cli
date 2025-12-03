@@ -2,8 +2,8 @@ import { BN } from "@coral-xyz/anchor";
 import {
   formatBits,
   parseProtocolPermissionsBitmask,
-  PROGRAM_AND_BITFLAG_BY_PROTOCOL_NAME,
-  PROTOCOLS_AND_PERMISSIONS,
+  getProgramAndBitflagByProtocolName,
+  getProtocolsAndPermissions,
 } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
 import {
@@ -66,6 +66,8 @@ export function installDelegateCommands(
     .description("Grant delegate permissions for a single protocol")
     .action(
       async (delegate: PublicKey, permissions: string[], { protocol, yes }) => {
+        const PROGRAM_AND_BITFLAG_BY_PROTOCOL_NAME =
+          getProgramAndBitflagByProtocolName();
         const entry = PROGRAM_AND_BITFLAG_BY_PROTOCOL_NAME[protocol];
         if (!entry) {
           console.error(
@@ -80,7 +82,7 @@ export function installDelegateCommands(
 
         // Find permissions defined by the protocol
         const protocolEntry =
-          PROTOCOLS_AND_PERMISSIONS[programIdStr]?.[bitflagStr];
+          getProtocolsAndPermissions()[programIdStr]?.[bitflagStr];
         if (!protocolEntry) {
           console.error(
             `Protocol mapping not found for program ${programIdStr} and bitflag ${bitflagStr}.`,
@@ -153,6 +155,8 @@ export function installDelegateCommands(
     .description("Revoke delegate permissions for a single protocol by name")
     .action(
       async (delegate: PublicKey, permissions: string[], { protocol, yes }) => {
+        const PROGRAM_AND_BITFLAG_BY_PROTOCOL_NAME =
+          getProgramAndBitflagByProtocolName();
         const entry = PROGRAM_AND_BITFLAG_BY_PROTOCOL_NAME[protocol];
         if (!entry) {
           console.error(
@@ -166,7 +170,7 @@ export function installDelegateCommands(
         const protocolBitflag = parseInt(bitflagStr, 2);
 
         const protocolEntry =
-          PROTOCOLS_AND_PERMISSIONS[programIdStr]?.[bitflagStr];
+          getProtocolsAndPermissions()[programIdStr]?.[bitflagStr];
         if (!protocolEntry) {
           console.error(
             `Protocol mapping not found for program ${programIdStr} and bitflag ${bitflagStr}.`,

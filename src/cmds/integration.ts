@@ -1,6 +1,6 @@
 import {
   formatBits,
-  PROGRAM_AND_BITFLAG_BY_PROTOCOL_NAME,
+  getProgramAndBitflagByProtocolName,
   parseProtocolsBitmask,
   getGlamMintProgramId,
 } from "@glamsystems/glam-sdk";
@@ -66,6 +66,9 @@ export function installIntegrationCommands(
       const groups: Record<string, number> = {}; // Program ID -> Protocols Bitmask
       const unknown: string[] = [];
 
+      const PROGRAM_AND_BITFLAG_BY_PROTOCOL_NAME =
+        getProgramAndBitflagByProtocolName();
+
       for (const name of protocols) {
         const entry = PROGRAM_AND_BITFLAG_BY_PROTOCOL_NAME[name];
         if (!entry) {
@@ -128,6 +131,9 @@ export function installIntegrationCommands(
     .action(async (protocols: string[], { yes }) => {
       const groups: Record<string, number> = {};
       const unknown: string[] = [];
+
+      const PROGRAM_AND_BITFLAG_BY_PROTOCOL_NAME =
+        getProgramAndBitflagByProtocolName();
 
       for (const name of protocols) {
         const entry = PROGRAM_AND_BITFLAG_BY_PROTOCOL_NAME[name];
