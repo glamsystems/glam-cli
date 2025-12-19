@@ -219,7 +219,8 @@ export function installDriftProtocolCommands(
     .command("users")
     .description("List drift users (sub accounts)")
     .action(async () => {
-      const driftUsers = await context.glamClient.drift.fetchDriftUsers();
+      const driftUsers =
+        await context.glamClient.drift.fetchAndParseDriftUsers();
       console.log(`${driftUsers.length} Drift users found`);
       driftUsers.map((u, i) => {
         console.log(`[${i}]: ${u.name} (Pool ID: ${u.poolId})`);
@@ -236,15 +237,39 @@ export function installDriftProtocolCommands(
     )
     .description("List drift positions")
     .action(async ({ subAccountId }) => {
-      const user = await context.glamClient.drift.fetchDriftUser(subAccountId);
+      const user =
+        await context.glamClient.drift.fetchAndParseDriftUser(subAccountId);
       if (!user) {
         console.error(
           `Drift user not found for sub-account ID ${subAccountId}. Please specify a valid sub-account ID.`,
         );
         process.exit(1);
       }
-      for (const { marketIndex, uiAmount, marketName } of user.spotPositions) {
-        console.log(`${uiAmount} ${marketName} (market index: ${marketIndex})`);
+      const spotMarkets =
+        await context.glamClient.drift.fetchAndParseSpotMarkets(
+          user.spotPositions.map((p) => p.marketIndex),
+        );
+      const perpMarkets =
+        await context.glamClient.drift.fetchAndParsePerpMarkets(
+          user.perpPositions.map((p) => p.marketIndex),
+        );
+
+      for (const {
+        marketIndex,
+        scaledBalance,
+        balanceType,
+      } of user.spotPositions) {
+        const spotMarket = spotMarkets.find(
+          (m) => m.marketIndex === marketIndex,
+        )!;
+        const { uiAmount } = spotMarket.calcSpotBalance(
+          scaledBalance,
+          balanceType,
+        );
+
+        console.log(
+          `${uiAmount} ${spotMarket.name} (market index: ${marketIndex})`,
+        );
       }
 
       for (const { marketIndex, baseAssetAmount } of user.perpPositions) {
@@ -497,7 +522,7 @@ export function installDriftProtocolCommands(
     .description("List open orders")
     .action(async ({ subAccountId }) => {
       const driftUser =
-        await context.glamClient.drift.fetchDriftUser(subAccountId);
+        await context.glamClient.drift.fetchAndParseDriftUser(subAccountId);
       if (!driftUser) {
         console.error(
           `Drift user not found for sub account ID ${subAccountId}`,
@@ -593,7 +618,7 @@ export function installDriftProtocolCommands(
       }
 
       const driftUser =
-        await context.glamClient.drift.fetchDriftUser(subAccountId);
+        await context.glamClient.drift.fetchAndParseDriftUser(subAccountId);
       if (!driftUser) {
         console.error(
           `Drift user not found for sub account ID ${subAccountId}`,

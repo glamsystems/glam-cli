@@ -120,7 +120,7 @@ export function installDriftVaultsCommands(
       );
 
       parsedVaultDepositors.map(({ address, driftVault, shares }, i) => {
-        const { pubkey, spotMarketIndex, nameStr } = parsedDriftVaults[i];
+        const { pubkey, spotMarketIndex, name } = parsedDriftVaults[i];
 
         if (!driftVault.equals(pubkey)) {
           throw new Error(
@@ -133,7 +133,7 @@ export function installDriftVaultsCommands(
         const depositAsset = tokenInfo?.symbol || mint.toBase58();
 
         console.log(
-          `[${i}] Depositor: ${address}, vault: ${nameStr}, shares: ${shares / 10 ** decimals}, deposit asset: ${depositAsset}`,
+          `[${i}] Depositor: ${address}, vault: ${name}, shares: ${shares / 10 ** decimals}, deposit asset: ${depositAsset}`,
         );
       });
     });
@@ -182,11 +182,11 @@ export function installDriftVaultsCommands(
     .option("-y, --yes", "Skip confirmation prompt")
     .description("Request to withdraw from a drift vault")
     .action(async (vault, amount, options) => {
-      const { spotMarketIndex, nameStr } =
+      const { spotMarketIndex, name } =
         await context.glamClient.driftVaults.parseDriftVault(vault);
       options?.yes ||
         (await confirmOperation(
-          `Confirm requesting to withdraw ${amount} vault shares from ${nameStr} (${vault})?`,
+          `Confirm requesting to withdraw ${amount} vault shares from ${name} (${vault})?`,
         ));
 
       const { decimals } =
@@ -200,7 +200,7 @@ export function installDriftVaultsCommands(
           context.txOptions,
         );
         console.log(
-          `Withdrawal request submitted for drift vault ${nameStr} (${vault}): ${txSig}`,
+          `Withdrawal request submitted for drift vault ${name} (${vault}): ${txSig}`,
         );
       } catch (e) {
         console.error(parseTxError(e));
