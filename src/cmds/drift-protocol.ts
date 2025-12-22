@@ -9,8 +9,9 @@ import {
 import { Command } from "commander";
 import {
   CliContext,
-  confirmOperation,
-  parseTxError,
+  executeTxWithErrorHandling,
+  validateBooleanInput,
+  validateDriftMarketType,
   validatePublicKey,
   validateSubAccountId,
 } from "../utils";
@@ -34,16 +35,11 @@ export function installDriftProtocolCommands(
 
   drift
     .command("allowlist-market")
-    .argument("<market_type>", "Market type", (v) => {
-      if (v !== "spot" && v !== "perp") {
-        console.error("Invalid market type, must be 'spot' or 'perp'");
-        process.exit(1);
-      }
-      return v;
-    })
+    .argument("<market_type>", "Market type", validateDriftMarketType)
     .argument("<market_index>", "Spot or perp market index", parseInt)
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Add a market to the allowlist")
-    .action(async (marketType, marketIndex) => {
+    .action(async (marketType, marketIndex, { yes }) => {
       const policy =
         (await context.glamClient.fetchProtocolPolicy(
           context.glamClient.extDriftProgram.programId,
@@ -56,35 +52,30 @@ export function installDriftProtocolCommands(
       } else {
         policy.perpMarketsAllowlist.push(marketIndex);
       }
-      try {
-        const txSig = await context.glamClient.access.setProtocolPolicy(
-          context.glamClient.extDriftProgram.programId,
-          0b01,
-          policy.encode(),
-          context.txOptions,
-        );
-        console.log(
-          `${marketType} market ${marketIndex} added to allowlist:`,
-          txSig,
-        );
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.access.setProtocolPolicy(
+            context.glamClient.extDriftProgram.programId,
+            0b01,
+            policy.encode(),
+            context.txOptions,
+          ),
+        {
+          skip: yes,
+          message: `Confirm adding ${marketType} market ${marketIndex} to allowlist`,
+        },
+        (txSig) =>
+          `${marketType} market ${marketIndex} added to allowlist: ${txSig}`,
+      );
     });
 
   drift
     .command("remove-market")
-    .argument("<market_type>", "Market type", (v) => {
-      if (v !== "spot" && v !== "perp") {
-        console.error("Invalid market type, must be 'spot' or 'perp'");
-        process.exit(1);
-      }
-      return v;
-    })
+    .argument("<market_type>", "Market type", validateDriftMarketType)
     .argument("<market_index>", "Spot or perp market index", parseInt)
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Remove a market from the allowlist")
-    .action(async (marketType, marketIndex) => {
+    .action(async (marketType, marketIndex, { yes }) => {
       const policy = await context.glamClient.fetchProtocolPolicy(
         context.glamClient.extDriftProgram.programId,
         0b01,
@@ -104,28 +95,29 @@ export function installDriftProtocolCommands(
           (m) => m !== marketIndex,
         );
       }
-      try {
-        const txSig = await context.glamClient.access.setProtocolPolicy(
-          context.glamClient.extDriftProgram.programId,
-          0b01,
-          policy.encode(),
-          context.txOptions,
-        );
-        console.log(
-          `${marketType} market ${marketIndex} removed from allowlist:`,
-          txSig,
-        );
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.access.setProtocolPolicy(
+            context.glamClient.extDriftProgram.programId,
+            0b01,
+            policy.encode(),
+            context.txOptions,
+          ),
+        {
+          skip: yes,
+          message: `Confirm removing ${marketType} market ${marketIndex} from allowlist`,
+        },
+        (txSig) =>
+          `${marketType} market ${marketIndex} removed from allowlist: ${txSig}`,
+      );
     });
 
   drift
     .command("allowlist-borrowable-asset")
     .argument("<token_mint>", "Token mint public key", validatePublicKey)
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Add a borrowable asset to the allowlist")
-    .action(async (tokenMint) => {
+    .action(async (tokenMint, { yes }) => {
       const policy =
         (await context.glamClient.fetchProtocolPolicy(
           context.glamClient.extDriftProgram.programId,
@@ -135,25 +127,25 @@ export function installDriftProtocolCommands(
 
       policy.borrowAllowlist.push(tokenMint);
 
-      try {
-        const txSig = await context.glamClient.access.setProtocolPolicy(
-          context.glamClient.extDriftProgram.programId,
-          0b01,
-          policy.encode(),
-          context.txOptions,
-        );
-        console.log(`Borrowable asset ${tokenMint} added to allowlist:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.access.setProtocolPolicy(
+            context.glamClient.extDriftProgram.programId,
+            0b01,
+            policy.encode(),
+            context.txOptions,
+          ),
+        { skip: yes, message: `Confirm adding borrowable asset ${tokenMint}` },
+        (txSig) => `Borrowable asset ${tokenMint} added to allowlist: ${txSig}`,
+      );
     });
 
   drift
     .command("remove-borrowable-asset")
     .argument("<token_mint>", "Token mint public key", validatePublicKey)
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Remove a borrowable asset from the allowlist")
-    .action(async (tokenMint) => {
+    .action(async (tokenMint, { yes }) => {
       const policy = await context.glamClient.fetchProtocolPolicy(
         context.glamClient.extDriftProgram.programId,
         0b01,
@@ -167,21 +159,21 @@ export function installDriftProtocolCommands(
       policy.borrowAllowlist = policy.borrowAllowlist.filter(
         (m) => !m.equals(tokenMint),
       );
-      try {
-        const txSig = await context.glamClient.access.setProtocolPolicy(
-          context.glamClient.extDriftProgram.programId,
-          0b01,
-          policy.encode(),
-          context.txOptions,
-        );
-        console.log(
-          `Borrowable asset ${tokenMint} removed from allowlist:`,
-          txSig,
-        );
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.access.setProtocolPolicy(
+            context.glamClient.extDriftProgram.programId,
+            0b01,
+            policy.encode(),
+            context.txOptions,
+          ),
+        {
+          skip: yes,
+          message: `Confirm removing borrowable asset ${tokenMint}`,
+        },
+        (txSig) =>
+          `Borrowable asset ${tokenMint} removed from allowlist: ${txSig}`,
+      );
     });
 
   drift
@@ -196,23 +188,16 @@ export function installDriftProtocolCommands(
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Initialize drift user")
     .action(async ({ subAccountId, poolId: _poolId, yes }) => {
-      yes ||
-        (await confirmOperation(
-          `Initializing drift user (sub-account ${subAccountId})`,
-        ));
-
-      try {
-        const txSig = await context.glamClient.drift.initialize(
-          subAccountId,
-          context.txOptions,
-        );
-        console.log(
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.drift.initialize(subAccountId, context.txOptions),
+        {
+          skip: yes,
+          message: `Initializing drift user (sub-account ${subAccountId})`,
+        },
+        (txSig) =>
           `Drift user (sub-account ${subAccountId}) initialized: ${txSig}`,
-        );
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      );
     });
 
   drift
@@ -280,36 +265,48 @@ export function installDriftProtocolCommands(
     });
 
   drift
-    .command("withdraw <market_index> <amount>")
+    .command("withdraw")
+    .argument("<market_index>", "Market index", parseInt)
+    .argument("<amount>", "Amount", parseFloat)
     .option(
       "-s, --sub-account-id <sub_account_id>",
       "Sub account ID",
       validateSubAccountId,
       0,
     )
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Withdraw from a drift spot market")
-    .action(async (marketIndex, amount, { subAccountId }) => {
-      try {
-        const marketConfigs =
-          await context.glamClient.drift.fetchMarketConfigs();
+    .action(async (marketIndex, amount, { subAccountId, yes }) => {
+      const marketConfigs = await context.glamClient.drift.fetchMarketConfigs();
 
-        const marketConfig = marketConfigs.spotMarkets.find(
-          (m) => m.marketIndex === parseInt(marketIndex),
+      const spotMarket = marketConfigs.spotMarkets.find(
+        (m) => m.marketIndex === marketIndex,
+      );
+      if (!spotMarket) {
+        console.error(
+          `Spot market config not found for market index ${marketIndex}`,
         );
-        const amountBn = new BN(Number(amount) * 10 ** marketConfig.decimals);
-
-        const txSig = await context.glamClient.drift.withdraw(
-          amountBn,
-          marketConfig.marketIndex,
-          subAccountId,
-          context.txOptions,
-        );
-
-        console.log(`Withdraw from drift: ${txSig}`);
-      } catch (e) {
-        console.error(parseTxError(e));
         process.exit(1);
       }
+
+      const { decimals, mint, name } = spotMarket;
+      const amountBn = new BN(amount * 10 ** decimals);
+
+      await executeTxWithErrorHandling(
+        async () => {
+          return context.glamClient.drift.withdraw(
+            amountBn,
+            marketIndex,
+            subAccountId,
+            context.txOptions,
+          );
+        },
+        {
+          skip: yes,
+          message: `Confirm withdrawing ${amount} ${mint} to ${name} spot market`,
+        },
+        (txSig) => `Withdraw from drift: ${txSig}`,
+      );
     });
 
   drift
@@ -325,48 +322,34 @@ export function installDriftProtocolCommands(
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Deposit to drift")
     .action(async (marketIndex, amount, { subAccountId, yes }) => {
-      if (isNaN(marketIndex) || marketIndex < 0) {
-        console.error("Invalid market index");
-        process.exit(1);
-      }
-
-      if (isNaN(amount) || amount < 0) {
-        console.error("Invalid amount");
-        process.exit(1);
-      }
-
-      try {
-        const marketConfigs =
-          await context.glamClient.drift.fetchMarketConfigs();
-        const marketConfig = marketConfigs.spotMarkets.find(
-          (m) => m.marketIndex === parseInt(marketIndex),
+      const marketConfigs = await context.glamClient.drift.fetchMarketConfigs();
+      const spotMarket = marketConfigs.spotMarkets.find(
+        (m) => m.marketIndex === marketIndex,
+      );
+      if (!spotMarket) {
+        console.error(
+          `Spot market config not found for market index ${marketIndex}`,
         );
-        if (!marketConfig) {
-          console.error(
-            `Spot market config not found for market index ${marketIndex}`,
-          );
-          process.exit(1);
-        }
-
-        const { mint, decimals } = marketConfig;
-        yes ||
-          (await confirmOperation(
-            `Confirm depositing ${amount} ${mint} to ${marketConfig.name} spot market?`,
-          ));
-
-        const amountBn = new BN(Number(amount) * 10 ** decimals);
-        const txSig = await context.glamClient.drift.deposit(
-          amountBn,
-          marketIndex,
-          subAccountId,
-          context.txOptions,
-        );
-
-        console.log(`Deposited to drift: ${txSig}`);
-      } catch (e) {
-        console.error(e);
         process.exit(1);
       }
+
+      const { mint, decimals, name } = spotMarket;
+      const amountBn = new BN(amount * 10 ** decimals);
+
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.drift.deposit(
+            amountBn,
+            marketIndex,
+            subAccountId,
+            context.txOptions,
+          ),
+        {
+          skip: yes,
+          message: `Confirm depositing ${amount} ${mint} to ${name} spot market`,
+        },
+        (txSig) => `Deposited to drift: ${txSig}`,
+      );
     });
 
   drift
@@ -421,22 +404,19 @@ export function installDriftProtocolCommands(
           price,
         });
 
-        yes ||
-          (await confirmOperation(
-            `Confirm placing ${direction} order for ${amount} ${spotMarket.name} at ${priceLimit} USD?`,
-          ));
-
-        try {
-          const txSig = await context.glamClient.drift.placeOrder(
-            orderParams,
-            subAccountId,
-            context.txOptions,
-          );
-          console.log(`Spot order placed: ${txSig}`);
-        } catch (e) {
-          console.error(parseTxError(e));
-          process.exit(1);
-        }
+        await executeTxWithErrorHandling(
+          () =>
+            context.glamClient.drift.placeOrder(
+              orderParams,
+              subAccountId,
+              context.txOptions,
+            ),
+          {
+            skip: yes,
+            message: `Confirm placing ${direction} order for ${amount} ${spotMarket.name} at ${priceLimit} USD?`,
+          },
+          (txSig) => `Spot order placed: ${txSig}`,
+        );
       },
     );
 
@@ -492,22 +472,19 @@ export function installDriftProtocolCommands(
           price,
         });
 
-        yes ||
-          (await confirmOperation(
-            `Confirm placing ${direction} order for ${amount} ${perpMarket.name} at ${priceLimit} USD?`,
-          ));
-
-        try {
-          const txSig = await context.glamClient.drift.placeOrder(
-            orderParams,
-            subAccountId,
-            context.txOptions,
-          );
-          console.log(`Perp order placed: ${txSig}`);
-        } catch (e) {
-          console.error(parseTxError(e));
-          process.exit(1);
-        }
+        await executeTxWithErrorHandling(
+          () =>
+            context.glamClient.drift.placeOrder(
+              orderParams,
+              subAccountId,
+              context.txOptions,
+            ),
+          {
+            skip: yes,
+            message: `Confirm placing ${direction} order for ${amount} ${perpMarket.name} at ${priceLimit} USD?`,
+          },
+          (txSig) => `Perp order placed: ${txSig}`,
+        );
       },
     );
 
@@ -587,36 +564,36 @@ export function installDriftProtocolCommands(
       validateSubAccountId,
       0,
     )
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Cancel order")
-    .action(async (orderIds, { subAccountId }) => {
-      try {
-        const txSig = await context.glamClient.drift.cancelOrdersByIds(
-          orderIds.map((id: string) => Number(id)),
-          subAccountId,
-          context.txOptions,
-        );
-        console.log(`Orders cancelled: ${txSig}`);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+    .action(async (orderIds, { subAccountId, yes }) => {
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.drift.cancelOrdersByIds(
+            orderIds.map((id: string) => Number(id)),
+            subAccountId,
+            context.txOptions,
+          ),
+        {
+          skip: yes,
+          message: `Confirm cancelling orders ${orderIds.join(", ")}`,
+        },
+        (txSig) => `Orders cancelled: ${txSig}`,
+      );
     });
 
   drift
-    .command("margin <enabled>")
+    .command("margin")
+    .argument("<enabled>", "Enable margin trading", validateBooleanInput)
     .option(
       "-s, --sub-account-id <sub_account_id>",
       "Sub account ID",
       validateSubAccountId,
       0,
     )
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Enable margin trading")
-    .action(async (enabled, { subAccountId }) => {
-      let shouldEnable = false;
-      if (["true", "1", "yes", "y", "enabled"].includes(enabled)) {
-        shouldEnable = true;
-      }
-
+    .action(async (enabled, { subAccountId, yes }) => {
       const driftUser =
         await context.glamClient.drift.fetchAndParseDriftUser(subAccountId);
       if (!driftUser) {
@@ -627,27 +604,27 @@ export function installDriftProtocolCommands(
       }
 
       const { isMarginTradingEnabled } = driftUser;
-      if (isMarginTradingEnabled === shouldEnable) {
+      if (isMarginTradingEnabled === enabled) {
         console.log(
-          `Margin trading already ${shouldEnable ? "enabled" : "disabled"}`,
+          `Margin trading already ${enabled ? "enabled" : "disabled"}`,
         );
         return;
       }
 
-      try {
-        const txSig =
-          await context.glamClient.drift.updateUserMarginTradingEnabled(
-            shouldEnable,
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.drift.updateUserMarginTradingEnabled(
+            enabled,
             subAccountId,
             context.txOptions,
-          );
-        console.log(
-          `Margin trading ${shouldEnable ? "enabled" : "disabled"}: ${txSig}`,
-        );
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+          ),
+        {
+          skip: yes,
+          message: `Confirm ${enabled ? "enabling" : "disabling"} margin trading`,
+        },
+        (txSig) =>
+          `Margin trading ${enabled ? "enabled" : "disabled"}: ${txSig}`,
+      );
     });
 
   drift
@@ -670,64 +647,61 @@ export function installDriftProtocolCommands(
         process.exit(1);
       }
 
-      try {
-        const txSig = await context.glamClient.drift.settlePnl(
-          parseInt(marketIndex),
-          subAccountId,
-          context.txOptions,
-        );
-        console.log(`Settled PnL for perp market ${perpMarket.name}: ${txSig}`);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.drift.settlePnl(
+            parseInt(marketIndex),
+            subAccountId,
+            context.txOptions,
+          ),
+        { skip: true },
+        (txSig) => `Settled PnL for perp market ${perpMarket.name}: ${txSig}`,
+      );
     });
 
   drift
     .command("delete-user")
     .argument("<sub_account_id>", "Sub account ID", parseInt)
-    .option("-y, --yes", "Skip confirmation prompt")
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Delete a drift user (sub account)")
     .action(async (subAccountId, options) => {
-      options?.yes ||
-        (await confirmOperation(
-          `Confirm deleting drift user (sub account) ${subAccountId}?`,
-        ));
-
-      try {
-        const txSig = await context.glamClient.drift.deleteUser(
-          subAccountId,
-          context.txOptions,
-        );
-        console.log(`Deleted drift user: ${txSig}`);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.drift.deleteUser(subAccountId, context.txOptions),
+        {
+          skip: options?.yes,
+          message: `Confirm deleting drift user (sub account) ${subAccountId}`,
+        },
+        (txSig) => `Deleted drift user: ${txSig}`,
+      );
     });
 
   drift
     .command("update-user-pool-id")
     .argument("<sub_account_id>", "Sub account ID", parseInt)
     .argument("<pool_id>", "Isolated pool ID", parseInt)
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Update a drift user's pool ID")
-    .action(async (subAccountId, poolId) => {
-      try {
-        const tx = new Transaction().add(
-          await context.glamClient.drift.txBuilder.updateUserPoolIdIx(
-            subAccountId,
-            poolId,
-          ),
-        );
-        const vTx = await context.glamClient.intoVersionedTransaction(
-          tx,
-          context.txOptions,
-        );
-        const txSig = await context.glamClient.sendAndConfirm(vTx);
-        console.log(`Updated drift user's pool ID: ${txSig}`);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+    .action(async (subAccountId, poolId, { yes }) => {
+      await executeTxWithErrorHandling(
+        async () => {
+          const tx = new Transaction().add(
+            await context.glamClient.drift.txBuilder.updateUserPoolIdIx(
+              subAccountId,
+              poolId,
+            ),
+          );
+          const vTx = await context.glamClient.intoVersionedTransaction(
+            tx,
+            context.txOptions,
+          );
+          return context.glamClient.sendAndConfirm(vTx);
+        },
+        {
+          skip: yes,
+          message: `Confirm updating drift user (sub account) ${subAccountId}'s pool ID to ${poolId}`,
+        },
+        (txSig) => `Updated drift user's pool ID: ${txSig}`,
+      );
     });
 }

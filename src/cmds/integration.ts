@@ -7,8 +7,7 @@ import {
 import { Command } from "commander";
 import {
   CliContext,
-  confirmOperation,
-  parseTxError,
+  executeTxWithErrorHandling,
   validatePublicKey,
 } from "../utils";
 import { PublicKey } from "@solana/web3.js";
@@ -97,26 +96,25 @@ export function installIntegrationCommands(
         return `${pid} -> ${names}`;
       });
 
-      !yes &&
-        (await confirmOperation(
-          `Enable protocols from integration programs:\n${details.join("\n")}?`,
-        ));
-
-      for (const [pid, mask] of Object.entries(groups)) {
+      const entries = Object.entries(groups);
+      for (let i = 0; i < entries.length; i++) {
+        const [pid, mask] = entries[i];
         const programId = new PublicKey(pid);
         const { protocols } = parseProtocolsBitmask(programId, mask);
         const names = protocols.map((p) => p.name).join(", ");
-        try {
-          const txSig = await context.glamClient.access.enableProtocols(
-            programId,
-            mask,
-            context.txOptions,
-          );
-          console.log(`Enabled ${names} on ${programId}: ${txSig}`);
-        } catch (e) {
-          console.error(parseTxError(e));
-          process.exit(1);
-        }
+        await executeTxWithErrorHandling(
+          () =>
+            context.glamClient.access.enableProtocols(
+              programId,
+              mask,
+              context.txOptions,
+            ),
+          {
+            skip: yes || i > 0,
+            message: `Enable protocols from integration programs:\n${details.join("\n")}?`,
+          },
+          (txSig) => `Enabled ${names} on ${programId}: ${txSig}`,
+        );
       }
     });
 
@@ -163,26 +161,25 @@ export function installIntegrationCommands(
         return `${pid} -> ${names}`;
       });
 
-      !yes &&
-        (await confirmOperation(
-          `Disable protocols from integration programs:\n${details.join("\n")}?`,
-        ));
-
-      for (const [pid, mask] of Object.entries(groups)) {
+      const entries = Object.entries(groups);
+      for (let i = 0; i < entries.length; i++) {
+        const [pid, mask] = entries[i];
         const programId = new PublicKey(pid);
         const { protocols } = parseProtocolsBitmask(programId, mask);
         const names = protocols.map((p) => p.name).join(", ");
-        try {
-          const txSig = await context.glamClient.access.disableProtocols(
-            programId,
-            mask,
-            context.txOptions,
-          );
-          console.log(`Disabled ${names} on ${programId}: ${txSig}`);
-        } catch (e) {
-          console.error(parseTxError(e));
-          process.exit(1);
-        }
+        await executeTxWithErrorHandling(
+          () =>
+            context.glamClient.access.disableProtocols(
+              programId,
+              mask,
+              context.txOptions,
+            ),
+          {
+            skip: yes || i > 0,
+            message: `Disable protocols from integration programs:\n${details.join("\n")}?`,
+          },
+          (txSig) => `Disabled ${names} on ${programId}: ${txSig}`,
+        );
       }
     });
 
@@ -196,22 +193,18 @@ export function installIntegrationCommands(
     .option("-y, --yes", "Skip confirmation")
     .description("Disable all protocols from an integration")
     .action(async (integrationProgram: PublicKey, { yes }) => {
-      !yes &&
-        (await confirmOperation(
-          `Disable all protocols from integration ${integrationProgram}?`,
-        ));
-
-      try {
-        const txSig = await context.glamClient.access.emergencyAccessUpdate(
-          { disabledIntegrations: [integrationProgram] },
-          context.txOptions,
-        );
-        console.log(
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.access.emergencyAccessUpdate(
+            { disabledIntegrations: [integrationProgram] },
+            context.txOptions,
+          ),
+        {
+          skip: yes,
+          message: `Disable all protocols from integration ${integrationProgram}?`,
+        },
+        (txSig) =>
           `Disabled all protocols from ${integrationProgram}: ${txSig}`,
-        );
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      );
     });
 }

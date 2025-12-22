@@ -12,10 +12,11 @@ import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import fs from "fs";
 import {
   CliContext,
-  confirmOperation,
+  executeTxWithErrorHandling,
   parseMintJson,
   parseStateJson,
-  parseTxError,
+  validateBooleanInput,
+  validateFileExists,
   validatePublicKey,
 } from "../utils";
 import { BN } from "@coral-xyz/anchor";
@@ -112,78 +113,53 @@ export function installVaultCommands(program: Command, context: CliContext) {
     .command("update-owner")
     .argument("<new-owner>", "New owner public key", validatePublicKey)
     .option("-n, --name <name>", "New portfolio manager name")
-    .option("-y, --yes", "Skip confirmation prompt")
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Update the owner of a GLAM vault")
     .action(async (newOwner: PublicKey, options) => {
       const newPortfolioManagerName = options?.name
         ? nameToChars(options.name)
         : null;
 
-      if (!options?.yes) {
-        if (newPortfolioManagerName) {
-          await confirmOperation(
-            `Confirm updating owner to ${newOwner} and portfolio manager name to ${options.name}?`,
-          );
-        } else {
-          await confirmOperation(`Confirm updating owner to ${newOwner}?`);
-        }
-      }
+      const message = newPortfolioManagerName
+        ? `Confirm transferring ownership to ${newOwner} (portfolio manager: ${options.name})?`
+        : `Confirm transferring ownership to ${newOwner}?`;
 
-      try {
-        const txSig = await context.glamClient.state.update({
-          owner: newOwner,
-          portfolioManagerName: newPortfolioManagerName,
-        });
-        if (newPortfolioManagerName) {
-          console.log(
-            `GLAM owner and portfolio manager name updated: ${txSig}`,
-          );
-        } else {
-          console.log(`GLAM owner updated: ${txSig}`);
-        }
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.state.update({
+            owner: newOwner,
+            portfolioManagerName: newPortfolioManagerName,
+          }),
+        {
+          skip: options?.yes,
+          message,
+        },
+        (txSig) => `Vault ownership transferred: ${txSig}`,
+      );
     });
 
   program
-    .command("set-enabled <enabled>")
-    .description("Set GLAM state enabled or disabled")
-    .option("-y, --yes", "Skip confirmation prompt")
+    .command("set-enabled")
+    .argument("<enabled>", "New vault state", validateBooleanInput)
+    .description("Enable or disable a GLAM vault")
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .action(async (enabled, options) => {
-      const parseBooleanInput = (input: string): boolean => {
-        const normalized = input.toLowerCase().trim();
-        const truthyValues = ["true", "1", "yes", "y", "on", "enable"];
-        const falsyValues = ["false", "0", "no", "n", "off", "disable"];
+      const stateAccount = await context.glamClient.fetchStateAccount();
+      const name = charsToName(stateAccount.name);
 
-        if (truthyValues.includes(normalized)) return true;
-        if (falsyValues.includes(normalized)) return false;
-
-        throw new Error(
-          `Invalid boolean value: "${input}". Use: true/false, yes/no, 1/0, enable/disable`,
-        );
-      };
-      const enabledBool = parseBooleanInput(enabled);
-      const glamState = context.cliConfig.glamState;
-      options?.yes ||
-        (await confirmOperation(
-          `Confirm ${enabledBool ? "enabling" : "disabling"} ${glamState}?`,
-        ));
-
-      try {
-        const txSig = await context.glamClient.access.emergencyAccessUpdate(
-          { stateEnabled: enabledBool },
-          context.txOptions,
-        );
-        console.log(
-          `Set GLAM state ${glamState} to ${enabledBool ? "enabled" : "disabled"}:`,
-          txSig,
-        );
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.access.emergencyAccessUpdate(
+            { stateEnabled: enabled },
+            context.txOptions,
+          ),
+        {
+          skip: options?.yes,
+          message: `Confirm ${enabled ? "enabling" : "disabling"} vault: ${name}`,
+        },
+        (txSig) =>
+          `GLAM vault ${name} ${enabled ? "enabled" : "disabled"}: ${txSig}`,
+      );
     });
 
   program
@@ -203,14 +179,11 @@ export function installVaultCommands(program: Command, context: CliContext) {
     });
 
   program
-    .command("create <path>")
-    .description("Create a new GLAM from a json file")
-    .action(async (file) => {
-      if (!fs.existsSync(file)) {
-        console.error(`File ${file} does not exist`);
-        process.exit(1);
-      }
-
+    .command("create")
+    .argument("<path>", "Path to the JSON file", validateFileExists)
+    .option("-y, --yes", "Skip confirmation prompt", false)
+    .description("Create a new GLAM vault from a json file")
+    .action(async (file, options) => {
       const json = JSON.parse(fs.readFileSync(file, "utf8"));
       if (!json.state && !json.mint) {
         throw new Error(
@@ -219,142 +192,138 @@ export function installVaultCommands(program: Command, context: CliContext) {
       }
 
       const initStateParams = parseStateJson(json);
-      if (
-        StateAccountType.equals(
-          initStateParams.accountType,
-          StateAccountType.VAULT,
-        )
-      ) {
-        try {
-          const txSig = await context.glamClient.state.initialize(
-            initStateParams,
-            context.txOptions,
-          );
-          context.cliConfig.glamState = context.glamClient.statePda;
-          console.log("GLAM vault initialized:", txSig);
-          console.log("State PDA:", context.glamClient.statePda.toBase58());
-          console.log("Vault PDA:", context.glamClient.vaultPda.toBase58());
-        } catch (e) {
-          console.error(parseTxError(e));
-          process.exit(1);
-        }
+      if (initStateParams.accountType === StateAccountType.VAULT) {
+        await executeTxWithErrorHandling(
+          async () => {
+            const txSig = await context.glamClient.state.initialize(
+              initStateParams,
+              context.txOptions,
+            );
+            context.cliConfig.glamState = context.glamClient.statePda;
+            console.log("State PDA:", context.glamClient.statePda.toBase58());
+            console.log("Vault PDA:", context.glamClient.vaultPda.toBase58());
+            return txSig;
+          },
+          {
+            skip: options?.yes,
+            message: `Confirm initializing GLAM vault: ${charsToName(initStateParams.name)}`,
+          },
+          (txSig) => `GLAM vault initialized: ${txSig}`,
+        );
         return;
       }
 
       const initMintParams = parseMintJson(json, initStateParams.accountType);
-      try {
-        // mint.initialize creates state with default setup
-        // we update state with input after mint initialization
-        const txSig = await context.glamClient.mint.initializeWithStateParams(
-          initMintParams,
-          initStateParams,
-          context.txOptions,
-        );
-        context.cliConfig.glamState = context.glamClient.statePda;
-        console.log("GLAM tokenized vault initialized:", txSig);
-        console.log("State PDA:", context.glamClient.statePda.toBase58());
-        console.log("Vault PDA:", context.glamClient.vaultPda.toBase58());
-        console.log("Mint PDA:", context.glamClient.mintPda.toBase58());
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        async () => {
+          // mint.initializeWithStateParams creates state with default setup
+          // we update state with input after mint initialization to apply state params
+          const txSig = await context.glamClient.mint.initializeWithStateParams(
+            initMintParams,
+            initStateParams,
+            context.txOptions,
+          );
+          context.cliConfig.glamState = context.glamClient.statePda;
+          console.log("State PDA:", context.glamClient.statePda.toBase58());
+          console.log("Vault PDA:", context.glamClient.vaultPda.toBase58());
+          console.log("Mint PDA:", context.glamClient.mintPda.toBase58());
+          return txSig;
+        },
+        {
+          skip: options?.yes,
+          message: `Confirm initializing GLAM tokenized vault: ${charsToName(initMintParams.name)}`,
+        },
+        (txSig) => `GLAM tokenized vault initialized: ${txSig}`,
+      );
     });
 
   program
     .command("extend")
     .argument("<bytes>", "New bytes", parseInt)
-    .description("Extend GLAM state account size")
-    .action(async (bytes) => {
-      const statePda = context.cliConfig.glamState;
-      const glamClient = new GlamClient({ statePda });
-      try {
-        const txSig = await context.glamClient.state.extend(bytes);
-        console.log(
-          `GLAM state account ${statePda} extended by ${bytes} bytes:`,
-          txSig,
-        );
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+    .option("-y, --yes", "Skip confirmation prompt", false)
+    .description("Extend GLAM state account")
+    .action(async (bytes, options) => {
+      await executeTxWithErrorHandling(
+        () => context.glamClient.state.extend(bytes),
+        {
+          skip: options?.yes,
+          message: `Confirm extending GLAM state ${context.cliConfig.glamState} by ${bytes} bytes`,
+        },
+        (txSig) =>
+          `GLAM state ${context.cliConfig.glamState} extended: ${txSig}`,
+      );
     });
 
-  program
-    .command("set-protocol-fees")
-    .argument(
-      "<state>",
-      "GLAM state public key for the tokenized vault",
-      validatePublicKey,
-    )
-    .argument("<base-fee-bps>", "Base fee in basis points", parseInt)
-    .argument("<flow-fee-bps>", "Flow fee in basis points", parseInt)
-    .option("-y, --yes", "Skip confirmation prompt")
-    .description("Set protocol fees for a GLAM tokenized vault")
-    .action(
-      async (
-        state: PublicKey,
-        baseFeeBps: number,
-        flowFeeBps: number,
-        options,
-      ) => {
-        options?.yes ||
-          (await confirmOperation(
-            `Confirm setting protocol base fee to ${baseFeeBps} and flow fee to ${flowFeeBps} for ${state}?`,
-          ));
-
-        try {
-          const txSig = await context.glamClient.fees.setProtocolFees(
-            baseFeeBps,
-            flowFeeBps,
-          );
-          console.log(`Protocol fees updated for ${state}:`, txSig);
-        } catch (e) {
-          console.error(parseTxError(e));
-          process.exit(1);
-        }
-      },
-    );
+  // program
+  //   .command("set-protocol-fees")
+  //   .argument(
+  //     "<state>",
+  //     "GLAM state public key for the tokenized vault",
+  //     validatePublicKey,
+  //   )
+  //   .argument("<base-fee-bps>", "Base fee in basis points", parseInt)
+  //   .argument("<flow-fee-bps>", "Flow fee in basis points", parseInt)
+  //   .option("-y, --yes", "Skip confirmation prompt")
+  //   .description("Set protocol fees for a GLAM tokenized vault")
+  //   .action(
+  //     async (
+  //       state: PublicKey,
+  //       baseFeeBps: number,
+  //       flowFeeBps: number,
+  //       options,
+  //     ) => {
+  //       await executeTxWithErrorHandling(
+  //         () => context.glamClient.fees.setProtocolFees(baseFeeBps, flowFeeBps),
+  //         {
+  //           skip: options?.yes,
+  //           message: `Confirm setting protocol base fee to ${baseFeeBps} and flow fee to ${flowFeeBps} for ${state}?`,
+  //         },
+  //         (txSig) => `Protocol fees updated for ${state}: ${txSig}`,
+  //       );
+  //     },
+  //   );
 
   program
     .command("close")
     .argument("[state]", "Vault state public key", validatePublicKey)
     .description("Close a GLAM vault by its state pubkey")
-    .option("-y, --yes", "Skip confirmation prompt")
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .action(async (state: PublicKey | null, options) => {
       const statePda = state || context.cliConfig.glamState;
-      const glamClient = new GlamClient({ statePda });
+      const glamClient = new GlamClient({
+        statePda,
+        cluster: context.cliConfig.cluster,
+      });
       const stateModel = await glamClient.fetchStateModel();
-
-      options?.yes ||
-        (await confirmOperation(
-          `Confirm closing GLAM: ${stateModel.nameStr} (state pubkey ${statePda})?`,
-        ));
 
       const preInstructions = [];
       if (stateModel.mint) {
         const closeMintIx = await glamClient.mint.txBuilder.closeMintIx();
         preInstructions.push(closeMintIx);
       }
-      try {
-        const txSig = await glamClient.state.close({
-          ...context.txOptions,
-          preInstructions,
-        });
-
-        console.log(`${stateModel.nameStr} closed:`, txSig);
-        context.cliConfig.glamState = null;
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        async () => {
+          const txSig = await glamClient.state.close({
+            ...context.txOptions,
+            preInstructions,
+          });
+          context.cliConfig.glamState = null;
+          return txSig;
+        },
+        {
+          skip: options?.yes,
+          message: `Confirm closing vault: ${stateModel.nameStr}\n  - state: ${statePda}\n  - vault: ${stateModel.vault}`,
+        },
+        (txSig) => `${stateModel.nameStr} closed: ${txSig}`,
+      );
     });
 
   program
     .command("wrap")
     .argument("<amount>", "Amount to wrap", parseFloat)
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Wrap SOL")
-    .action(async (amount: number) => {
+    .action(async (amount: number, options) => {
       const lamports = new BN(amount * LAMPORTS_PER_SOL);
 
       if (lamports.lte(new BN(0))) {
@@ -362,29 +331,29 @@ export function installVaultCommands(program: Command, context: CliContext) {
         process.exit(1);
       }
 
-      try {
-        const txSig = await context.glamClient.vault.wrap(
-          lamports,
-          context.txOptions,
-        );
-        console.log(`Wrapped ${amount} SOL:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () => context.glamClient.vault.wrap(lamports, context.txOptions),
+        {
+          skip: options?.yes,
+          message: `Confirm wrapping ${amount} SOL`,
+        },
+        (txSig) => `Wrapped ${amount} SOL: ${txSig}`,
+      );
     });
 
   program
     .command("unwrap")
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Unwrap wSOL")
-    .action(async () => {
-      try {
-        const txSig = await context.glamClient.vault.unwrap(context.txOptions);
-        console.log(`All wSOL unwrapped:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+    .action(async (options) => {
+      await executeTxWithErrorHandling(
+        () => context.glamClient.vault.unwrap(context.txOptions),
+        {
+          skip: options?.yes,
+          message: `Confirm unwrapping all wSOL`,
+        },
+        (txSig) => `wSOL unwrapped: ${txSig}`,
+      );
     });
 
   program
@@ -453,7 +422,7 @@ export function installVaultCommands(program: Command, context: CliContext) {
 
   program
     .command("asset-allowlist")
-    .description("Get asset allowlist and corresponding token account")
+    .description("Get vault asset allowlist and corresponding token account")
     .action(async () => {
       const state = await context.glamClient.fetchStateAccount();
       const mints = await fetchMintsAndTokenPrograms(
@@ -481,8 +450,9 @@ export function installVaultCommands(program: Command, context: CliContext) {
   program
     .command("add-asset")
     .argument("<asset>", "Asset mint public key", validatePublicKey)
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Add a new asset to allowlist")
-    .action(async (asset: PublicKey) => {
+    .action(async (asset: PublicKey, options) => {
       const state = await context.glamClient.fetchStateAccount();
       const assetsSet = new PkSet(state.assets);
 
@@ -492,18 +462,23 @@ export function installVaultCommands(program: Command, context: CliContext) {
       }
 
       const assets = Array.from(assetsSet.add(asset));
-      const txSig = await context.glamClient.state.update(
-        { assets },
-        context.txOptions,
+
+      await executeTxWithErrorHandling(
+        () => context.glamClient.state.update({ assets }, context.txOptions),
+        {
+          skip: options?.yes,
+          message: `Confirm adding ${asset} to allowlist?`,
+        },
+        (txSig) => `${asset} added to allowlist: ${txSig}`,
       );
-      console.log(`Allowlisted asset ${asset}: ${txSig}`);
     });
 
   program
     .command("delete-asset")
     .argument("<asset>", "Asset mint public key", validatePublicKey)
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Delete an asset from allowlist")
-    .action(async (asset: PublicKey) => {
+    .action(async (asset: PublicKey, options) => {
       const state = await context.glamClient.fetchStateAccount();
 
       if (asset.equals(state.baseAssetMint)) {
@@ -512,23 +487,26 @@ export function installVaultCommands(program: Command, context: CliContext) {
       }
 
       const assetsSet = new PkSet(state.assets);
-      let removed = assetsSet.delete(asset);
+      const removed = assetsSet.delete(asset);
       if (!removed) {
         console.error(`${asset} not found in allowlist, nothing to delete`);
         process.exit(1);
       }
 
       const assets = Array.from(assetsSet);
-      const txSig = await context.glamClient.state.update(
-        { assets },
-        context.txOptions,
+      await executeTxWithErrorHandling(
+        () => context.glamClient.state.update({ assets }, context.txOptions),
+        {
+          skip: options?.yes,
+          message: `Confirm deleting ${asset} from allowlist?`,
+        },
+        (txSig) => `${asset} deleted from allowlist: ${txSig}`,
       );
-      console.log(`Deleted asset ${asset} from allowlist: ${txSig}`);
     });
 
   program
     .command("holdings")
-    .description("Get vault holdings")
+    .description("Get all vault holdings")
     .action(async () => {
       const holdings =
         await context.glamClient.price.getVaultHoldings("confirmed");

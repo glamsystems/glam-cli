@@ -7,8 +7,7 @@ import {
 import { Command } from "commander";
 import {
   CliContext,
-  confirmOperation,
-  parseTxError,
+  executeTxWithErrorHandling,
   validatePublicKey,
 } from "../utils";
 
@@ -56,8 +55,9 @@ export function installJupiterCommands(program: Command, context: CliContext) {
   program
     .command("set-max-slippage")
     .argument("<slippage_bps>", "Maximum slippage in basis points", parseInt)
+    .option("-y, --yes", "Skip confirmation", false)
     .description("Set the maximum allowed slippage for swaps")
-    .action(async (slippageBps) => {
+    .action(async (slippageBps, options) => {
       const policy = await context.glamClient.fetchProtocolPolicy(
         context.glamClient.protocolProgram.programId,
         0b0000100,
@@ -66,25 +66,28 @@ export function installJupiterCommands(program: Command, context: CliContext) {
       const currentAllowlist = policy?.swapAllowlist || null;
 
       const newPolicy = new JupiterSwapPolicy(slippageBps, currentAllowlist);
-      try {
-        const txSig = await context.glamClient.access.setProtocolPolicy(
-          context.glamClient.protocolProgram.programId,
-          0b0000100,
-          newPolicy.encode(),
-          context.txOptions,
-        );
-        console.log(`Max slippage set to ${slippageBps} BPS:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.access.setProtocolPolicy(
+            context.glamClient.protocolProgram.programId,
+            0b0000100,
+            newPolicy.encode(),
+            context.txOptions,
+          ),
+        {
+          skip: options?.yes,
+          message: `Confirm setting max slippage to ${slippageBps} BPS`,
+        },
+        (txSig) => `Max slippage set to ${slippageBps} BPS: ${txSig}`,
+      );
     });
 
   program
     .command("allowlist-token")
     .argument("<token>", "Token mint public key", validatePublicKey)
+    .option("-y, --yes", "Skip confirmation", false)
     .description("Add a token to the swap allowlist")
-    .action(async (token) => {
+    .action(async (token, options) => {
       const policy = await context.glamClient.fetchProtocolPolicy(
         context.glamClient.protocolProgram.programId,
         0b0000100,
@@ -100,25 +103,28 @@ export function installJupiterCommands(program: Command, context: CliContext) {
 
       const newAllowlist = [...currentAllowlist, token];
       const newPolicy = new JupiterSwapPolicy(currentSlippage, newAllowlist);
-      try {
-        const txSig = await context.glamClient.access.setProtocolPolicy(
-          context.glamClient.protocolProgram.programId,
-          0b0000100,
-          newPolicy.encode(),
-          context.txOptions,
-        );
-        console.log(`Token ${token} added to swap allowlist:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.access.setProtocolPolicy(
+            context.glamClient.protocolProgram.programId,
+            0b0000100,
+            newPolicy.encode(),
+            context.txOptions,
+          ),
+        {
+          skip: options?.yes,
+          message: `Confirm adding token ${token} to swap allowlist`,
+        },
+        (txSig) => `Token ${token} added to swap allowlist: ${txSig}`,
+      );
     });
 
   program
     .command("remove-token")
     .argument("<token>", "Token mint public key", validatePublicKey)
+    .option("-y, --yes", "Skip confirmation", false)
     .description("Remove a token from the swap allowlist")
-    .action(async (token) => {
+    .action(async (token, options) => {
       const policy = await context.glamClient.fetchProtocolPolicy(
         context.glamClient.protocolProgram.programId,
         0b0000100,
@@ -139,24 +145,27 @@ export function installJupiterCommands(program: Command, context: CliContext) {
         policy.maxSlippageBps,
         newAllowlist.length > 0 ? newAllowlist : null,
       );
-      try {
-        const txSig = await context.glamClient.access.setProtocolPolicy(
-          context.glamClient.protocolProgram.programId,
-          0b0000100,
-          newPolicy.encode(),
-          context.txOptions,
-        );
-        console.log(`Token ${token} removed from swap allowlist:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.access.setProtocolPolicy(
+            context.glamClient.protocolProgram.programId,
+            0b0000100,
+            newPolicy.encode(),
+            context.txOptions,
+          ),
+        {
+          skip: options?.yes,
+          message: `Confirm removing token ${token} from swap allowlist`,
+        },
+        (txSig) => `Token ${token} removed from swap allowlist: ${txSig}`,
+      );
     });
 
   program
     .command("clear-allowlist")
+    .option("-y, --yes", "Skip confirmation", false)
     .description("Clear the swap allowlist (allow all tokens)")
-    .action(async () => {
+    .action(async (options) => {
       const policy = await context.glamClient.fetchProtocolPolicy(
         context.glamClient.protocolProgram.programId,
         0b0000100,
@@ -167,18 +176,20 @@ export function installJupiterCommands(program: Command, context: CliContext) {
         process.exit(1);
       }
       const newPolicy = new JupiterSwapPolicy(policy.maxSlippageBps, null);
-      try {
-        const txSig = await context.glamClient.access.setProtocolPolicy(
-          context.glamClient.protocolProgram.programId,
-          0b0000100,
-          newPolicy.encode(),
-          context.txOptions,
-        );
-        console.log(`Swap allowlist cleared (all tokens now allowed):`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.access.setProtocolPolicy(
+            context.glamClient.protocolProgram.programId,
+            0b0000100,
+            newPolicy.encode(),
+            context.txOptions,
+          ),
+        {
+          skip: options?.yes,
+          message: "Confirm clearing swap allowlist",
+        },
+        (txSig) => `Swap allowlist cleared (all tokens now allowed): ${txSig}`,
+      );
     });
 
   program
@@ -195,7 +206,7 @@ export function installJupiterCommands(program: Command, context: CliContext) {
     )
     .option("--use-v2", "Use v2 instruction", false)
     .option("-d, --only-direct-routes", "Direct routes only")
-    .option("-y, --yes", "Skip confirmation")
+    .option("-y, --yes", "Skip confirmation", false)
     .action(async (from, to, amount, options) => {
       const jupApi = context.glamClient.jupiterSwap.jupApi;
       const tokenFrom = await findToken(jupApi, from);
@@ -215,26 +226,22 @@ export function installJupiterCommands(program: Command, context: CliContext) {
         instructionVersion: useV2 ? "V2" : "V1",
       } as QuoteParams;
 
-      options?.yes ||
-        (await confirmOperation(
-          `Confirm swapping ${amount} ${tokenFrom.symbol} to ${tokenTo.symbol} with quote params: ${JSON.stringify(
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.jupiterSwap.swap(
+            { quoteParams },
+            context.txOptions,
+          ),
+        {
+          skip: options?.yes,
+          message: `Confirm swapping ${amount} ${tokenFrom.symbol} to ${tokenTo.symbol} with quote params: ${JSON.stringify(
             quoteParams,
             null,
             2,
           )}`,
-        ));
-
-      try {
-        const txSig = await context.glamClient.jupiterSwap.swap(
-          { quoteParams },
-          context.txOptions,
-        );
-        console.log(
+        },
+        (txSig) =>
           `Swapped ${amount} ${tokenFrom.symbol} to ${tokenTo.symbol}: ${txSig}`,
-        );
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      );
     });
 }

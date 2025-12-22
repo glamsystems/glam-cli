@@ -2,8 +2,7 @@ import { BN } from "@coral-xyz/anchor";
 import { Command } from "commander";
 import {
   CliContext,
-  confirmOperation,
-  parseTxError,
+  executeTxWithErrorHandling,
   validatePublicKey,
 } from "../utils";
 import tokens from "../tokens-verified.json";
@@ -35,8 +34,9 @@ export function installDriftVaultsCommands(
   driftVaults
     .command("allowlist-vault")
     .argument("<vault>", "Drift vault public key", validatePublicKey)
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Add a Drift vault to the allowlist")
-    .action(async (vault) => {
+    .action(async (vault, options) => {
       const policy =
         (await context.glamClient.fetchProtocolPolicy(
           context.glamClient.extDriftProgram.programId,
@@ -49,25 +49,28 @@ export function installDriftVaultsCommands(
       }
 
       policy.vaultsAllowlist.push(vault);
-      try {
-        const txSig = await context.glamClient.access.setProtocolPolicy(
-          context.glamClient.extDriftProgram.programId,
-          0b10,
-          policy.encode(),
-          context.txOptions,
-        );
-        console.log(`Drift vault ${vault} added to allowlist:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.access.setProtocolPolicy(
+            context.glamClient.extDriftProgram.programId,
+            0b10,
+            policy.encode(),
+            context.txOptions,
+          ),
+        {
+          skip: options?.yes,
+          message: `Confirm adding drift vault ${vault} to allowlist`,
+        },
+        (txSig) => `Drift vault ${vault} added to allowlist: ${txSig}`,
+      );
     });
 
   driftVaults
     .command("remove-vault")
     .argument("<vault>", "Drift vault public key", validatePublicKey)
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Remove a Drift vault from the allowlist")
-    .action(async (vault) => {
+    .action(async (vault, options) => {
       const policy = await context.glamClient.fetchProtocolPolicy(
         context.glamClient.extDriftProgram.programId,
         0b10,
@@ -85,18 +88,20 @@ export function installDriftVaultsCommands(
       policy.vaultsAllowlist = policy.vaultsAllowlist.filter(
         (v) => !v.equals(vault),
       );
-      try {
-        const txSig = await context.glamClient.access.setProtocolPolicy(
-          context.glamClient.extDriftProgram.programId,
-          0b10,
-          policy.encode(),
-          context.txOptions,
-        );
-        console.log(`Drift vault ${vault} removed from allowlist:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.access.setProtocolPolicy(
+            context.glamClient.extDriftProgram.programId,
+            0b10,
+            policy.encode(),
+            context.txOptions,
+          ),
+        {
+          skip: options?.yes,
+          message: `Confirm removing drift vault ${vault} from allowlist`,
+        },
+        (txSig) => `Drift vault ${vault} removed from allowlist: ${txSig}`,
+      );
     });
 
   driftVaults
@@ -142,7 +147,7 @@ export function installDriftVaultsCommands(
     .command("deposit")
     .argument("<vault>", "Drift vault public key", validatePublicKey)
     .argument("<amount>", "Amount to deposit", parseFloat)
-    .option("-y, --yes", "Skip confirmation prompt")
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Deposit to a drift vault")
     .action(async (vault, amount, options) => {
       const { spotMarketIndex } =
@@ -157,73 +162,69 @@ export function installDriftVaultsCommands(
         process.exit(1);
       }
 
-      options?.yes ||
-        (await confirmOperation(
-          `Confirm depositing ${amount} ${tokenInfo.symbol} (${mint}) to drift vault ${vault}?`,
-        ));
-
-      try {
-        const txSig = await context.glamClient.driftVaults.deposit(
-          vault,
-          amountBN,
-          context.txOptions,
-        );
-        console.log(`Deposit to drift vault ${vault}: ${txSig}`);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.driftVaults.deposit(
+            vault,
+            amountBN,
+            context.txOptions,
+          ),
+        {
+          skip: options?.yes,
+          message: `Confirm depositing ${amount} ${tokenInfo.symbol} (${mint}) to drift vault ${vault}?`,
+        },
+        (txSig) => `Deposit to drift vault ${vault}: ${txSig}`,
+      );
     });
 
   driftVaults
     .command("request-withdraw")
     .argument("<vault>", "Drift vault public key", validatePublicKey)
     .argument("<amount>", "Amount of vault shares to withdraw", parseFloat)
-    .option("-y, --yes", "Skip confirmation prompt")
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Request to withdraw from a drift vault")
     .action(async (vault, amount, options) => {
       const { spotMarketIndex, name } =
         await context.glamClient.driftVaults.parseDriftVault(vault);
-      options?.yes ||
-        (await confirmOperation(
-          `Confirm requesting to withdraw ${amount} vault shares from ${name} (${vault})?`,
-        ));
 
       const { decimals } =
         await context.glamClient.drift.fetchAndParseSpotMarket(spotMarketIndex);
 
       const amountBN = new BN(amount * 10 ** decimals);
-      try {
-        const txSig = await context.glamClient.driftVaults.requestWithdraw(
-          vault,
-          amountBN,
-          context.txOptions,
-        );
-        console.log(
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.driftVaults.requestWithdraw(
+            vault,
+            amountBN,
+            context.txOptions,
+          ),
+        {
+          skip: options?.yes,
+          message: `Confirm requesting to withdraw ${amount} vault shares from ${name} (${vault})?`,
+        },
+        (txSig) =>
           `Withdrawal request submitted for drift vault ${name} (${vault}): ${txSig}`,
-        );
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      );
     });
 
   driftVaults
     .command("cancel-withdraw")
     .argument("<vault>", "Drift vault public key", validatePublicKey)
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Cancel the pending withdraw request")
-    .action(async (vault) => {
-      try {
-        const txSig =
-          await context.glamClient.driftVaults.cancelWithdrawRequest(
+    .action(async (vault, options) => {
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.driftVaults.cancelWithdrawRequest(
             vault,
             context.txOptions,
-          );
-        console.log(`Withdrawal request cancelled: ${txSig}`);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+          ),
+        {
+          skip: options?.yes,
+          message: `Confirm canceling withdrawal request from drift vault ${vault}?`,
+        },
+        (txSig) => `Withdrawal request cancelled: ${txSig}`,
+      );
     });
 
   driftVaults
@@ -231,15 +232,10 @@ export function installDriftVaultsCommands(
     .argument("<vault>", "Drift vault public key", validatePublicKey)
     .description("Claim withdrawal")
     .action(async (vault) => {
-      try {
-        const txSig = await context.glamClient.driftVaults.withdraw(
-          vault,
-          context.txOptions,
-        );
-        console.log(`Confirmed withdrawal from drift vault ${vault}: ${txSig}`);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () => context.glamClient.driftVaults.withdraw(vault, context.txOptions),
+        { skip: true },
+        (txSig) => `Confirmed withdrawal from drift vault ${vault}: ${txSig}`,
+      );
     });
 }

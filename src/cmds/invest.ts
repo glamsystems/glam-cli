@@ -1,13 +1,9 @@
 import { BN } from "@coral-xyz/anchor";
-import {
-  GlamClient,
-  fetchMintAndTokenProgram,
-} from "@glamsystems/glam-sdk";
+import { GlamClient, fetchMintAndTokenProgram } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
 import {
   CliContext,
-  confirmOperation,
-  parseTxError,
+  executeTxWithErrorHandling,
   validatePublicKey,
 } from "../utils";
 import tokens from "../tokens-verified.json";
@@ -22,7 +18,7 @@ export function installInvestCommands(invest: Command, context: CliContext) {
       validatePublicKey,
     )
     .description("Subscribe to a tokenized vault")
-    .option("-y, --yes", "Skip confirmation prompt")
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .option("-q, --queued", "Subscribe to a tokenized vault in queued mode")
     .action(async (amount, state, options) => {
       let glamClient = context.glamClient;
@@ -54,32 +50,23 @@ export function installInvestCommands(invest: Command, context: CliContext) {
         process.exit(1);
       }
 
-      options?.yes ||
-        (await confirmOperation(
-          `Confirm ${options?.queued ? "queued" : "instant"} subscription with ${amount} ${symbol} (${name})?`,
-        ));
-
       const preInstructions = await glamClient.price.priceVaultIxs(); // this loads lookup tables
       const lookupTables = glamClient.price.lookupTables;
 
-      try {
-        const txSig = await glamClient.invest.subscribe(
-          amountBN,
-          !!options?.queued,
-          {
+      await executeTxWithErrorHandling(
+        () =>
+          glamClient.invest.subscribe(amountBN, !!options?.queued, {
             ...context.txOptions,
             preInstructions: options?.queued ? [] : preInstructions, // queued subscription does not need pricing ixs
             lookupTables,
-          },
-        );
-        console.log(
-          `${glamClient.signer} ${options?.queued ? "queued" : "instant"} subscription:`,
-          txSig,
-        );
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+          }),
+        {
+          skip: options?.yes,
+          message: `Confirm ${options?.queued ? "queued" : "instant"} subscription with ${amount} ${symbol} (${name})?`,
+        },
+        (txSig) =>
+          `${glamClient.signer} ${options?.queued ? "queued" : "instant"} subscription: ${txSig}`,
+      );
     });
 
   invest
@@ -91,24 +78,23 @@ export function installInvestCommands(invest: Command, context: CliContext) {
       const preInstructions = await context.glamClient.price.priceVaultIxs();
       const lookupTables = context.glamClient.price.lookupTables;
 
-      try {
-        const txSig = await context.glamClient.invest.claim({
-          ...context.txOptions,
-          preInstructions,
-          lookupTables,
-        });
-        console.log(`${context.glamClient.signer} claimed shares:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.invest.claim({
+            ...context.txOptions,
+            preInstructions,
+            lookupTables,
+          }),
+        { skip: true },
+        (txSig) => `${context.glamClient.signer} claimed shares: ${txSig}`,
+      );
     });
 
   invest
     .command("redeem")
     .argument("<amount>", "Amount to redeem", parseFloat)
     .description("Request to redeem share tokens")
-    .option("-y, --yes", "Skip confirmation prompt")
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .action(async (amount, options) => {
       const { mint } = await fetchMintAndTokenProgram(
         context.glamClient.connection,
@@ -127,21 +113,15 @@ export function installInvestCommands(invest: Command, context: CliContext) {
         process.exit(1);
       }
 
-      options?.yes ||
-        (await confirmOperation(
-          `Confirm queued redemption of ${amount} shares?`,
-        ));
-
-      try {
-        const txSig = await context.glamClient.invest.queuedRedeem(
-          amountBN,
-          context.txOptions,
-        );
-        console.log(`${context.glamClient.signer} requested to redeem:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.invest.queuedRedeem(amountBN, context.txOptions),
+        {
+          skip: options?.yes,
+          message: `Confirm queued redemption of ${amount} shares`,
+        },
+        (txSig) => `${context.glamClient.signer} requested to redeem: ${txSig}`,
+      );
     });
 
   invest
@@ -151,34 +131,33 @@ export function installInvestCommands(invest: Command, context: CliContext) {
       const preInstructions = await context.glamClient.price.priceVaultIxs(); // this loads lookup tables
       const lookupTables = context.glamClient.price.lookupTables;
 
-      try {
-        const txSig = await context.glamClient.invest.claim({
-          ...context.txOptions,
-          preInstructions,
-          lookupTables,
-        });
-        console.log(`${context.glamClient.signer} claimed tokens:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.invest.claim({
+            ...context.txOptions,
+            preInstructions,
+            lookupTables,
+          }),
+        { skip: true },
+        (txSig) => `${context.glamClient.signer} claimed tokens: ${txSig}`,
+      );
     });
 
   invest
     .command("cancel")
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description(
       "Cancel a queued subscription or redemption that has not been fulfilled",
     )
-    .action(async () => {
-      try {
-        const txSig = await context.glamClient.invest.cancel(context.txOptions);
-        console.log(
-          `${context.glamClient.signer} cancelled queued request:`,
-          txSig,
-        );
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+    .action(async (options) => {
+      await executeTxWithErrorHandling(
+        () => context.glamClient.invest.cancel(context.txOptions),
+        {
+          skip: options?.yes,
+          message: "Confirm canceling queued subscription or redemption?",
+        },
+        (txSig) =>
+          `${context.glamClient.signer} cancelled queued request: ${txSig}`,
+      );
     });
 }

@@ -2,8 +2,7 @@ import { BN } from "@coral-xyz/anchor";
 import { Command } from "commander";
 import {
   CliContext,
-  confirmOperation,
-  parseTxError,
+  executeTxWithErrorHandling,
   validatePublicKey,
 } from "../utils";
 import { KaminoVaultsPolicy } from "@glamsystems/glam-sdk";
@@ -34,8 +33,9 @@ export function installKaminoVaultsCommands(
   kvaults
     .command("allowlist-vault")
     .argument("<vault>", "Kamino vault public key", validatePublicKey)
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Add a vault to the allowlist")
-    .action(async (vault) => {
+    .action(async (vault, options) => {
       const policy =
         (await context.glamClient.fetchProtocolPolicy(
           context.glamClient.extKaminoProgram.programId,
@@ -48,25 +48,28 @@ export function installKaminoVaultsCommands(
       }
 
       policy.vaultsAllowlist.push(vault);
-      try {
-        const txSig = await context.glamClient.access.setProtocolPolicy(
-          context.glamClient.extKaminoProgram.programId,
-          0b10,
-          policy.encode(),
-          context.txOptions,
-        );
-        console.log(`Kamino vault ${vault} added to allowlist:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.access.setProtocolPolicy(
+            context.glamClient.extKaminoProgram.programId,
+            0b10,
+            policy.encode(),
+            context.txOptions,
+          ),
+        {
+          skip: options?.yes,
+          message: `Confirm adding Kamino vault ${vault} to allowlist`,
+        },
+        (txSig) => `Kamino vault ${vault} added to allowlist: ${txSig}`,
+      );
     });
 
   kvaults
     .command("remove-vault")
     .argument("<vault>", "Kamino vault public key", validatePublicKey)
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Remove a vault from the allowlist")
-    .action(async (vault) => {
+    .action(async (vault, options) => {
       const policy = await context.glamClient.fetchProtocolPolicy(
         context.glamClient.extKaminoProgram.programId,
         0b10,
@@ -84,51 +87,46 @@ export function installKaminoVaultsCommands(
       policy.vaultsAllowlist = policy.vaultsAllowlist.filter(
         (v) => !v.equals(vault),
       );
-      try {
-        const txSig = await context.glamClient.access.setProtocolPolicy(
-          context.glamClient.extKaminoProgram.programId,
-          0b10,
-          policy.encode(),
-          context.txOptions,
-        );
-        console.log(`Kamino vault ${vault} removed from allowlist:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.access.setProtocolPolicy(
+            context.glamClient.extKaminoProgram.programId,
+            0b10,
+            policy.encode(),
+            context.txOptions,
+          ),
+        {
+          skip: options?.yes,
+          message: `Confirm removing Kamino vault ${vault} from allowlist`,
+        },
+        (txSig) => `Kamino vault ${vault} removed from allowlist: ${txSig}`,
+      );
     });
 
   kvaults
     .command("deposit")
     .argument("<vault>", "Kamino vault public key", validatePublicKey)
     .argument("<amount>", "Amount to deposit", parseFloat)
-    .option("-y, --yes", "Skip confirmation prompt")
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Deposit to a Kamino vault")
     .action(async (vault, amount, options) => {
       const vaultState =
         await context.glamClient.kaminoVaults.fetchAndParseVaultState(vault);
       const { tokenMint, tokenMintDecimals, vaultLookupTable } = vaultState;
 
-      options?.yes ||
-        (await confirmOperation(
-          `Confirm depositing ${amount} ${tokenMint} to Kamino vault ${vault}?`,
-        ));
-
-      try {
-        const amountBN = new BN(amount * 10 ** tokenMintDecimals);
-        const txSig = await context.glamClient.kaminoVaults.deposit(
-          vault,
-          amountBN,
-          {
+      const amountBN = new BN(amount * 10 ** tokenMintDecimals);
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.kaminoVaults.deposit(vault, amountBN, {
             ...context.txOptions,
             lookupTables: [vaultLookupTable],
-          },
-        );
-        console.log(`Deposit successful: ${txSig}`);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+          }),
+        {
+          skip: options?.yes,
+          message: `Confirm depositing ${amount} ${tokenMint} to Kamino vault ${vault}?`,
+        },
+        (txSig) => `Deposit successful: ${txSig}`,
+      );
     });
 
   kvaults
@@ -139,32 +137,25 @@ export function installKaminoVaultsCommands(
       "Burn Kamino vault tokens and withdraw deposit asset",
       parseFloat,
     )
-    .option("-y, --yes", "Skip confirmation prompt")
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Deposit to a Kamino vault")
     .action(async (vault, amount, options) => {
       const vaultState =
         await context.glamClient.kaminoVaults.fetchAndParseVaultState(vault);
       const { sharesMintDecimals, vaultLookupTable } = vaultState;
 
-      options?.yes ||
-        (await confirmOperation(
-          `Confirm withdrawing ${amount} shares from Kamino vault ${vault}?`,
-        ));
-
-      try {
-        const amountBN = new BN(amount * 10 ** sharesMintDecimals);
-        const txSig = await context.glamClient.kaminoVaults.withdraw(
-          vault,
-          amountBN,
-          {
+      const amountBN = new BN(amount * 10 ** sharesMintDecimals);
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.kaminoVaults.withdraw(vault, amountBN, {
             ...context.txOptions,
             lookupTables: [vaultLookupTable],
-          },
-        );
-        console.log(`Withdraw successful: ${txSig}`);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+          }),
+        {
+          skip: options?.yes,
+          message: `Confirm withdrawing ${amount} shares from Kamino vault ${vault}?`,
+        },
+        (txSig) => `Withdrawal successful: ${txSig}`,
+      );
     });
 }

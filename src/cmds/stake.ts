@@ -1,6 +1,10 @@
 import { Command } from "commander";
 import { PublicKey } from "@solana/web3.js";
-import { CliContext, parseTxError } from "../utils";
+import {
+  CliContext,
+  executeTxWithErrorHandling,
+  validatePublicKey,
+} from "../utils";
 import { getStakeAccountsWithStates } from "@glamsystems/glam-sdk";
 
 export function installStakeCommands(stake: Command, context: CliContext) {
@@ -41,18 +45,22 @@ export function installStakeCommands(stake: Command, context: CliContext) {
       "<accounts...>",
       "Stake accounts to deactivate (space-separated pubkeys)",
     )
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Deactivate stake accounts")
-    .action(async (accounts: string[]) => {
-      try {
-        const txSig = await context.glamClient.stake.deactivate(
-          accounts.map((a: string) => new PublicKey(a)),
-          context.txOptions,
-        );
-        console.log(`Deactivated ${accounts}:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+    .action(async (accounts: string[], options) => {
+      const accountsArray = accounts.map(validatePublicKey);
+      const accountList = accountsArray.map((a) => a.toBase58()).join(", ");
+
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.stake.deactivate(accountsArray, context.txOptions),
+        {
+          skip: options?.yes,
+          message: `Confirm deactivating ${accountsArray.length} stake account(s):\n  ${accountList}`,
+        },
+        (txSig) =>
+          `Deactivated ${accountsArray.length} stake account(s): ${txSig}`,
+      );
     });
 
   stake
@@ -61,17 +69,21 @@ export function installStakeCommands(stake: Command, context: CliContext) {
       "<accounts...>",
       "Stake accounts to withdraw from (space-separated pubkeys)",
     )
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Withdraw from stake accounts")
-    .action(async (accounts) => {
-      try {
-        const txSig = await context.glamClient.stake.withdraw(
-          accounts.map((a: string) => new PublicKey(a)),
-          context.txOptions,
-        );
-        console.log(`Withdrew from ${accounts}:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+    .action(async (accounts: string[], options) => {
+      // Parse all account strings to PublicKeys
+      const accountsArray = accounts.map(validatePublicKey);
+      const accountList = accountsArray.map((a) => a.toBase58()).join(", ");
+
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.stake.withdraw(accountsArray, context.txOptions),
+        {
+          skip: options?.yes,
+          message: `Confirm withdrawing from ${accountsArray.length} stake account(s):\n  ${accountList}`,
+        },
+        (txSig) => `Withdrawal completed: ${txSig}`,
+      );
     });
 }

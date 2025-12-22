@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { CliContext, confirmOperation, parseTxError } from "../utils";
+import { CliContext, executeTxWithErrorHandling } from "../utils";
 import {
   IntegrationAcl,
   DelegateAcl,
@@ -227,18 +227,14 @@ export function installTimelockCommands(program: Command, context: CliContext) {
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Set timelock duration")
     .action(async (duration, { yes }) => {
-      yes || (await confirmOperation(`Set timelock to ${duration} seconds?`));
-
-      try {
-        const txSig = await context.glamClient.timelock.set(
-          duration,
-          context.txOptions,
-        );
-        console.log(`Timelock updated:`, txSig);
-      } catch (error) {
-        console.error("Error setting timelock:", parseTxError(error));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () => context.glamClient.timelock.set(duration, context.txOptions),
+        {
+          skip: yes,
+          message: `Set timelock to ${duration} seconds?`,
+        },
+        (txSig) => `Timelock updated: ${txSig}`,
+      );
     });
 
   program
@@ -246,17 +242,14 @@ export function installTimelockCommands(program: Command, context: CliContext) {
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Apply timelocked changes")
     .action(async ({ yes }) => {
-      yes || (await confirmOperation("Apply timelocked changes?"));
-
-      try {
-        const txSig = await context.glamClient.timelock.apply(
-          context.txOptions,
-        );
-        console.log(`Timelock applied:`, txSig);
-      } catch (error) {
-        console.error("Error applying timelock:", parseTxError(error));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () => context.glamClient.timelock.apply(context.txOptions),
+        {
+          skip: yes,
+          message: "Apply timelocked changes?",
+        },
+        (txSig) => `Timelock applied: ${txSig}`,
+      );
     });
 
   program
@@ -264,16 +257,13 @@ export function installTimelockCommands(program: Command, context: CliContext) {
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Cancel pending timelocked changes")
     .action(async ({ yes }) => {
-      yes || (await confirmOperation("Cancel pending timelocked changes?"));
-
-      try {
-        const txSig = await context.glamClient.timelock.cancel(
-          context.txOptions,
-        );
-        console.log(`Timelock cancelled:`, txSig);
-      } catch (error) {
-        console.error("Error cancelling timelock:", parseTxError(error));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () => context.glamClient.timelock.cancel(context.txOptions),
+        {
+          skip: yes,
+          message: "Cancel pending timelocked changes?",
+        },
+        (txSig) => `Timelock cancelled: ${txSig}`,
+      );
     });
 }

@@ -9,8 +9,7 @@ import {
 import { Command } from "commander";
 import {
   CliContext,
-  confirmOperation,
-  parseTxError,
+  executeTxWithErrorHandling,
   validatePublicKey,
 } from "../utils";
 import { PublicKey } from "@solana/web3.js";
@@ -43,8 +42,9 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
   klend
     .command("allowlist-market")
     .argument("<market>", "Kamino lending market public key", validatePublicKey)
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Add a market to the allowlist")
-    .action(async (market) => {
+    .action(async (market, options) => {
       const policy =
         (await context.glamClient.fetchProtocolPolicy(
           context.glamClient.extKaminoProgram.programId,
@@ -57,25 +57,28 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
       }
 
       policy.marketsAllowlist.push(market);
-      try {
-        const txSig = await context.glamClient.access.setProtocolPolicy(
-          context.glamClient.extKaminoProgram.programId,
-          0b01,
-          policy.encode(),
-          context.txOptions,
-        );
-        console.log(`Kamino market ${market} added to allowlist:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.access.setProtocolPolicy(
+            context.glamClient.extKaminoProgram.programId,
+            0b01,
+            policy.encode(),
+            context.txOptions,
+          ),
+        {
+          skip: options?.yes,
+          message: `Confirm adding market ${market}`,
+        },
+        (txSig) => `Kamino market ${market} added to allowlist: ${txSig}`,
+      );
     });
 
   klend
     .command("remove-market")
     .argument("<market>", "Kamino lending market public key", validatePublicKey)
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Remove a market from the allowlist")
-    .action(async (market) => {
+    .action(async (market, options) => {
       const policy = await context.glamClient.fetchProtocolPolicy(
         context.glamClient.extKaminoProgram.programId,
         0b01,
@@ -93,25 +96,28 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
       policy.marketsAllowlist = policy.marketsAllowlist.filter(
         (m) => !m.equals(market),
       );
-      try {
-        const txSig = await context.glamClient.access.setProtocolPolicy(
-          context.glamClient.extKaminoProgram.programId,
-          0b01,
-          policy.encode(),
-          context.txOptions,
-        );
-        console.log(`Kamino market ${market} removed from allowlist:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.access.setProtocolPolicy(
+            context.glamClient.extKaminoProgram.programId,
+            0b01,
+            policy.encode(),
+            context.txOptions,
+          ),
+        {
+          skip: options?.yes,
+          message: `Confirm removing market ${market}`,
+        },
+        (txSig) => `Kamino market ${market} removed from allowlist: ${txSig}`,
+      );
     });
 
   klend
     .command("allowlist-borrowable-asset")
     .argument("<asset>", "Borrowable asset public key", validatePublicKey)
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Add a borrowable asset to the allowlist")
-    .action(async (asset) => {
+    .action(async (asset, options) => {
       const policy =
         (await context.glamClient.fetchProtocolPolicy(
           context.glamClient.extKaminoProgram.programId,
@@ -125,25 +131,28 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
       }
 
       policy.borrowAllowlist.push(asset);
-      try {
-        const txSig = await context.glamClient.access.setProtocolPolicy(
-          context.glamClient.extKaminoProgram.programId,
-          0b01,
-          policy.encode(),
-          context.txOptions,
-        );
-        console.log(`Borrowable asset ${asset} added to allowlist:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.access.setProtocolPolicy(
+            context.glamClient.extKaminoProgram.programId,
+            0b01,
+            policy.encode(),
+            context.txOptions,
+          ),
+        {
+          skip: options?.yes,
+          message: `Confirm adding borrowable asset ${asset}`,
+        },
+        (txSig) => `Borrowable asset ${asset} added to allowlist: ${txSig}`,
+      );
     });
 
   klend
     .command("remove-borrowable-asset")
     .argument("<asset>", "Borrowable asset public key", validatePublicKey)
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Remove a borrowable asset from the allowlist")
-    .action(async (asset) => {
+    .action(async (asset, options) => {
       const policy = await context.glamClient.fetchProtocolPolicy(
         context.glamClient.extKaminoProgram.programId,
         0b01,
@@ -161,33 +170,32 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
       policy.borrowAllowlist = policy.borrowAllowlist.filter(
         (a) => !a.equals(asset),
       );
-      try {
-        const txSig = await context.glamClient.access.setProtocolPolicy(
-          context.glamClient.extKaminoProgram.programId,
-          0b01,
-          policy.encode(),
-          context.txOptions,
-        );
-        console.log(`Borrowable asset ${asset} removed from allowlist:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.access.setProtocolPolicy(
+            context.glamClient.extKaminoProgram.programId,
+            0b01,
+            policy.encode(),
+            context.txOptions,
+          ),
+        {
+          skip: options?.yes,
+          message: `Confirm removing borrowable asset ${asset}`,
+        },
+        (txSig) => `Borrowable asset ${asset} removed from allowlist: ${txSig}`,
+      );
     });
 
   klend
     .command("init")
     .description("Initialize Kamino user")
     .action(async () => {
-      try {
-        const txSig = await context.glamClient.kaminoLending.initUserMetadata(
-          context.txOptions,
-        );
-        console.log(`Initialized Kamino user:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        throw e;
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.kaminoLending.initUserMetadata(context.txOptions),
+        { skip: true },
+        (txSig) => `Initialized Kamino user: ${txSig}`,
+      );
     });
 
   klend
@@ -255,114 +263,122 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
     });
 
   klend
-    .command("deposit <market> <asset> <amount>")
+    .command("deposit")
+    .argument("<market>", "Kamino lending market public key", validatePublicKey)
+    .argument("<asset>", "Asset public key", validatePublicKey)
+    .argument("<amount>", "Amount to deposit", parseFloat)
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Deposit to Kamino Lending market")
-    .option("-y, --yes", "Skip confirmation prompt")
     .action(async (market, asset, amount, options) => {
-      options?.yes ||
-        (await confirmOperation(`Confirm deposit of ${amount} ${asset}?`));
-
       const decimals = ASSETS_MAINNET.get(asset)?.decimals;
       if (!decimals) {
         console.error(`Asset ${asset} not supported`);
         process.exit(1);
       }
 
-      try {
-        const txSig = await context.glamClient.kaminoLending.deposit(
-          market,
-          asset,
-          parseFloat(amount) * 10 ** decimals,
-          context.txOptions,
-        );
-        console.log(`Deposit ${amount} ${asset} to Kamino from vault:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        throw e;
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.kaminoLending.deposit(
+            market,
+            asset,
+            amount * 10 ** decimals,
+            context.txOptions,
+          ),
+        {
+          skip: options?.yes,
+          message: `Confirm depositing ${amount} ${asset}?`,
+        },
+        (txSig) => `Deposited ${amount} ${asset}: ${txSig}`,
+      );
     });
 
   klend
-    .command("withdraw <market> <asset> <amount>")
+    .command("withdraw")
+    .argument("<market>", "Kamino lending market public key", validatePublicKey)
+    .argument("<asset>", "Asset public key", validatePublicKey)
+    .argument("<amount>", "Amount to withdraw", parseFloat)
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Withdraw asset from Kamino Lending market")
-    .option("-y, --yes", "Skip confirmation prompt")
     .action(async (market, asset, amount, options) => {
-      options?.yes ||
-        (await confirmOperation(`Confirm withdrawing ${amount} ${asset}?`));
-
       const decimals = ASSETS_MAINNET.get(asset)?.decimals;
       if (!decimals) {
         console.error(`Asset ${asset} not supported`);
         process.exit(1);
       }
 
-      try {
-        const txSig = await context.glamClient.kaminoLending.withdraw(
-          market,
-          asset,
-          parseFloat(amount) * 10 ** decimals,
-          context.txOptions,
-        );
-        console.log(`Withdraw ${amount} ${asset} from Kamino:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        throw e;
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.kaminoLending.withdraw(
+            market,
+            asset,
+            amount * 10 ** decimals,
+            context.txOptions,
+          ),
+        {
+          skip: options?.yes,
+          message: `Confirm withdrawing ${amount} ${asset}`,
+        },
+        (txSig) => `Withdraw ${amount} ${asset}: ${txSig}`,
+      );
     });
 
   klend
-    .command("borrow <market> <asset> <amount>")
+    .command("borrow")
+    .argument("<market>", "Kamino lending market public key", validatePublicKey)
+    .argument("<asset>", "Asset public key", validatePublicKey)
+    .argument("<amount>", "Amount to repay", parseFloat)
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Borrow from Kamino Lending market")
-    .option("-y, --yes", "Skip confirmation prompt")
     .action(async (market, asset, amount, options) => {
-      options?.yes ||
-        (await confirmOperation(`Confirm borrow of ${amount} ${asset}?`));
-
       const decimals = ASSETS_MAINNET.get(asset)?.decimals;
       if (!decimals) {
         console.error(`Asset ${asset} not supported`);
         process.exit(1);
       }
 
-      try {
-        const txSig = await context.glamClient.kaminoLending.borrow(
-          market,
-          asset,
-          parseFloat(amount) * 10 ** decimals,
-          context.txOptions,
-        );
-        console.log(`Borrowed ${amount} ${asset} from Kamino:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        throw e;
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.kaminoLending.borrow(
+            market,
+            asset,
+            amount * 10 ** decimals,
+            context.txOptions,
+          ),
+        {
+          skip: options?.yes,
+          message: `Confirm borrowing ${amount} ${asset}`,
+        },
+        (txSig) => `Borrowed ${amount} ${asset}: ${txSig}`,
+      );
     });
 
   klend
-    .command("repay <market> <asset> <amount>")
+    .command("repay")
+    .argument("<market>", "Kamino lending market public key", validatePublicKey)
+    .argument("<asset>", "Asset public key", validatePublicKey)
+    .argument("<amount>", "Amount to repay", parseFloat)
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Repay loan from Kamino Lending market")
-    .option("-y, --yes", "Skip confirmation prompt")
     .action(async (market, asset, amount, options) => {
-      options?.yes ||
-        (await confirmOperation(`Confirm repay of ${amount} ${asset}?`));
-
       const decimals = ASSETS_MAINNET.get(asset)?.decimals;
       if (!decimals) {
         console.error(`Asset ${asset} not supported`);
         process.exit(1);
       }
 
-      try {
-        const txSig = await context.glamClient.kaminoLending.repay(
-          market,
-          asset,
-          parseFloat(amount) * 10 ** decimals,
-          context.txOptions,
-        );
-        console.log(`Repaid ${amount} ${asset} to Kamino:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        throw e;
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.kaminoLending.repay(
+            market,
+            asset,
+            amount * 10 ** decimals,
+            context.txOptions,
+          ),
+        {
+          skip: options?.yes,
+          message: `Confirm repaying ${amount} ${asset}`,
+        },
+        (txSig) => `Repaid ${amount} ${asset}: ${txSig}`,
+      );
     });
 }

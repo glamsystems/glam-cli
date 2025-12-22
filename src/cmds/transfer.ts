@@ -7,8 +7,7 @@ import { Command } from "commander";
 import { PublicKey } from "@solana/web3.js";
 import {
   CliContext,
-  confirmOperation,
-  parseTxError,
+  executeTxWithErrorHandling,
   validatePublicKey,
 } from "../utils";
 import { BN } from "@coral-xyz/anchor";
@@ -39,11 +38,12 @@ export function installTransferCommands(program: Command, context: CliContext) {
     .command("allowlist-destination")
     .argument(
       "<pubkey>",
-      "Pubkey of the destination address to add to the allowlist",
+      "Pubkey of the destination address",
       validatePublicKey,
     )
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Add a destination address to the token transfer allowlist")
-    .action(async (pubkey: PublicKey) => {
+    .action(async (pubkey: PublicKey, options) => {
       const policy =
         (await context.glamClient.fetchProtocolPolicy(
           context.glamClient.extSplProgram.programId,
@@ -58,33 +58,34 @@ export function installTransferCommands(program: Command, context: CliContext) {
       }
 
       policy.allowlist.push(pubkey);
-      try {
-        const txSig = await context.glamClient.access.setProtocolPolicy(
-          context.glamClient.extSplProgram.programId,
-          0b01,
-          policy.encode(),
-          context.txOptions,
-        );
-        console.log(
-          `Added destination ${pubkey.toBase58()} to allowlist. Transaction signature: ${txSig}`,
-        );
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.access.setProtocolPolicy(
+            context.glamClient.extSplProgram.programId,
+            0b01,
+            policy.encode(),
+            context.txOptions,
+          ),
+        {
+          skip: options?.yes,
+          message: `Confirm adding destination ${pubkey} to allowlist?`,
+        },
+        (txSig) => `Added destination ${pubkey} to allowlist: ${txSig}`,
+      );
     });
 
   program
     .command("remove-destination")
     .argument(
       "<pubkey>",
-      "Pubkey of the destination address to remove",
+      "Pubkey of the destination address",
       validatePublicKey,
     )
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description(
       "Remove a destination address from the token transfer allowlist",
     )
-    .action(async (pubkey: PublicKey) => {
+    .action(async (pubkey: PublicKey, options) => {
       const policy = await context.glamClient.fetchProtocolPolicy(
         context.glamClient.extSplProgram.programId,
         0b01,
@@ -96,24 +97,24 @@ export function installTransferCommands(program: Command, context: CliContext) {
       }
 
       policy.allowlist = policy.allowlist.filter((p) => !p.equals(pubkey));
-      try {
-        const txSig = await context.glamClient.access.setProtocolPolicy(
-          context.glamClient.extSplProgram.programId,
-          0b01,
-          policy.encode(),
-          context.txOptions,
-        );
-        console.log(
-          `Removed destination ${pubkey} from allowlist. Transaction signature: ${txSig}`,
-        );
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.access.setProtocolPolicy(
+            context.glamClient.extSplProgram.programId,
+            0b01,
+            policy.encode(),
+            context.txOptions,
+          ),
+        {
+          skip: options?.yes,
+          message: `Confirm removing destination ${pubkey} from allowlist?`,
+        },
+        (txSig) => `Removed destination ${pubkey} from allowlist: ${txSig}`,
+      );
     });
 
   program
-    .argument("<amount>", "Amount to transfer (in token units)", parseFloat)
+    .argument("<amount>", "Amount to transfer", parseFloat)
     .argument("<to>", "Destination address (pubkey)", validatePublicKey)
     .option(
       "-t, --token <mint>",
@@ -121,36 +122,32 @@ export function installTransferCommands(program: Command, context: CliContext) {
       validatePublicKey,
       WSOL,
     )
-    .option("-y, --yes", "Skip confirmation prompt")
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description(
       "Transfer SPL token (defaults to wSOL) to the destination address",
     )
     .action(async (amount, destination: PublicKey, { token, yes }) => {
       const assetLabel = token.equals(WSOL) ? "wSOL" : token.toBase58();
+      const { mint } = await fetchMintAndTokenProgram(
+        context.glamClient.connection,
+        token,
+      );
+      const amountBN = new BN(amount * 10 ** mint.decimals);
 
-      yes ||
-        (await confirmOperation(
-          `Confirm transfer of ${amount} ${assetLabel} to ${destination}?`,
-        ));
-
-      try {
-        const { mint } = await fetchMintAndTokenProgram(
-          context.glamClient.connection,
-          token,
-        );
-        const amountBN = new BN(amount * 10 ** mint.decimals);
-        const txSig = await context.glamClient.vault.tokenTransfer(
-          token,
-          amountBN,
-          destination,
-          context.txOptions,
-        );
-        console.log(
-          `Transferred ${amount} ${assetLabel} to ${destination}. Transaction signature: ${txSig}`,
-        );
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.vault.tokenTransfer(
+            token,
+            amountBN,
+            destination,
+            context.txOptions,
+          ),
+        {
+          skip: yes,
+          message: `Confirm transfer of ${amount} ${assetLabel} to ${destination}?`,
+        },
+        (txSig) =>
+          `Transferred ${amount} ${assetLabel} to ${destination}: ${txSig}`,
+      );
     });
 }

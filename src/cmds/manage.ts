@@ -1,6 +1,10 @@
 import { BN } from "@coral-xyz/anchor";
 import { Command } from "commander";
-import { CliContext, confirmOperation, parseTxError } from "../utils";
+import {
+  CliContext,
+  executeTxWithErrorHandling,
+  validateInvestorAction,
+} from "../utils";
 import { Transaction } from "@solana/web3.js";
 import { findGlamLookupTables } from "@glamsystems/glam-sdk";
 
@@ -24,17 +28,17 @@ export function installManageCommands(manage: Command, context: CliContext) {
 
       const tx = new Transaction().add(...ixs);
 
-      try {
-        const vTx = await context.glamClient.intoVersionedTransaction(tx, {
-          ...context.txOptions,
-          lookupTables,
-        });
-        const txSig = await context.glamClient.sendAndConfirm(vTx);
-        console.log("Priced vault assets:", txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        async () => {
+          const vTx = await context.glamClient.intoVersionedTransaction(tx, {
+            ...context.txOptions,
+            lookupTables,
+          });
+          return context.glamClient.sendAndConfirm(vTx);
+        },
+        { skip: true },
+        (txSig) => `Vault priced: ${txSig}`,
+      );
     });
 
   manage
@@ -44,127 +48,111 @@ export function installManageCommands(manage: Command, context: CliContext) {
       const preInstructions = await context.glamClient.price.priceVaultIxs(); // this loads lookup tables
       const lookupTables = context.glamClient.price.lookupTables;
 
-      try {
-        const txSig = await context.glamClient.invest.fulfill(null, {
-          ...context.txOptions,
-          preInstructions,
-          lookupTables,
-          simulate: true,
-        });
-        console.log(
-          `${context.glamClient.signer} triggered fulfillment:`,
-          txSig,
-        );
-      } catch (e) {
-        console.error(parseTxError(e));
-        throw e;
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.invest.fulfill(null, {
+            ...context.txOptions,
+            preInstructions,
+            lookupTables,
+            simulate: true,
+          }),
+        { skip: true },
+        (txSig) => `Fulfillment triggered: ${txSig}`,
+      );
     });
 
   manage
     .command("claim-fees")
     .description("Claim fees collected by tokenized vault")
     .action(async () => {
-      try {
-        const txSig = await context.glamClient.fees.claimFees();
-        console.log(`${context.glamClient.signer} claimed fees:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        throw e;
-      }
+      await executeTxWithErrorHandling(
+        () => context.glamClient.fees.claimFees(),
+        { skip: true },
+        (txSig) => `Fees claimed: ${txSig}`,
+      );
     });
 
   manage
     .command("update-min-subscription")
     .argument("<amount>", "Minimum subscription amount", parseFloat)
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Update the minimum subscription amount")
-    .action(async (amount) => {
-      const stateModel = await context.glamClient.fetchStateModel();
-      const amountBN = new BN(amount * 10 ** stateModel.baseAssetDecimals!);
-      try {
-        const txSig = await context.glamClient.mint.update(
-          { minSubscription: amountBN },
-          context.txOptions,
-        );
-        console.log(`Updated minimum subscription amount to ${amount}:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        throw e;
-      }
+    .action(async (amount, options) => {
+      const { baseAssetDecimals } = await context.glamClient.fetchStateModel();
+      const amountBN = new BN(amount * 10 ** baseAssetDecimals!);
+
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.mint.update(
+            { minSubscription: amountBN },
+            context.txOptions,
+          ),
+        {
+          skip: options?.yes,
+          message: `Confirm updating minimum subscription amount to ${amount}`,
+        },
+        (txSig) => `Updated minimum subscription amount to ${amount}: ${txSig}`,
+      );
     });
 
   manage
     .command("update-min-redemption")
     .argument("<amount>", "Minimum redemption amount", parseFloat)
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Update the minimum redemption amount")
-    .action(async (amount) => {
-      const stateModel = await context.glamClient.fetchStateModel();
-      const amountBN = new BN(amount * 10 ** stateModel.baseAssetDecimals!);
-      try {
-        const txSig = await context.glamClient.mint.update(
-          { minRedemption: amountBN },
-          context.txOptions,
-        );
-        console.log(`Updated minimum redemption amount to ${amount}:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        throw e;
-      }
+    .action(async (amount, options) => {
+      const { baseAssetDecimals } = await context.glamClient.fetchStateModel();
+      const amountBN = new BN(amount * 10 ** baseAssetDecimals!);
+
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.mint.update(
+            { minRedemption: amountBN },
+            context.txOptions,
+          ),
+        {
+          skip: options?.yes,
+          message: `Confirm updating minimum redemption amount to ${amount}`,
+        },
+        (txSig) => `Updated minimum redemption amount to ${amount}: ${txSig}`,
+      );
     });
 
   manage
     .command("pause")
-    .argument("<action>", "Action to pause", (action) => {
-      if (action !== "subscription" && action !== "redemption") {
-        console.error(`<action> must be "subscription" or "redemption"`);
-        process.exit(1);
-      }
-      return action;
-    })
-    .option("-y, --yes", "Skip confirmation prompt")
+    .argument("<action>", "Action to pause", validateInvestorAction)
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Pause subscription or redemption")
     .action(async (action, options) => {
-      options?.yes || (await confirmOperation(`Confirm pausing ${action}?`));
-
-      const promise =
-        action === "subscription"
-          ? context.glamClient.mint.pauseSubscription(context.txOptions)
-          : context.glamClient.mint.pauseRedemption(context.txOptions);
-
-      try {
-        const txSig = await promise;
-        console.log(`Paused ${action}:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        throw e;
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          action === "subscription"
+            ? context.glamClient.mint.pauseSubscription(context.txOptions)
+            : context.glamClient.mint.pauseRedemption(context.txOptions),
+        {
+          skip: options?.yes,
+          message: `Confirm pausing ${action}`,
+        },
+        (txSig) => `Paused ${action}: ${txSig}`,
+      );
     });
 
   manage
     .command("unpause")
-    .argument("<action>", "Action to pause", (action) => {
-      if (action !== "subscription" && action !== "redemption") {
-        console.error(`<action> must be "subscription" or "redemption"`);
-        process.exit(1);
-      }
-      return action;
-    })
-    .option("-y, --yes", "Skip confirmation prompt")
+    .argument("<action>", "Action to pause", validateInvestorAction)
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Unpause subscription or redemption")
     .action(async (action, options) => {
-      options?.yes || (await confirmOperation(`Confirm unpausing ${action}?`));
-
-      const promise =
-        action === "subscription"
-          ? context.glamClient.mint.unpauseSubscription(context.txOptions)
-          : context.glamClient.mint.unpauseRedemption(context.txOptions);
-
-      try {
-        const txSig = await promise;
-        console.log(`Unpaused ${action}:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        throw e;
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          action === "subscription"
+            ? context.glamClient.mint.unpauseSubscription(context.txOptions)
+            : context.glamClient.mint.unpauseRedemption(context.txOptions),
+        {
+          skip: options?.yes,
+          message: `Confirm unpausing ${action}`,
+        },
+        (txSig) => `Unpaused ${action}: ${txSig}`,
+      );
     });
 }

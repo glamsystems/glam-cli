@@ -209,7 +209,7 @@ export function parseStateJson(json: any): InitStateParams {
   });
 
   const params = {
-    accountType: { [state.accountType]: {} },
+    accountType: StateAccountType.from(state.accountType),
     name: state.name ? nameToChars(state.name) : null,
     enabled: state.enabled !== false,
     assets: state.assets?.map((asset: string) => new PublicKey(asset)) || null,
@@ -228,7 +228,7 @@ export function parseMintJson(
   json: any,
   accountType: StateAccountType,
 ): InitMintParams {
-  if (StateAccountType.equals(accountType, StateAccountType.VAULT)) {
+  if (accountType === StateAccountType.VAULT) {
     throw new Error(
       "Invalid JSON file: mint config is not supported for state account type `vault`",
     );
@@ -326,4 +326,72 @@ export function validateSubAccountId(subAccountId: string): number {
     process.exit(1);
   }
   return parsed;
+}
+
+export function validateFileExists(path: string) {
+  if (!fs.existsSync(path)) {
+    console.error(`File ${path} does not exist`);
+    process.exit(1);
+  }
+  return path;
+}
+
+export function validateInvestorAction(action: string) {
+  if (action !== "subscription" && action !== "redemption") {
+    console.error(`Invalid action. Allowed values: subscription, redemption`);
+    process.exit(1);
+  }
+  return action;
+}
+
+export function validateBooleanInput(input: string) {
+  const normalized = input.toLowerCase().trim();
+  const truthyValues = ["true", "1", "yes", "y", "on", "enable"];
+  const falsyValues = ["false", "0", "no", "n", "off", "disable"];
+
+  if (truthyValues.includes(normalized)) return true;
+  if (falsyValues.includes(normalized)) return false;
+
+  throw new Error(
+    `Invalid boolean value: "${input}". Use: true/false, yes/no, 1/0, enable/disable`,
+  );
+}
+
+export function validateDriftMarketType(input: string) {
+  if (input !== "spot" && input !== "perp") {
+    console.error("Invalid market type. Allowed values: spot, perp");
+    process.exit(1);
+  }
+  return input;
+}
+
+/**
+ * Execute a transaction with standardized error handling
+ * @param txFn - Async function that returns a transaction signature
+ * @param confirmOptions - Options for confirmation prompt
+ * @param successMessage - Success message string or function that takes txSig and returns string
+ */
+export async function executeTxWithErrorHandling(
+  txFn: () => Promise<string>,
+  confirmOptions: {
+    skip: boolean;
+    message?: string;
+  },
+  successMessage: string | ((txSig: string) => string),
+): Promise<void> {
+  if (!confirmOptions.skip) {
+    await confirmOperation(confirmOptions.message || "Confirm operation?");
+  }
+
+  try {
+    const txSig = await txFn();
+    const message =
+      typeof successMessage === "function"
+        ? successMessage(txSig)
+        : `${successMessage} ${txSig}`;
+    console.log(message);
+  } catch (e) {
+    console.error(parseTxError(e));
+    process.exit(1);
+  }
 }

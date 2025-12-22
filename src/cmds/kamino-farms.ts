@@ -1,5 +1,9 @@
 import { Command } from "commander";
-import { CliContext, parseTxError, validatePublicKey } from "../utils";
+import {
+  CliContext,
+  executeTxWithErrorHandling,
+  validatePublicKey,
+} from "../utils";
 import { PublicKey } from "@solana/web3.js";
 import { BN } from "@coral-xyz/anchor";
 
@@ -41,26 +45,30 @@ export function installKaminoFarmsCommands(
       "<farm_states...>",
       "Vault-owned farm states to harvest rewards from",
     )
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Harvest rewards from Kamino farms")
-    .action(async (farmStates: string[]) => {
-      try {
-        const txSig = await context.glamClient.kaminoFarm.harvest(
-          farmStates.map((f) => new PublicKey(f)),
-          context.txOptions,
-        );
-        console.log(`Harvested farm rewards:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+    .action(async (farmStates: string[], options) => {
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.kaminoFarm.harvest(
+            farmStates.map((f) => new PublicKey(f)),
+            context.txOptions,
+          ),
+        {
+          skip: options?.yes,
+          message: `Confirm harvesting farm rewards from ${farmStates.length} farms`,
+        },
+        (txSig) => `Harvested farm rewards: ${txSig}`,
+      );
     });
 
   kfarms
     .command("stake")
     .argument("<farm_state>", "Farm state to stake to", validatePublicKey)
     .argument("<amount>", "Amount of farm token to stake", parseFloat)
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Stake token to a delegated farm")
-    .action(async (farmState: PublicKey, amount: number) => {
+    .action(async (farmState: PublicKey, amount: number, options) => {
       const farms = await context.glamClient.kaminoFarm.fetchAndParseFarmStates(
         [farmState],
       );
@@ -71,25 +79,28 @@ export function installKaminoFarmsCommands(
       const { farmTokenDecimals } = parsedFarmState;
       const amountBN = new BN(amount * 10 ** farmTokenDecimals.toNumber());
 
-      try {
-        const txSig = await context.glamClient.kaminoFarm.stake(
-          amountBN,
-          farmState,
-          context.txOptions,
-        );
-        console.log(`Staked farm token:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.kaminoFarm.stake(
+            amountBN,
+            farmState,
+            context.txOptions,
+          ),
+        {
+          skip: options?.yes,
+          message: `Confirm staking to farm ${farmState}`,
+        },
+        (txSig) => `Staked farm token: ${txSig}`,
+      );
     });
 
   kfarms
     .command("unstake")
     .argument("<farm_state>", "Farm state to unstake from", validatePublicKey)
     .argument("<amount>", "Amount of farm token to unstake", parseFloat)
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Unstake token from a delegated farm")
-    .action(async (farmState: PublicKey, amount: number) => {
+    .action(async (farmState: PublicKey, amount: number, options) => {
       const farms = await context.glamClient.kaminoFarm.fetchAndParseFarmStates(
         [farmState],
       );
@@ -102,16 +113,18 @@ export function installKaminoFarmsCommands(
         new BN(10).pow(new BN(18)),
       );
 
-      try {
-        const txSig = await context.glamClient.kaminoFarm.unstake(
-          amountBN,
-          farmState,
-          context.txOptions,
-        );
-        console.log(`Unstaked farm token:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.kaminoFarm.unstake(
+            amountBN,
+            farmState,
+            context.txOptions,
+          ),
+        {
+          skip: options?.yes,
+          message: `Confirm unstaking from farm ${farmState}`,
+        },
+        (txSig) => `Unstaked farm token: ${txSig}`,
+      );
     });
 }

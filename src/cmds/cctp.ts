@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { CliContext, parseTxError } from "../utils";
+import { CliContext, executeTxWithErrorHandling } from "../utils";
 import { BN } from "@coral-xyz/anchor";
 import { CctpPolicy, publicKeyToEvmAddress } from "@glamsystems/glam-sdk";
 import { evmAddressToPublicKey } from "@glamsystems/glam-sdk";
@@ -32,8 +32,9 @@ export function installCctpCommands(program: Command, context: CliContext) {
     .argument("<domain>", "CCTP domain", parseInt)
     .argument("<destination_address>", "Destination address")
     .option("--base58", "Address is a base58 string")
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Add a destination to the allowlist")
-    .action(async (domain, destinationAddress, { base58 }) => {
+    .action(async (domain, destinationAddress, { base58, yes }) => {
       const recipientPubkey = base58
         ? new PublicKey(destinationAddress)
         : evmAddressToPublicKey(destinationAddress);
@@ -56,21 +57,21 @@ export function installCctpCommands(program: Command, context: CliContext) {
       }
 
       cctpPolicy.allowedDestinations.push({ domain, address: recipientPubkey });
-      try {
-        const txSig = await context.glamClient.access.setProtocolPolicy(
-          context.glamClient.extCctpProgram.programId,
-          0b01,
-          cctpPolicy.encode(),
-          context.txOptions,
-        );
-        console.log(
-          `Destination ${destinationAddress} (domain ${domain}) added to allowlist:`,
-          txSig,
-        );
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.access.setProtocolPolicy(
+            context.glamClient.extCctpProgram.programId,
+            0b01,
+            cctpPolicy.encode(),
+            context.txOptions,
+          ),
+        {
+          skip: yes,
+          message: `Confirm adding destination ${destinationAddress} (domain ${domain}) to allowlist`,
+        },
+        (txSig) =>
+          `Destination ${destinationAddress} (domain ${domain}) added to allowlist: ${txSig}`,
+      );
     });
 
   program
@@ -78,8 +79,9 @@ export function installCctpCommands(program: Command, context: CliContext) {
     .argument("<domain>", "CCTP domain", parseInt)
     .argument("<destination_address>", "Destination address")
     .option("--base58", "Address is a base58 string")
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Remove a destination from the allowlist")
-    .action(async (domain, destinationAddress, { base58 }) => {
+    .action(async (domain, destinationAddress, { base58, yes }) => {
       const recipientPubkey = base58
         ? new PublicKey(destinationAddress)
         : evmAddressToPublicKey(destinationAddress);
@@ -96,21 +98,21 @@ export function installCctpCommands(program: Command, context: CliContext) {
       cctpPolicy.allowedDestinations = cctpPolicy.allowedDestinations.filter(
         (d) => !(d.domain === domain && d.address.equals(recipientPubkey)),
       );
-      try {
-        const txSig = await context.glamClient.access.setProtocolPolicy(
-          context.glamClient.extCctpProgram.programId,
-          0b01,
-          cctpPolicy.encode(),
-          context.txOptions,
-        );
-        console.log(
-          `Destination ${destinationAddress} (domain ${domain}) removed from allowlist:`,
-          txSig,
-        );
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.access.setProtocolPolicy(
+            context.glamClient.extCctpProgram.programId,
+            0b01,
+            cctpPolicy.encode(),
+            context.txOptions,
+          ),
+        {
+          skip: yes,
+          message: `Confirm removing destination ${destinationAddress} (domain ${domain}) from allowlist`,
+        },
+        (txSig) =>
+          `Destination ${destinationAddress} (domain ${domain}) removed from allowlist: ${txSig}`,
+      );
     });
 
   // https://developers.circle.com/cctp/cctp-supported-blockchains#cctp-v2-supported-domains
@@ -121,52 +123,57 @@ export function installCctpCommands(program: Command, context: CliContext) {
     .argument("<destination_address>", "EVM address")
     .option("--base58", "Address is a base58 string")
     .option("--fast", "Fast transfer (lower finality threshold)", false)
+    .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Bridge USDC to an EVM chain")
-    .action(async (amount, domain, destinationAddress, { base58, fast }) => {
-      const recipientPubkey = base58
-        ? new PublicKey(destinationAddress)
-        : evmAddressToPublicKey(destinationAddress);
+    .action(
+      async (amount, domain, destinationAddress, { base58, fast, yes }) => {
+        const recipientPubkey = base58
+          ? new PublicKey(destinationAddress)
+          : evmAddressToPublicKey(destinationAddress);
 
-      const cctpPolicy = await context.glamClient.fetchProtocolPolicy(
-        context.glamClient.extCctpProgram.programId,
-        0b01,
-        CctpPolicy,
-      );
-      if (
-        cctpPolicy &&
-        !cctpPolicy.allowedDestinations.find(
-          (d) => d.domain === domain && d.address.equals(recipientPubkey),
-        )
-      ) {
-        console.error(
-          `Destination (${domain}, ${destinationAddress}) not in allowlist`,
+        const cctpPolicy = await context.glamClient.fetchProtocolPolicy(
+          context.glamClient.extCctpProgram.programId,
+          0b01,
+          CctpPolicy,
         );
-        process.exit(1);
-      }
+        if (
+          cctpPolicy &&
+          !cctpPolicy.allowedDestinations.find(
+            (d) => d.domain === domain && d.address.equals(recipientPubkey),
+          )
+        ) {
+          console.error(
+            `Destination (${domain}, ${destinationAddress}) not in allowlist`,
+          );
+          process.exit(1);
+        }
 
-      const amountBN = new BN(amount * 10 ** 6);
+        const amountBN = new BN(amount * 10 ** 6);
 
-      // https://developers.circle.com/cctp/technical-guide#cctp-finality-thresholds
-      const maxFee = amountBN.mul(new BN(1)).div(new BN(10 ** 4));
-      const minFinalityThreshold = fast ? 1000 : 2000;
+        // https://developers.circle.com/cctp/technical-guide#cctp-finality-thresholds
+        const maxFee = amountBN.mul(new BN(1)).div(new BN(10 ** 4));
+        const minFinalityThreshold = fast ? 1000 : 2000;
 
-      try {
-        const txSig = await context.glamClient.cctp.bridgeUsdc(
-          amountBN,
-          domain,
-          recipientPubkey,
+        await executeTxWithErrorHandling(
+          () =>
+            context.glamClient.cctp.bridgeUsdc(
+              amountBN,
+              domain,
+              recipientPubkey,
+              {
+                maxFee,
+                minFinalityThreshold,
+              },
+              context.txOptions,
+            ),
           {
-            maxFee,
-            minFinalityThreshold,
+            skip: yes,
+            message: `Confirm bridging ${amount} USDC to ${destinationAddress} (domain ${domain})`,
           },
-          context.txOptions,
+          (txSig) => `USDC burned: ${txSig}`,
         );
-        console.log(`Deposit for burn:`, txSig);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
-    });
+      },
+    );
 
   program
     .command("receive")
@@ -180,24 +187,24 @@ export function installCctpCommands(program: Command, context: CliContext) {
       "Receive USDC from an EVM chain. Either txHash or nonce is required.",
     )
     .action(async (sourceDomain, { txHash, nonce }) => {
-      try {
-        await context.glamClient.cctp.receiveUsdc(
-          sourceDomain,
-          {
-            txHash,
-            nonce,
-          },
-          {
-            ...context.txOptions,
-            lookupTables: [
-              new PublicKey("qj4EYgsGpnRdt9rvQW3wWZR8JVaKPg9rG9EB8DNgfz8"), // CCTP lookup table
-            ],
-          },
-        );
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.cctp.receiveUsdc(
+            sourceDomain,
+            {
+              txHash,
+              nonce,
+            },
+            {
+              ...context.txOptions,
+              lookupTables: [
+                new PublicKey("qj4EYgsGpnRdt9rvQW3wWZR8JVaKPg9rG9EB8DNgfz8"), // CCTP lookup table
+              ],
+            },
+          ),
+        { skip: true },
+        (txSig) => `Received USDC: ${txSig}`,
+      );
     });
 
   program

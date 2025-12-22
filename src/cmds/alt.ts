@@ -1,8 +1,7 @@
 import { Command } from "commander";
 import {
   CliContext,
-  confirmOperation,
-  parseTxError,
+  executeTxWithErrorHandling,
   validatePublicKey,
 } from "../utils";
 import { PublicKey, Transaction, VersionedTransaction } from "@solana/web3.js";
@@ -54,29 +53,28 @@ export function installAltCommands(alt: Command, context: CliContext) {
       const { tables, tx: b64Txs } = result;
 
       const table = tables[0];
-      options?.yes ||
-        (await confirmOperation(
-          `Confirm creating address lookup table ${table}?`,
-        ));
 
       // It might need multiple txs to set up tables[0]
       // Build and send txs
-      try {
-        const txSigs = [];
-        for (const b64Tx of b64Txs) {
-          const vTx = await context.glamClient.intoVersionedTransaction(
-            buildLegacyTxFromBase64(b64Tx),
-            context.txOptions,
-          );
-          const txSig = await context.glamClient.sendAndConfirm(vTx);
-          txSigs.push(txSig);
-        }
-
-        console.log(`Address lookup table ${table} created:`, txSigs);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        async () => {
+          const txSigs = [];
+          for (const b64Tx of b64Txs) {
+            const vTx = await context.glamClient.intoVersionedTransaction(
+              buildLegacyTxFromBase64(b64Tx),
+              context.txOptions,
+            );
+            const txSig = await context.glamClient.sendAndConfirm(vTx);
+            txSigs.push(txSig);
+          }
+          return txSigs.join(", ");
+        },
+        {
+          skip: options?.yes,
+          message: `Confirm creating address lookup table ${table}?`,
+        },
+        (txSigs) => `Address lookup table ${table} created: ${txSigs}`,
+      );
     });
 
   alt
@@ -106,28 +104,26 @@ export function installAltCommands(alt: Command, context: CliContext) {
           `Address lookup table ${table} from api.glam.systems does not match`,
         );
       }
-      options?.yes ||
-        (await confirmOperation(
-          `Confirm extending address lookup table ${table}?`,
-        ));
-
       // Build and send txs
-      try {
-        const txSigs = [];
-        for (const b64Tx of b64Txs) {
-          const vTx = await context.glamClient.intoVersionedTransaction(
-            buildLegacyTxFromBase64(b64Tx),
-            context.txOptions,
-          );
-          const txSig = await context.glamClient.sendAndConfirm(vTx);
-          txSigs.push(txSig);
-        }
-
-        console.log(`Address lookup table ${table} extended:`, txSigs);
-      } catch (e) {
-        console.error(parseTxError(e));
-        process.exit(1);
-      }
+      await executeTxWithErrorHandling(
+        async () => {
+          const txSigs = [];
+          for (const b64Tx of b64Txs) {
+            const vTx = await context.glamClient.intoVersionedTransaction(
+              buildLegacyTxFromBase64(b64Tx),
+              context.txOptions,
+            );
+            const txSig = await context.glamClient.sendAndConfirm(vTx);
+            txSigs.push(txSig);
+          }
+          return txSigs.join(", ");
+        },
+        {
+          skip: options?.yes,
+          message: `Confirm extending address lookup table ${table}?`,
+        },
+        (txSigs) => `Address lookup table ${table} extended: ${txSigs}`,
+      );
     });
 
   alt
