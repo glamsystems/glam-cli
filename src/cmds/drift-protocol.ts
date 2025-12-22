@@ -239,29 +239,60 @@ export function installDriftProtocolCommands(
           user.perpPositions.map((p) => p.marketIndex),
         );
 
-      for (const {
-        marketIndex,
-        scaledBalance,
-        balanceType,
-      } of user.spotPositions) {
-        const spotMarket = spotMarkets.find(
-          (m) => m.marketIndex === marketIndex,
+      const total = [];
+      for (const spotPosition of user.spotPositions) {
+        const {
+          name: spotMarketName,
+          decimals,
+          marketIndex,
+          cumulativeDepositInterest,
+          cumulativeBorrowInterest,
+          lastOraclePrice,
+        } = spotMarkets.find(
+          (m) => m.marketIndex === spotPosition.marketIndex,
         )!;
-        const { uiAmount } = spotMarket.calcSpotBalance(
-          scaledBalance,
-          balanceType,
+
+        const { uiAmount } = spotPosition.calcBalance(
+          decimals,
+          cumulativeDepositInterest,
+          cumulativeBorrowInterest,
         );
+        const usdValue = (uiAmount * lastOraclePrice.toNumber()) / 1_000_000;
+        total.push(usdValue);
 
         console.log(
-          `${uiAmount} ${spotMarket.name} (market index: ${marketIndex})`,
+          `${uiAmount} ${spotMarketName} (market index: ${marketIndex}): $${usdValue}`,
         );
       }
 
-      for (const { marketIndex, baseAssetAmount } of user.perpPositions) {
+      for (const perpPosition of user.perpPositions) {
+        const {
+          name: perpMarketName,
+          marketIndex,
+          lastOraclePrice,
+          cumulativeFundingRateLong,
+          cumulativeFundingRateShort,
+        } = perpMarkets.find(
+          (m) => m.marketIndex === perpPosition.marketIndex,
+        )!;
+
+        const pos = perpPosition.baseAssetAmount.toNumber() / 1_000_000_000;
+        const usdValue =
+          perpPosition
+            .getUsdValueScaled(
+              lastOraclePrice,
+              cumulativeFundingRateLong,
+              cumulativeFundingRateShort,
+            )
+            .toNumber() / 1_000_000;
+        total.push(usdValue);
+
         console.log(
-          `Base amount: ${baseAssetAmount} (market index: ${marketIndex})`,
+          `${pos} ${perpMarketName} (market index: ${marketIndex}): $${usdValue}`,
         );
       }
+
+      console.log(`Total: $${total.reduce((a, b) => a + b, 0)}`);
     });
 
   drift
