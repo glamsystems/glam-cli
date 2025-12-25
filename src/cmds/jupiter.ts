@@ -3,6 +3,7 @@ import {
   JupiterSwapPolicy,
   QuoteParams,
   TokenListItem,
+  JupTokenList,
 } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
 import {
@@ -16,7 +17,7 @@ async function findToken(
   value: string,
 ): Promise<TokenListItem> {
   const tokenList = await jupApi.fetchTokensList();
-  const tokenInfo = tokenList.find(
+  const tokenInfo = tokenList.tokens.find(
     (t) =>
       t.address === value || t.symbol.toLowerCase() === value.toLowerCase(),
   );

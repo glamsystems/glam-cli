@@ -254,35 +254,6 @@ export function installVaultCommands(program: Command, context: CliContext) {
       );
     });
 
-  // program
-  //   .command("set-protocol-fees")
-  //   .argument(
-  //     "<state>",
-  //     "GLAM state public key for the tokenized vault",
-  //     validatePublicKey,
-  //   )
-  //   .argument("<base-fee-bps>", "Base fee in basis points", parseInt)
-  //   .argument("<flow-fee-bps>", "Flow fee in basis points", parseInt)
-  //   .option("-y, --yes", "Skip confirmation prompt")
-  //   .description("Set protocol fees for a GLAM tokenized vault")
-  //   .action(
-  //     async (
-  //       state: PublicKey,
-  //       baseFeeBps: number,
-  //       flowFeeBps: number,
-  //       options,
-  //     ) => {
-  //       await executeTxWithErrorHandling(
-  //         () => context.glamClient.fees.setProtocolFees(baseFeeBps, flowFeeBps),
-  //         {
-  //           skip: options?.yes,
-  //           message: `Confirm setting protocol base fee to ${baseFeeBps} and flow fee to ${flowFeeBps} for ${state}?`,
-  //         },
-  //         (txSig) => `Protocol fees updated for ${state}: ${txSig}`,
-  //       );
-  //     },
-  //   );
-
   program
     .command("close")
     .argument("[state]", "Vault state public key", validatePublicKey)
@@ -375,10 +346,6 @@ export function installVaultCommands(program: Command, context: CliContext) {
       }
 
       const jupApi = context.glamClient.jupiterSwap.jupApi;
-      const tokenPrices = await jupApi.fetchTokenPrices(mints);
-      const mintToPrice = new Map(
-        tokenPrices.map(({ mint, price }) => [mint, price]),
-      );
       const tokenList = await jupApi.fetchTokensList();
 
       // Define column widths
@@ -397,7 +364,7 @@ export function installVaultCommands(program: Command, context: CliContext) {
         "SOL",
         "N/A",
         solUiAmount.toFixed(9).toString(),
-        (mintToPrice.get(WSOL.toBase58()) * solUiAmount).toFixed(6),
+        (tokenList.getByMint(WSOL)?.usdPrice * solUiAmount).toFixed(6),
       ]);
 
       tokenAccounts.forEach((ta) => {
@@ -405,10 +372,10 @@ export function installVaultCommands(program: Command, context: CliContext) {
         const mintStr = mint.toBase58();
 
         if (all || uiAmount > 0) {
-          const token = tokenList.find((t) => t.address === mintStr);
+          const token = tokenList.getByMint(mintStr);
           const tokenSymbol =
             token?.symbol === "SOL" ? "wSOL" : token?.symbol || "Unknown";
-          const value = mintToPrice.get(mintStr) * uiAmount;
+          const value = token?.usdPrice * uiAmount;
 
           printRow([
             tokenSymbol,
