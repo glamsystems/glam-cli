@@ -2,8 +2,7 @@ import { BN } from "@coral-xyz/anchor";
 import {
   formatBits,
   parseProtocolPermissionsBitmask,
-  getProgramAndBitflagByProtocolName,
-  getProtocolsAndPermissions,
+  parsePermissionNames,
 } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
 import {
@@ -13,66 +12,17 @@ import {
 } from "../utils";
 import { PublicKey } from "@solana/web3.js";
 
-function validateProtocolName(input: string) {
-  const protocol = input.replace(/\s+/g, "");
-  const mapping = getProgramAndBitflagByProtocolName();
-  const entry = mapping[protocol];
-  if (!entry) {
-    console.error(
-      `Unknown protocol name: ${protocol}. Allowed values: ${Object.keys(mapping).join(", ")}.`,
-    );
-    process.exit(1);
-  }
-  return entry;
-}
-
 async function handleDelegatePermissions(
   operation: "grant" | "revoke",
   delegate: PublicKey,
-  sIntegrationProgram: string,
-  sProtocolBitflag: string,
-  permissions: string[],
+  integrationProgram: PublicKey,
+  protocolBitflag: number,
+  protocolName: string,
+  permissionsBitmask: BN,
+  permissionNames: string[],
   context: CliContext,
   yes: boolean,
 ) {
-  const integrationProgram = new PublicKey(sIntegrationProgram);
-  const protocolBitflag = parseInt(sProtocolBitflag, 2);
-
-  // Find permissions defined by the protocol
-  const protocolPermissions =
-    getProtocolsAndPermissions()[sIntegrationProgram]?.[sProtocolBitflag];
-  if (!protocolPermissions) {
-    console.error(
-      `Protocol mapping not found for program ${sIntegrationProgram} and bitflag ${sProtocolBitflag}.`,
-    );
-    process.exit(1);
-  }
-
-  const permissionNameToBitflag: Record<string, BN> = {};
-  for (const [permBitflagStr, name] of Object.entries(
-    protocolPermissions.permissions,
-  )) {
-    permissionNameToBitflag[name] = new BN(permBitflagStr);
-  }
-
-  // Validate input permissions
-  const unknown = permissions.filter(
-    (p) => permissionNameToBitflag[p] === undefined,
-  );
-  if (unknown.length) {
-    const allowed = Object.values(protocolPermissions.permissions).join(", ");
-    console.error(
-      `Unknown permission name(s): ${unknown.join(", ")}. Allowed values: ${allowed}.`,
-    );
-    process.exit(1);
-  }
-
-  const permissionsBitmask = permissions.reduce(
-    (mask: BN, p) => mask.or(permissionNameToBitflag[p]),
-    new BN(0),
-  );
-  const permissionNames = permissions.join(", ");
-
   const action = operation === "grant" ? "Granted" : "Revoked";
   const preposition = operation === "grant" ? "to" : "from";
 
@@ -95,10 +45,10 @@ async function handleDelegatePermissions(
           ),
     {
       skip: yes,
-      message: `Confirm ${operation === "grant" ? "granting" : "revoking"} ${delegate} "${permissionNames}" permissions for protocol "${protocolPermissions.name}"?`,
+      message: `Confirm ${operation === "grant" ? "granting" : "revoking"} ${delegate} "${permissionNames}" permissions for protocol "${protocolName}"?`,
     },
     (txSig) =>
-      `${action} ${delegate} "${permissionNames}" permissions ${preposition} ${integrationProgram} for protocol "${protocolPermissions.name}": ${txSig}`,
+      `${action} ${delegate} "${permissionNames}" permissions ${preposition} ${integrationProgram} for protocol "${protocolName}": ${txSig}`,
   );
 }
 
@@ -147,26 +97,33 @@ export function installDelegateCommands(
     .requiredOption(
       "--protocol <name>",
       "Protocol name (e.g., DriftProtocol, KaminoLend, SplToken)",
-      validateProtocolName,
     )
     .argument("<permissions...>", "Permission names for the given protocol")
     .option("-y, --yes", "Skip confirmation prompt")
     .description("Grant delegate permissions for a single protocol")
     .action(
-      async (
-        delegate: PublicKey,
-        permissions: string[],
-        { protocol: parsedProtocol, yes },
-      ) => {
-        await handleDelegatePermissions(
-          "grant",
-          delegate,
-          parsedProtocol[0],
-          parsedProtocol[1],
-          permissions,
-          context,
-          yes,
-        );
+      async (delegate: PublicKey, permissions: string[], { protocol, yes }) => {
+        try {
+          const { integrationProgram, protocolBitflag, permissionsBitmask } =
+            parsePermissionNames({
+              protocolName: protocol,
+              permissionNames: permissions,
+            });
+          await handleDelegatePermissions(
+            "grant",
+            delegate,
+            integrationProgram,
+            protocolBitflag,
+            protocol,
+            permissions,
+            permissionsBitmask,
+            context,
+            yes,
+          );
+        } catch (e) {
+          console.error(e);
+          process.exit(1);
+        }
       },
     );
 
@@ -176,26 +133,34 @@ export function installDelegateCommands(
     .requiredOption(
       "--protocol <name>",
       "Protocol name (e.g., DriftProtocol, KaminoLend, SplToken)",
-      validateProtocolName,
     )
     .argument("<permissions...>", "Permission names for the given protocol")
     .option("-y, --yes", "Skip confirmation prompt")
     .description("Revoke delegate permissions for a single protocol by name")
     .action(
-      async (
-        delegate: PublicKey,
-        permissions: string[],
-        { protocol: parsedProtocol, yes },
-      ) => {
-        await handleDelegatePermissions(
-          "revoke",
-          delegate,
-          parsedProtocol[0],
-          parsedProtocol[1],
-          permissions,
-          context,
-          yes,
-        );
+      async (delegate: PublicKey, permissions: string[], { protocol, yes }) => {
+        try {
+          const { integrationProgram, protocolBitflag, permissionsBitmask } =
+            parsePermissionNames({
+              protocolName: protocol,
+              permissionNames: permissions,
+            });
+
+          await handleDelegatePermissions(
+            "revoke",
+            delegate,
+            integrationProgram,
+            protocolBitflag,
+            protocol,
+            permissionsBitmask,
+            permissions,
+            context,
+            yes,
+          );
+        } catch (e) {
+          console.error(e);
+          process.exit(1);
+        }
       },
     );
 
