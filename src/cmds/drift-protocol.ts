@@ -201,7 +201,7 @@ export function installDriftProtocolCommands(
     });
 
   drift
-    .command("users")
+    .command("list-users")
     .description("List drift users (sub accounts)")
     .action(async () => {
       const driftUsers =
@@ -213,7 +213,7 @@ export function installDriftProtocolCommands(
     });
 
   drift
-    .command("positions")
+    .command("list-positions")
     .option(
       "-s, --sub-account-id <sub_account_id>",
       "Sub account ID",
@@ -520,7 +520,7 @@ export function installDriftProtocolCommands(
     );
 
   drift
-    .command("orders")
+    .command("list-orders")
     .option(
       "-s, --sub-account-id <sub_account_id>",
       "Sub account ID",

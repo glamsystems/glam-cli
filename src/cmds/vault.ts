@@ -388,8 +388,8 @@ export function installVaultCommands(program: Command, context: CliContext) {
     });
 
   program
-    .command("asset-allowlist")
-    .description("Get vault asset allowlist and corresponding token account")
+    .command("list-assets")
+    .description("List vault asset allowlist and corresponding token accounts")
     .action(async () => {
       const state = await context.glamClient.fetchStateAccount();
       const mints = await fetchMintsAndTokenPrograms(
@@ -415,10 +415,10 @@ export function installVaultCommands(program: Command, context: CliContext) {
     });
 
   program
-    .command("add-asset")
+    .command("allowlist-asset")
     .argument("<asset>", "Asset mint public key", validatePublicKey)
     .option("-y, --yes", "Skip confirmation prompt", false)
-    .description("Add a new asset to allowlist")
+    .description("Add an asset to the allowlist")
     .action(async (asset: PublicKey, options) => {
       const state = await context.glamClient.fetchStateAccount();
       const assetsSet = new PkSet(state.assets);
@@ -441,22 +441,22 @@ export function installVaultCommands(program: Command, context: CliContext) {
     });
 
   program
-    .command("delete-asset")
+    .command("remove-asset")
     .argument("<asset>", "Asset mint public key", validatePublicKey)
     .option("-y, --yes", "Skip confirmation prompt", false)
-    .description("Delete an asset from allowlist")
+    .description("Remove an asset from the allowlist")
     .action(async (asset: PublicKey, options) => {
       const state = await context.glamClient.fetchStateAccount();
 
       if (asset.equals(state.baseAssetMint)) {
-        console.error("Base asset should not be deleted from allowlist");
+        console.error("Base asset should not be removed from allowlist");
         process.exit(1);
       }
 
       const assetsSet = new PkSet(state.assets);
       const removed = assetsSet.delete(asset);
       if (!removed) {
-        console.error(`${asset} not found in allowlist, nothing to delete`);
+        console.error(`${asset} not found in allowlist, nothing to remove`);
         process.exit(1);
       }
 
@@ -465,9 +465,9 @@ export function installVaultCommands(program: Command, context: CliContext) {
         () => context.glamClient.state.update({ assets }, context.txOptions),
         {
           skip: options?.yes,
-          message: `Confirm deleting ${asset} from allowlist?`,
+          message: `Confirm removing ${asset} from allowlist?`,
         },
-        (txSig) => `${asset} deleted from allowlist: ${txSig}`,
+        (txSig) => `${asset} removed from allowlist: ${txSig}`,
       );
     });
 

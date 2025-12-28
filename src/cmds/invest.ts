@@ -144,10 +144,10 @@ export function installInvestCommands(invest: Command, context: CliContext) {
     });
 
   invest
-    .command("cancel")
+    .command("cancel-request")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description(
-      "Cancel a queued subscription or redemption that has not been fulfilled",
+      "Cancel a queued subscription or redemption request that has not been fulfilled",
     )
     .action(async (options) => {
       await executeTxWithErrorHandling(

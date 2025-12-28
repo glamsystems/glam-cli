@@ -11,8 +11,8 @@ import {
 
 export function installTimelockCommands(program: Command, context: CliContext) {
   program
-    .command("get")
-    .description("Get current timelock")
+    .command("view")
+    .description("View current timelock")
     .action(async () => {
       const stateModel = await context.glamClient.fetchStateModel();
       if (!stateModel) {
