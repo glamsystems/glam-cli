@@ -8,7 +8,11 @@ import {
   PkSet,
 } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
-import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+import {
+  LAMPORTS_PER_SOL,
+  PublicKey,
+  TransactionInstruction,
+} from "@solana/web3.js";
 import fs from "fs";
 import {
   CliContext,
@@ -103,7 +107,8 @@ export function installVaultCommands(program: Command, context: CliContext) {
         console.log(`Active GLAM state: ${stateModel.idStr}`);
         console.log(`Vault: ${stateModel.vault}`);
       } catch {
-        context.glamClient.statePda = null;
+        // @ts-expect-error
+        context.glamClient.statePda = undefined;
         console.error("Invalid GLAM state public key.");
         process.exit(1);
       }
@@ -118,7 +123,7 @@ export function installVaultCommands(program: Command, context: CliContext) {
     .action(async (newOwner: PublicKey, options) => {
       const newPortfolioManagerName = options?.name
         ? nameToChars(options.name)
-        : null;
+        : undefined;
 
       const message = newPortfolioManagerName
         ? `Confirm transferring ownership to ${newOwner} (portfolio manager: ${options.name})?`
@@ -220,6 +225,7 @@ export function installVaultCommands(program: Command, context: CliContext) {
           // we update state with input after mint initialization to apply state params
           const txSig = await context.glamClient.mint.initializeWithStateParams(
             initMintParams,
+            // @ts-expect-error
             initStateParams,
             context.txOptions,
           );
@@ -267,7 +273,7 @@ export function installVaultCommands(program: Command, context: CliContext) {
       });
       const stateModel = await glamClient.fetchStateModel();
 
-      const preInstructions = [];
+      const preInstructions = new Array<TransactionInstruction>();
       if (stateModel.mint) {
         const closeMintIx = await glamClient.mint.txBuilder.closeMintIx();
         preInstructions.push(closeMintIx);
@@ -364,7 +370,7 @@ export function installVaultCommands(program: Command, context: CliContext) {
         "SOL",
         "N/A",
         solUiAmount.toFixed(9).toString(),
-        (tokenList.getByMint(WSOL)?.usdPrice * solUiAmount).toFixed(6),
+        ((tokenList.getByMint(WSOL)?.usdPrice || 0) * solUiAmount).toFixed(6),
       ]);
 
       tokenAccounts.forEach((ta) => {
@@ -375,7 +381,7 @@ export function installVaultCommands(program: Command, context: CliContext) {
           const token = tokenList.getByMint(mintStr);
           const tokenSymbol =
             token?.symbol === "SOL" ? "wSOL" : token?.symbol || "Unknown";
-          const value = token?.usdPrice * uiAmount;
+          const value = (token?.usdPrice || 0) * uiAmount;
 
           printRow([
             tokenSymbol,

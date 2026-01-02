@@ -556,6 +556,10 @@ export function installDriftProtocolCommands(
           const marketConfig = marketConfigs.spotMarkets.find(
             (m) => m.marketIndex === marketIndex,
           );
+          if (!marketConfig) {
+            console.error(`Spot market not found at index ${marketIndex}`);
+            process.exit(1);
+          }
           const amount =
             baseAssetAmount.toNumber() / 10 ** marketConfig.decimals;
           const priceStr =
@@ -569,6 +573,10 @@ export function installDriftProtocolCommands(
           const marketConfig = marketConfigs.perpMarkets.find(
             (m) => m.marketIndex === marketIndex,
           );
+          if (!marketConfig) {
+            console.error(`Perp market not found at index ${marketIndex}`);
+            process.exit(1);
+          }
           const amount =
             baseAssetAmount.toNumber() /
             10 ** marketConfigs.orderConstants.perpBaseScale;

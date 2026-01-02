@@ -203,7 +203,7 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
     .description("List Kamino deposits and borrows")
     .action(async (market: string | null) => {
       const vault = context.glamClient.vaultPda;
-      const lendingMarket = market ? new PublicKey(market) : null;
+      const lendingMarket = market ? new PublicKey(market) : undefined;
 
       const obligations =
         await context.glamClient.kaminoLending.findAndParseObligations(
@@ -230,8 +230,12 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
 
         let i = 0;
         for (const { depositReserve, depositedAmount } of activeDeposits) {
-          const { collateralExchangeRate, liquidity } =
-            reservesMap.get(depositReserve);
+          const reserve = reservesMap.get(depositReserve);
+          if (!reserve) {
+            console.error(`Reserve ${depositReserve} not found`);
+            process.exit(1);
+          }
+          const { collateralExchangeRate, liquidity } = reserve;
           const supplyAmount = new Decimal(depositedAmount.toString()).div(
             collateralExchangeRate,
           );
@@ -246,8 +250,12 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
           borrowedAmountSf,
           cumulativeBorrowRateBsf,
         } of activeBorrows) {
-          const { cumulativeBorrowRate, liquidity } =
-            reservesMap.get(borrowReserve);
+          const reserve = reservesMap.get(borrowReserve);
+          if (!reserve) {
+            console.error(`Reserve ${borrowReserve} not found`);
+            process.exit(1);
+          }
+          const { cumulativeBorrowRate, liquidity } = reserve;
           const obligationCumulativeBorrowRate = bfToDecimal(
             cumulativeBorrowRateBsf,
           );

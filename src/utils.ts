@@ -44,7 +44,7 @@ export class CliConfig {
   private configPath: string;
 
   constructor(config: Partial<CliConfig> = {}, configPath?: string) {
-    this.cluster = ClusterNetwork.fromStr(config.cluster);
+    this.cluster = ClusterNetwork.fromStr(config.cluster || "mainnet-beta");
     this.json_rpc_url = config.json_rpc_url || "";
     this.tx_rpc_url = config.tx_rpc_url || "";
     this.websocket_disabled = config.websocket_disabled || false;
@@ -132,7 +132,7 @@ export class CliConfig {
     } catch (err) {
       console.error(
         `Could not load glam cli config at ${configPath}:`,
-        err.message,
+        (err as any).message,
       );
       throw err;
     }
@@ -180,16 +180,16 @@ export async function confirmOperation(message: string) {
       console.log("Aborted.");
       process.exit(0);
     }
-  } catch (error) {
+  } catch (err) {
     // Handle Ctrl+C interruption gracefully
     if (
-      error.name === "ExitPromptError" ||
-      error.message?.includes("force closed")
+      (err as any).name === "ExitPromptError" ||
+      (err as any).message?.includes("force closed")
     ) {
       console.log("\nOperation cancelled.");
       process.exit(0);
     }
-    throw error;
+    throw err;
   }
 }
 
@@ -210,12 +210,10 @@ export function parseStateJson(json: any): InitStateParams {
 
   const params = {
     accountType: StateAccountType.from(state.accountType),
-    name: state.name ? nameToChars(state.name) : null,
+    name: nameToChars(state.name),
     enabled: state.enabled !== false,
     assets: state.assets?.map((asset: string) => new PublicKey(asset)) || null,
-    baseAssetMint: state.baseAssetMint
-      ? new PublicKey(state.baseAssetMint)
-      : null,
+    baseAssetMint: new PublicKey(state.baseAssetMint),
     portfolioManagerName: state.portfolioManagerName
       ? nameToChars(state.portfolioManagerName)
       : null,

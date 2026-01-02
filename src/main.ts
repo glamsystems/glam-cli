@@ -57,7 +57,8 @@ function initialize(configPath?: string, skipSimulation = false) {
 
   context.glamClient = new GlamClient({
     cluster,
-    statePda: glam_state && new PublicKey(glam_state),
+    statePda:
+      glam_state && glam_state !== "" ? new PublicKey(glam_state) : undefined,
   });
 
   context.cliConfig = cliConfig;

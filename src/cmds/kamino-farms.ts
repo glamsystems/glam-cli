@@ -30,7 +30,12 @@ export function installKaminoFarmsCommands(
           farmState,
           unclaimedRewards,
         } = farmStates[i];
-        const { rewards } = parsedFarms.get(farmState);
+        const parsedFarmState = parsedFarms.get(farmState);
+        if (!parsedFarmState) {
+          console.error(`Farm state ${farmState} not found`);
+          process.exit(1);
+        }
+        const { rewards } = parsedFarmState;
         for (const { index, mint } of rewards) {
           console.log(
             `vaultFarmUser: ${userState}, reward token: ${mint}, unclaimed: ${unclaimedRewards[index]}`,
