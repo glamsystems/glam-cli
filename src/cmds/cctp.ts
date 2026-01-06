@@ -1,7 +1,11 @@
 import { Command } from "commander";
 import { CliContext, executeTxWithErrorHandling } from "../utils";
 import { BN } from "@coral-xyz/anchor";
-import { CctpPolicy, publicKeyToEvmAddress } from "@glamsystems/glam-sdk";
+import {
+  CctpPolicy,
+  fromUiAmount,
+  publicKeyToEvmAddress,
+} from "@glamsystems/glam-sdk";
 import { evmAddressToPublicKey } from "@glamsystems/glam-sdk";
 import { PublicKey } from "@solana/web3.js";
 
@@ -118,18 +122,37 @@ export function installCctpCommands(program: Command, context: CliContext) {
   // https://developers.circle.com/cctp/cctp-supported-blockchains#cctp-v2-supported-domains
   program
     .command("bridge-usdc")
-    .argument("<amount>", "USDC amount to bridge", parseFloat)
+    .argument("<amount>", "USDC amount", parseFloat)
     .argument("<domain>", "CCTP domain", parseInt)
-    .argument("<destination_address>", "EVM address")
-    .option("--base58", "Address is a base58 string")
-    .option("--fast", "Fast transfer (lower finality threshold)", false)
+    .argument("<destination_address>", "Recipient EVM address")
+    .option("-d, --destination-caller <address>", "Destination caller address")
+    .option(
+      "-m, --max-fee-bps <maxFeeBps>",
+      "Max fee in basis points (default 1)",
+      (val) => {
+        const parsed = parseInt(val);
+        return isNaN(parsed) ? 1 : parsed;
+      },
+    )
+    .option("-b, --base58", "Address is a base58 string")
+    .option("-f, --fast", "Fast transfer (lower finality threshold)", false)
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Bridge USDC to an EVM chain")
     .action(
-      async (amount, domain, destinationAddress, { base58, fast, yes }) => {
+      async (
+        amount,
+        domain,
+        destinationAddress,
+        { destinationCaller, maxFeeBps, base58, fast, yes },
+      ) => {
         const recipientPubkey = base58
           ? new PublicKey(destinationAddress)
           : evmAddressToPublicKey(destinationAddress);
+        const destinationCallerPubkey = destinationCaller
+          ? base58
+            ? new PublicKey(destinationCaller)
+            : evmAddressToPublicKey(destinationCaller)
+          : undefined;
 
         const cctpPolicy = await context.glamClient.fetchProtocolPolicy(
           context.glamClient.extCctpProgram.programId,
@@ -148,10 +171,9 @@ export function installCctpCommands(program: Command, context: CliContext) {
           process.exit(1);
         }
 
-        const amountBN = new BN(amount * 10 ** 6);
-
         // https://developers.circle.com/cctp/technical-guide#cctp-finality-thresholds
-        const maxFee = amountBN.mul(new BN(1)).div(new BN(10 ** 4));
+        const amountBN = fromUiAmount(amount, 6);
+        const maxFee = amountBN.mul(new BN(maxFeeBps)).div(new BN(10000));
         const minFinalityThreshold = fast ? 1000 : 2000;
 
         await executeTxWithErrorHandling(
@@ -163,6 +185,7 @@ export function installCctpCommands(program: Command, context: CliContext) {
               {
                 maxFee,
                 minFinalityThreshold,
+                destinationCaller: destinationCallerPubkey,
               },
               context.txOptions,
             ),
@@ -177,7 +200,7 @@ export function installCctpCommands(program: Command, context: CliContext) {
 
   program
     .command("receive")
-    .argument("<source_domain>", "USDC amount to receive", parseInt)
+    .argument("<source_domain>", "Source domain", parseInt)
     .option(
       "-t, --txHash <txHash>",
       "Transaction hash hex string (start with 0x)",
