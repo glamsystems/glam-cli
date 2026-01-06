@@ -6,7 +6,7 @@ import {
   validateInvestorAction,
 } from "../utils";
 import { Transaction } from "@solana/web3.js";
-import { findGlamLookupTables } from "@glamsystems/glam-sdk";
+import { findGlamLookupTables, fromUiAmount } from "@glamsystems/glam-sdk";
 
 export function installManageCommands(manage: Command, context: CliContext) {
   manage
@@ -79,7 +79,7 @@ export function installManageCommands(manage: Command, context: CliContext) {
     .description("Update the minimum subscription amount")
     .action(async (amount, options) => {
       const { baseAssetDecimals } = await context.glamClient.fetchStateModel();
-      const amountBN = new BN(amount * 10 ** baseAssetDecimals!);
+      const amountBN = fromUiAmount(amount, baseAssetDecimals!);
 
       await executeTxWithErrorHandling(
         () =>
@@ -102,7 +102,7 @@ export function installManageCommands(manage: Command, context: CliContext) {
     .description("Update the minimum redemption amount")
     .action(async (amount, options) => {
       const { baseAssetDecimals } = await context.glamClient.fetchStateModel();
-      const amountBN = new BN(amount * 10 ** baseAssetDecimals!);
+      const amountBN = fromUiAmount(amount, baseAssetDecimals!);
 
       await executeTxWithErrorHandling(
         () =>

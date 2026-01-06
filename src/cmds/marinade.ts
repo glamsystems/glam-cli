@@ -2,6 +2,7 @@ import { BN } from "@coral-xyz/anchor";
 import { Command } from "commander";
 import { CliContext, executeTxWithErrorHandling } from "../utils";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { fromUiAmount } from "@glamsystems/glam-sdk";
 
 export function installMarinadeCommands(
   marinade: Command,
@@ -13,7 +14,7 @@ export function installMarinadeCommands(
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Stake SOL and get mSOL")
     .action(async (amount, options) => {
-      const amountBN = new BN(parseFloat(amount) * LAMPORTS_PER_SOL);
+      const amountBN = fromUiAmount(parseFloat(amount), 9);
       await executeTxWithErrorHandling(
         () => context.glamClient.marinade.deposit(amountBN, context.txOptions),
         {
@@ -30,7 +31,7 @@ export function installMarinadeCommands(
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Stake SOL to Marinade Native")
     .action(async (amount, options) => {
-      const amountBN = new BN(parseFloat(amount) * LAMPORTS_PER_SOL);
+      const amountBN = fromUiAmount(parseFloat(amount), 9);
       await executeTxWithErrorHandling(
         () =>
           context.glamClient.marinade.depositNative(
@@ -52,7 +53,7 @@ export function installMarinadeCommands(
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Withdraw <amount> mSOL into a stake account")
     .action(async (amount, options) => {
-      const amountBN = new BN(amount * LAMPORTS_PER_SOL);
+      const amountBN = fromUiAmount(amount, 9);
       await executeTxWithErrorHandling(
         () =>
           context.glamClient.marinade.withdrawStakeAccount(

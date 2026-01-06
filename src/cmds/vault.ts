@@ -1,11 +1,12 @@
 import {
   WSOL,
-  nameToChars,
-  charsToName,
+  stringToChars,
+  charsToString,
   GlamClient,
   StateAccountType,
   fetchMintsAndTokenPrograms,
   PkSet,
+  fromUiAmount,
 } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
 import {
@@ -90,7 +91,7 @@ export function installVaultCommands(program: Command, context: CliContext) {
             stateModel.idStr,
             stateModel.vault.toBase58(),
             stateModel.launchDate,
-            charsToName(stateModel.name),
+            charsToString(stateModel.name),
           ]);
         });
     });
@@ -122,7 +123,7 @@ export function installVaultCommands(program: Command, context: CliContext) {
     .description("Update the owner of a GLAM vault")
     .action(async (newOwner: PublicKey, options) => {
       const newPortfolioManagerName = options?.name
-        ? nameToChars(options.name)
+        ? stringToChars(options.name)
         : undefined;
 
       const message = newPortfolioManagerName
@@ -150,7 +151,7 @@ export function installVaultCommands(program: Command, context: CliContext) {
     .option("-y, --yes", "Skip confirmation prompt", false)
     .action(async (enabled, options) => {
       const stateAccount = await context.glamClient.fetchStateAccount();
-      const name = charsToName(stateAccount.name);
+      const name = charsToString(stateAccount.name);
 
       await executeTxWithErrorHandling(
         () =>
@@ -211,7 +212,7 @@ export function installVaultCommands(program: Command, context: CliContext) {
           },
           {
             skip: options?.yes,
-            message: `Confirm initializing GLAM vault: ${charsToName(initStateParams.name)}`,
+            message: `Confirm initializing GLAM vault: ${charsToString(initStateParams.name)}`,
           },
           (txSig) => `GLAM vault initialized: ${txSig}`,
         );
@@ -237,7 +238,7 @@ export function installVaultCommands(program: Command, context: CliContext) {
         },
         {
           skip: options?.yes,
-          message: `Confirm initializing GLAM tokenized vault: ${charsToName(initMintParams.name)}`,
+          message: `Confirm initializing GLAM tokenized vault: ${charsToString(initMintParams.name)}`,
         },
         (txSig) => `GLAM tokenized vault initialized: ${txSig}`,
       );
@@ -301,7 +302,7 @@ export function installVaultCommands(program: Command, context: CliContext) {
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Wrap SOL")
     .action(async (amount: number, options) => {
-      const lamports = new BN(amount * LAMPORTS_PER_SOL);
+      const lamports = fromUiAmount(amount, 9);
 
       if (lamports.lte(new BN(0))) {
         console.error("Error: amount must be greater than 0");

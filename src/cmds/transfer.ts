@@ -2,6 +2,7 @@ import {
   WSOL,
   TransferPolicy,
   fetchMintAndTokenProgram,
+  fromUiAmount,
 } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
 import { PublicKey } from "@solana/web3.js";
@@ -132,7 +133,7 @@ export function installTransferCommands(program: Command, context: CliContext) {
         context.glamClient.connection,
         token,
       );
-      const amountBN = new BN(amount * 10 ** mint.decimals);
+      const amountBN = fromUiAmount(amount, mint.decimals);
 
       await executeTxWithErrorHandling(
         () =>

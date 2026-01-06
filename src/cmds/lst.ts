@@ -6,6 +6,7 @@ import {
   executeTxWithErrorHandling,
   validatePublicKey,
 } from "../utils";
+import { fromUiAmount } from "@glamsystems/glam-sdk";
 
 export function installLstCommands(lst: Command, context: CliContext) {
   lst
@@ -15,7 +16,7 @@ export function installLstCommands(lst: Command, context: CliContext) {
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Stake SOL into a LST pool")
     .action(async (stakepool, amount, options) => {
-      const amountBN = new BN(parseFloat(amount) * LAMPORTS_PER_SOL);
+      const amountBN = fromUiAmount(parseFloat(amount), 9);
 
       await executeTxWithErrorHandling(
         () =>
@@ -39,7 +40,7 @@ export function installLstCommands(lst: Command, context: CliContext) {
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Unstake LST and receive SOL in a stake account")
     .action(async (asset, amount, options) => {
-      const amountBN = new BN(amount * LAMPORTS_PER_SOL);
+      const amountBN = fromUiAmount(amount, 9);
 
       await executeTxWithErrorHandling(
         () =>

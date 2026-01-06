@@ -1,5 +1,5 @@
 import {
-  charsToName,
+  charsToString,
   getPriorityFeeEstimate,
   GlamClient,
 } from "@glamsystems/glam-sdk";
@@ -132,7 +132,7 @@ program
       if (!stateAccount) {
         console.log("Invalid GLAM state account.");
       } else {
-        console.log("Vault name:", charsToName(stateAccount.name));
+        console.log("Vault name:", charsToString(stateAccount.name));
       }
     } else {
       console.log("No active GLAM vault configured.");

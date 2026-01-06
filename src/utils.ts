@@ -2,7 +2,7 @@ import { AnchorError, BN } from "@coral-xyz/anchor";
 import {
   ClusterNetwork,
   GlamClient,
-  nameToChars,
+  stringToChars,
   PriorityLevel,
   StateAccountType,
   TxOptions,
@@ -210,12 +210,12 @@ export function parseStateJson(json: any): InitStateParams {
 
   const params = {
     accountType: StateAccountType.from(state.accountType),
-    name: nameToChars(state.name),
+    name: stringToChars(state.name),
     enabled: state.enabled !== false,
     assets: state.assets?.map((asset: string) => new PublicKey(asset)) || null,
     baseAssetMint: new PublicKey(state.baseAssetMint),
     portfolioManagerName: state.portfolioManagerName
-      ? nameToChars(state.portfolioManagerName)
+      ? stringToChars(state.portfolioManagerName)
       : null,
   };
 
@@ -248,7 +248,7 @@ export function parseMintJson(
 
   const params = {
     accountType,
-    name: nameToChars(mint.name),
+    name: stringToChars(mint.name),
     symbol: mint.symbol,
     uri: mint.uri,
     baseAssetMint: new PublicKey(mint.baseAssetMint),

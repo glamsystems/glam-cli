@@ -115,8 +115,8 @@ export function installDelegateCommands(
             integrationProgram,
             protocolBitflag,
             protocol,
-            permissions,
             permissionsBitmask,
+            permissions,
             context,
             yes,
           );

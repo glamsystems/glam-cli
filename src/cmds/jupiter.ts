@@ -4,6 +4,7 @@ import {
   QuoteParams,
   TokenListItem,
   JupTokenList,
+  fromUiAmount,
 } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
 import {
@@ -217,7 +218,7 @@ export function installJupiterCommands(program: Command, context: CliContext) {
       const quoteParams = {
         inputMint: tokenFrom.address,
         outputMint: tokenTo.address,
-        amount: Math.floor(amount * 10 ** tokenFrom.decimals),
+        amount: fromUiAmount(amount, tokenFrom.decimals).toNumber(),
         swapMode: "ExactIn",
         slippageBps: parseInt(slippageBps),
         excludeDexes: ["Obric V2"],

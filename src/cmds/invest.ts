@@ -1,5 +1,5 @@
 import { BN } from "@coral-xyz/anchor";
-import { GlamClient, fetchMintAndTokenProgram } from "@glamsystems/glam-sdk";
+import { GlamClient, fetchMintAndTokenProgram, fromUiAmount } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
 import {
   CliContext,
@@ -42,7 +42,7 @@ export function installInvestCommands(invest: Command, context: CliContext) {
       const name = metadata?.name || baseAssetMint.toBase58();
       const symbol = metadata?.symbol || "Unknown token";
 
-      const amountBN = new BN(amount * 10 ** baseAssetDecimals);
+      const amountBN = fromUiAmount(amount, baseAssetDecimals);
       if (amountBN.lt(minSubscription)) {
         console.error(
           `Amount must be at least ${minSubscription.toNumber() / 10 ** baseAssetDecimals} ${symbol}`,
@@ -101,7 +101,7 @@ export function installInvestCommands(invest: Command, context: CliContext) {
         context.glamClient.mintPda,
       );
       const decimals = mint.decimals;
-      const amountBN = new BN(amount * 10 ** decimals);
+      const amountBN = fromUiAmount(amount, decimals);
 
       const stateModel = await context.glamClient.fetchStateModel();
       const minRedemption = new BN(stateModel?.mintModel?.minRedemption || 0);
