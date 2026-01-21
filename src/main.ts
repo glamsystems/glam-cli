@@ -82,7 +82,11 @@ function initialize(configPath?: string, skipSimulation = false) {
 
       // If helius_api_key is not provided, return 0
       return helius_api_key
-        ? await getPriorityFeeEstimate(helius_api_key, tx, undefined, level)
+        ? await getPriorityFeeEstimate({
+            heliusApiKey: helius_api_key,
+            tx,
+            priorityLevel: level,
+          })
         : 0;
     },
   };

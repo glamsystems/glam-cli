@@ -3,7 +3,6 @@ import {
   JupiterSwapPolicy,
   QuoteParams,
   TokenListItem,
-  JupTokenList,
   fromUiAmount,
 } from "@glamsystems/glam-sdk";
 import { Command } from "commander";

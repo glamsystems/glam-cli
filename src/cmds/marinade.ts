@@ -1,7 +1,5 @@
-import { BN } from "@coral-xyz/anchor";
 import { Command } from "commander";
 import { CliContext, executeTxWithErrorHandling } from "../utils";
-import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { fromUiAmount } from "@glamsystems/glam-sdk";
 
 export function installMarinadeCommands(

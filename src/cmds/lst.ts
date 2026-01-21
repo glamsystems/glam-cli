@@ -1,6 +1,6 @@
 import { BN } from "@coral-xyz/anchor";
 import { Command } from "commander";
-import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
 import {
   CliContext,
   executeTxWithErrorHandling,
