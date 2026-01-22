@@ -108,7 +108,7 @@ program
     initialize(config, skipSimulation);
     await idlCheck(context.glamClient);
   })
-  .version("1.0.7");
+  .version("1.0.8");
 
 program
   .command("env")
