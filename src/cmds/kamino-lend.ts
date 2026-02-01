@@ -1,7 +1,7 @@
 import {
-  ASSETS_MAINNET,
   bfToDecimal,
   Fraction,
+  getAssetMeta,
   KaminoLendingPolicy,
   PkMap,
   PkSet,
@@ -278,11 +278,7 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Deposit to Kamino Lending market")
     .action(async (market, asset, amount, options) => {
-      const decimals = ASSETS_MAINNET.get(asset)?.decimals;
-      if (!decimals) {
-        console.error(`Asset ${asset} not supported`);
-        process.exit(1);
-      }
+      const { decimals } = getAssetMeta(asset);
 
       await executeTxWithErrorHandling(
         () =>
@@ -308,11 +304,7 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Withdraw asset from Kamino Lending market")
     .action(async (market, asset, amount, options) => {
-      const decimals = ASSETS_MAINNET.get(asset)?.decimals;
-      if (!decimals) {
-        console.error(`Asset ${asset} not supported`);
-        process.exit(1);
-      }
+      const { decimals } = getAssetMeta(asset);
 
       await executeTxWithErrorHandling(
         () =>
@@ -338,11 +330,7 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Borrow from Kamino Lending market")
     .action(async (market, asset, amount, options) => {
-      const decimals = ASSETS_MAINNET.get(asset)?.decimals;
-      if (!decimals) {
-        console.error(`Asset ${asset} not supported`);
-        process.exit(1);
-      }
+      const { decimals } = getAssetMeta(asset);
 
       await executeTxWithErrorHandling(
         () =>
@@ -368,11 +356,7 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Repay loan from Kamino Lending market")
     .action(async (market, asset, amount, options) => {
-      const decimals = ASSETS_MAINNET.get(asset)?.decimals;
-      if (!decimals) {
-        console.error(`Asset ${asset} not supported`);
-        process.exit(1);
-      }
+      const { decimals } = getAssetMeta(asset);
 
       await executeTxWithErrorHandling(
         () =>
