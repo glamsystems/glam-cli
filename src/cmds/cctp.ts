@@ -39,7 +39,7 @@ export function installCctpCommands(program: Command, context: CliContext) {
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Add a destination to the allowlist")
     .action(async (domain, destinationAddress, { base58, yes }) => {
-      const recipientPubkey = base58
+      const destinationPubkey = base58
         ? new PublicKey(destinationAddress)
         : evmAddressToPublicKey(destinationAddress);
 
@@ -51,7 +51,7 @@ export function installCctpCommands(program: Command, context: CliContext) {
         )) ?? new CctpPolicy([]);
       if (
         cctpPolicy.allowedDestinations.find(
-          (d) => d.domain === domain && d.address.equals(recipientPubkey),
+          (d) => d.domain === domain && d.address.equals(destinationPubkey),
         )
       ) {
         console.error(
@@ -60,7 +60,10 @@ export function installCctpCommands(program: Command, context: CliContext) {
         process.exit(1);
       }
 
-      cctpPolicy.allowedDestinations.push({ domain, address: recipientPubkey });
+      cctpPolicy.allowedDestinations.push({
+        domain,
+        address: destinationPubkey,
+      });
       await executeTxWithErrorHandling(
         () =>
           context.glamClient.access.setProtocolPolicy(
@@ -86,7 +89,7 @@ export function installCctpCommands(program: Command, context: CliContext) {
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Remove a destination from the allowlist")
     .action(async (domain, destinationAddress, { base58, yes }) => {
-      const recipientPubkey = base58
+      const destinationPubkey = base58
         ? new PublicKey(destinationAddress)
         : evmAddressToPublicKey(destinationAddress);
 
@@ -100,7 +103,7 @@ export function installCctpCommands(program: Command, context: CliContext) {
         process.exit(1);
       }
       cctpPolicy.allowedDestinations = cctpPolicy.allowedDestinations.filter(
-        (d) => !(d.domain === domain && d.address.equals(recipientPubkey)),
+        (d) => !(d.domain === domain && d.address.equals(destinationPubkey)),
       );
       await executeTxWithErrorHandling(
         () =>
@@ -145,7 +148,7 @@ export function installCctpCommands(program: Command, context: CliContext) {
         destinationAddress,
         { destinationCaller, maxFeeBps, base58, fast, yes },
       ) => {
-        const recipientPubkey = base58
+        const destinationPubkey = base58
           ? new PublicKey(destinationAddress)
           : evmAddressToPublicKey(destinationAddress);
         const destinationCallerPubkey = destinationCaller
@@ -162,7 +165,7 @@ export function installCctpCommands(program: Command, context: CliContext) {
         if (
           cctpPolicy &&
           !cctpPolicy.allowedDestinations.find(
-            (d) => d.domain === domain && d.address.equals(recipientPubkey),
+            (d) => d.domain === domain && d.address.equals(destinationPubkey),
           )
         ) {
           console.error(
@@ -181,7 +184,7 @@ export function installCctpCommands(program: Command, context: CliContext) {
             context.glamClient.cctp.bridgeUsdc(
               amountBN,
               domain,
-              recipientPubkey,
+              destinationPubkey,
               {
                 maxFee,
                 minFinalityThreshold,
