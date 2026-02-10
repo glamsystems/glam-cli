@@ -193,33 +193,40 @@ export async function confirmOperation(message: string) {
   }
 }
 
+/**
+{
+  "state": {
+    "accountType": "vault",
+    "name": "Example vault",
+    "baseAssetMint": "So11111111111111111111111111111111111111112",
+    "enabled": true, // optional 
+    "assets": [ "So11111111111111111111111111111111111111112" ] // optional
+  }
+}
+ */
 export function parseStateJson(json: any): InitStateParams {
   if (!json.state) {
     throw new Error("Invalid JSON file: must contain 'state' property");
   }
   const { state } = json;
-  const requiredFields =
-    state.accountType === "vault"
-      ? ["accountType", "name", "baseAssetMint"]
-      : ["accountType"];
-  requiredFields.forEach((field) => {
+  ["accountType", "name", "baseAssetMint"].forEach((field) => {
     if (state?.[field] === undefined) {
-      throw new Error(`Missing required state field: ${field}`);
+      throw new Error(
+        `Account type ${state.accountType} missing required state field: ${field}`,
+      );
     }
   });
 
-  const params = {
+  return {
     accountType: StateAccountType.from(state.accountType),
     name: stringToChars(state.name),
+    baseAssetMint: new PublicKey(state.baseAssetMint),
     enabled: state.enabled !== false,
     assets: state.assets?.map((asset: string) => new PublicKey(asset)) || null,
-    baseAssetMint: new PublicKey(state.baseAssetMint),
     portfolioManagerName: state.portfolioManagerName
       ? stringToChars(state.portfolioManagerName)
       : null,
   };
-
-  return params;
 }
 
 export function parseMintJson(
@@ -239,19 +246,27 @@ export function parseMintJson(
 
   const { mint } = json;
 
-  const requiredFields = ["name", "symbol", "uri", "baseAssetMint"];
+  const requiredFields = ["name", "symbol", "uri"];
   requiredFields.forEach((field) => {
     if (mint?.[field] === undefined) {
-      throw new Error(`Missing required mint field: ${field}`);
+      throw new Error(
+        `Account type ${accountType} missing required mint field: ${field}`,
+      );
     }
   });
+  const baseAssetMint = json?.state?.baseAssetMint;
+  if (!baseAssetMint) {
+    throw new Error(
+      "Invalid JSON file: must contain 'baseAssetMint' property for tokenized vault",
+    );
+  }
 
-  const params = {
+  return {
     accountType,
     name: stringToChars(mint.name),
     symbol: mint.symbol,
     uri: mint.uri,
-    baseAssetMint: new PublicKey(mint.baseAssetMint),
+    baseAssetMint: new PublicKey(baseAssetMint),
     maxCap: mint.maxCap ? new BN(mint.maxCap) : null,
     minSubscription: mint.minSubscription ? new BN(mint.minSubscription) : null,
     minRedemption: mint.minRedemption ? new BN(mint.minRedemption) : null,
@@ -305,7 +320,6 @@ export function parseMintJson(
         }
       : null,
   };
-  return params;
 }
 
 export function validatePublicKey(value: string) {
