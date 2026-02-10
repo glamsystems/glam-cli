@@ -6,6 +6,8 @@ import {
   PriorityLevel,
   StateAccountType,
   TxOptions,
+  getProgramAndBitflagByProtocolName,
+  getProtocolsAndPermissions,
 } from "@glamsystems/glam-sdk";
 import {
   PublicKey,
@@ -409,4 +411,151 @@ export async function executeTxWithErrorHandling(
     console.error(parseTxError(e));
     process.exit(1);
   }
+}
+
+export function levenshtein(a: string, b: string): number {
+  const m = a.length,
+    n = b.length;
+  const dp: number[] = Array.from({ length: n + 1 }, (_, i) => i);
+  for (let i = 1; i <= m; i++) {
+    let prev = dp[0];
+    dp[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const tmp = dp[j];
+      dp[j] =
+        a[i - 1] === b[j - 1] ? prev : 1 + Math.min(prev, dp[j], dp[j - 1]);
+      prev = tmp;
+    }
+  }
+  return dp[n];
+}
+
+/**
+ * Resolve a single protocol name with fuzzy matching:
+ * 1. Exact match
+ * 2. Case-insensitive match
+ * 3. Levenshtein suggestion (distance <= 3)
+ *
+ * Returns the canonical protocol name or exits with an error.
+ */
+export function resolveProtocolName(name: string): string {
+  const lookup = getProgramAndBitflagByProtocolName();
+  const validNames = Object.keys(lookup);
+
+  // 1. Exact match
+  if (lookup[name]) {
+    return name;
+  }
+
+  // 2. Case-insensitive match
+  const ciIndex = new Map<string, string>();
+  for (const valid of validNames) {
+    ciIndex.set(valid.toLowerCase(), valid);
+  }
+  const ciMatch = ciIndex.get(name.toLowerCase());
+  if (ciMatch) {
+    console.log(`Note: using '${ciMatch}' for '${name}'`);
+    return ciMatch;
+  }
+
+  // 3. Levenshtein suggestion
+  let bestName = "";
+  let bestDist = Infinity;
+  const nameLower = name.toLowerCase();
+  for (const valid of validNames) {
+    const dist = levenshtein(nameLower, valid.toLowerCase());
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestName = valid;
+    }
+  }
+  const suggestion =
+    bestDist <= 3 ? `  Did you mean '${bestName}' instead of '${name}'?` : "";
+
+  console.error(`Unknown protocol name: ${name}`);
+  if (suggestion) console.error(suggestion);
+  console.error(`Valid protocol names: ${validNames.join(", ")}`);
+  process.exit(1);
+}
+
+/**
+ * Resolve permission names for a given (already-resolved) protocol with fuzzy matching.
+ * Returns an array of canonical permission names or exits with an error.
+ */
+export function resolvePermissionNames(
+  protocolName: string,
+  inputNames: string[],
+): string[] {
+  const protocolConfig = getProgramAndBitflagByProtocolName()[protocolName];
+  if (!protocolConfig) {
+    console.error(`Unknown protocol name: ${protocolName}`);
+    process.exit(1);
+  }
+
+  const [programIdStr, bitflagStr] = protocolConfig;
+  const protocolPermissions =
+    getProtocolsAndPermissions()[programIdStr]?.[bitflagStr];
+  if (!protocolPermissions) {
+    console.error(
+      `Protocol mapping not found for protocol name ${protocolName}`,
+    );
+    process.exit(1);
+  }
+
+  const validNames = Object.values(protocolPermissions.permissions);
+  const ciIndex = new Map<string, string>();
+  for (const valid of validNames) {
+    ciIndex.set(valid.toLowerCase(), valid);
+  }
+
+  const resolved: string[] = [];
+  const unknown: string[] = [];
+  const suggestions: string[] = [];
+
+  for (const name of inputNames) {
+    // 1. Exact match
+    if (validNames.includes(name)) {
+      resolved.push(name);
+      continue;
+    }
+
+    // 2. Case-insensitive match
+    const ciMatch = ciIndex.get(name.toLowerCase());
+    if (ciMatch) {
+      console.log(`Note: using '${ciMatch}' for '${name}'`);
+      resolved.push(ciMatch);
+      continue;
+    }
+
+    // 3. Levenshtein suggestion
+    let bestName = "";
+    let bestDist = Infinity;
+    const nameLower = name.toLowerCase();
+    for (const valid of validNames) {
+      const dist = levenshtein(nameLower, valid.toLowerCase());
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestName = valid;
+      }
+    }
+    if (bestDist <= 3) {
+      suggestions.push(`  Did you mean '${bestName}' instead of '${name}'?`);
+    }
+    unknown.push(name);
+  }
+
+  if (unknown.length) {
+    console.error(
+      `Unknown permission name(s) for ${protocolName}: ${unknown.join(", ")}`,
+    );
+    for (const s of suggestions) {
+      console.error(s);
+    }
+    console.error(
+      `Valid permissions for ${protocolName}: ${validNames.join(", ")}`,
+    );
+    process.exit(1);
+  }
+
+  return resolved;
 }

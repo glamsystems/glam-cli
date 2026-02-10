@@ -8,6 +8,8 @@ import { Command } from "commander";
 import {
   CliContext,
   executeTxWithErrorHandling,
+  resolvePermissionNames,
+  resolveProtocolName,
   validatePublicKey,
 } from "../utils";
 import { PublicKey } from "@solana/web3.js";
@@ -103,27 +105,27 @@ export function installDelegateCommands(
     .description("Grant delegate permissions for a single protocol")
     .action(
       async (delegate: PublicKey, permissions: string[], { protocol, yes }) => {
-        try {
-          const { integrationProgram, protocolBitflag, permissionsBitmask } =
-            parsePermissionNames({
-              protocolName: protocol,
-              permissionNames: permissions,
-            });
-          await handleDelegatePermissions(
-            "grant",
-            delegate,
-            integrationProgram,
-            protocolBitflag,
-            protocol,
-            permissionsBitmask,
-            permissions,
-            context,
-            yes,
-          );
-        } catch (e) {
-          console.error(e);
-          process.exit(1);
-        }
+        const resolvedProtocol = resolveProtocolName(protocol);
+        const resolvedPermissions = resolvePermissionNames(
+          resolvedProtocol,
+          permissions,
+        );
+        const { integrationProgram, protocolBitflag, permissionsBitmask } =
+          parsePermissionNames({
+            protocolName: resolvedProtocol,
+            permissionNames: resolvedPermissions,
+          });
+        await handleDelegatePermissions(
+          "grant",
+          delegate,
+          integrationProgram,
+          protocolBitflag,
+          resolvedProtocol,
+          permissionsBitmask,
+          resolvedPermissions,
+          context,
+          yes,
+        );
       },
     );
 
@@ -139,28 +141,27 @@ export function installDelegateCommands(
     .description("Revoke delegate permissions for a single protocol by name")
     .action(
       async (delegate: PublicKey, permissions: string[], { protocol, yes }) => {
-        try {
-          const { integrationProgram, protocolBitflag, permissionsBitmask } =
-            parsePermissionNames({
-              protocolName: protocol,
-              permissionNames: permissions,
-            });
-
-          await handleDelegatePermissions(
-            "revoke",
-            delegate,
-            integrationProgram,
-            protocolBitflag,
-            protocol,
-            permissionsBitmask,
-            permissions,
-            context,
-            yes,
-          );
-        } catch (e) {
-          console.error(e);
-          process.exit(1);
-        }
+        const resolvedProtocol = resolveProtocolName(protocol);
+        const resolvedPermissions = resolvePermissionNames(
+          resolvedProtocol,
+          permissions,
+        );
+        const { integrationProgram, protocolBitflag, permissionsBitmask } =
+          parsePermissionNames({
+            protocolName: resolvedProtocol,
+            permissionNames: resolvedPermissions,
+          });
+        await handleDelegatePermissions(
+          "revoke",
+          delegate,
+          integrationProgram,
+          protocolBitflag,
+          resolvedProtocol,
+          permissionsBitmask,
+          resolvedPermissions,
+          context,
+          yes,
+        );
       },
     );
 
