@@ -198,7 +198,10 @@ export function installVaultCommands(program: Command, context: CliContext) {
       }
 
       const initStateParams = parseStateJson(json);
-      if (initStateParams.accountType === StateAccountType.VAULT) {
+      const accountType = initStateParams.accountType;
+      const accountTypeStr = Object.keys(accountType)[0];
+
+      if (accountType === StateAccountType.VAULT) {
         await executeTxWithErrorHandling(
           async () => {
             const txSig = await context.glamClient.state.initialize(
@@ -212,14 +215,14 @@ export function installVaultCommands(program: Command, context: CliContext) {
           },
           {
             skip: options?.yes,
-            message: `Confirm initializing GLAM vault: ${charsToString(initStateParams.name)}`,
+            message: `Confirm initializing ${accountTypeStr}: ${charsToString(initStateParams.name)}`,
           },
-          (txSig) => `GLAM vault initialized: ${txSig}`,
+          (txSig) => `Initialized ${accountTypeStr}: ${txSig}`,
         );
         return;
       }
 
-      const initMintParams = parseMintJson(json, initStateParams.accountType);
+      const initMintParams = parseMintJson(json, accountType);
       await executeTxWithErrorHandling(
         async () => {
           // mint.initializeWithStateParams creates state with default setup
@@ -238,9 +241,9 @@ export function installVaultCommands(program: Command, context: CliContext) {
         },
         {
           skip: options?.yes,
-          message: `Confirm initializing GLAM tokenized vault: ${charsToString(initMintParams.name)}`,
+          message: `Confirm initializing ${accountTypeStr}: ${charsToString(initMintParams.name)}`,
         },
-        (txSig) => `GLAM tokenized vault initialized: ${txSig}`,
+        (txSig) => `Initialized ${accountTypeStr}: ${txSig}`,
       );
     });
 

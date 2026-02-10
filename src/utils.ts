@@ -194,15 +194,12 @@ export async function confirmOperation(message: string) {
 }
 
 /**
-{
-  "state": {
-    "accountType": "vault",
-    "name": "Example vault",
-    "baseAssetMint": "So11111111111111111111111111111111111111112",
-    "enabled": true, // optional 
-    "assets": [ "So11111111111111111111111111111111111111112" ] // optional
-  }
-}
+ * Parses a JSON object containing state initialization parameters.
+ *
+ * `json.state` must contain the following properties:
+ * - `accountType`: The type of the state account.
+ * - `name`: The name of the state account.
+ * - `baseAssetMint`: The base asset mint of the vault.
  */
 export function parseStateJson(json: any): InitStateParams {
   if (!json.state) {
@@ -229,6 +226,14 @@ export function parseStateJson(json: any): InitStateParams {
   };
 }
 
+/**
+ * Parses a JSON object containing mint initialization parameters.
+ *
+ * `json.mint` must contain the following properties:
+ * - `name`: The name of the mint.
+ * - `symbol`: The symbol of the mint.
+ * - `uri`: The URI of the mint.
+ */
 export function parseMintJson(
   json: any,
   accountType: StateAccountType,
@@ -245,9 +250,7 @@ export function parseMintJson(
   }
 
   const { mint } = json;
-
-  const requiredFields = ["name", "symbol", "uri"];
-  requiredFields.forEach((field) => {
+  ["name", "symbol", "uri"].forEach((field) => {
     if (mint?.[field] === undefined) {
       throw new Error(
         `Account type ${accountType} missing required mint field: ${field}`,
@@ -257,7 +260,7 @@ export function parseMintJson(
   const baseAssetMint = json?.state?.baseAssetMint;
   if (!baseAssetMint) {
     throw new Error(
-      "Invalid JSON file: must contain 'baseAssetMint' property for tokenized vault",
+      "Invalid JSON file: missing required state field `baseAssetMint`",
     );
   }
 
