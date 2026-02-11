@@ -1,5 +1,4 @@
 import { Command } from "commander";
-import { PublicKey } from "@solana/web3.js";
 import {
   CliContext,
   executeTxWithErrorHandling,

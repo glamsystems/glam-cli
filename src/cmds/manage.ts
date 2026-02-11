@@ -3,6 +3,7 @@ import { Command } from "commander";
 import {
   CliContext,
   executeTxWithErrorHandling,
+  printTable,
   validateInvestorAction,
   validatePublicKey,
 } from "../utils";
@@ -13,6 +14,7 @@ import {
   toUiAmount,
   RequestType,
   PendingRequest,
+  fetchMintAndTokenProgram,
 } from "@glamsystems/glam-sdk";
 
 export function installManageCommands(manage: Command, context: CliContext) {
@@ -166,7 +168,8 @@ export function installManageCommands(manage: Command, context: CliContext) {
   manage
     .command("list-requests")
     .description("List pending user requests in the queue")
-    .action(async () => {
+    .option("-j, --json", "Output in JSON format", false)
+    .action(async ({ json }) => {
       const queue = await context.glamClient.fetchRequestQueue();
       const requests = queue?.data || [];
 
@@ -175,18 +178,18 @@ export function installManageCommands(manage: Command, context: CliContext) {
         return;
       }
 
-      const { baseAssetDecimals } =
-        await context.glamClient.fetchStateModel();
-      const { mint } = await (
-        await import("@glamsystems/glam-sdk")
-      ).fetchMintAndTokenProgram(
+      const stateModel = await context.glamClient.fetchStateModel();
+      const timeUnit = stateModel.mintModel?.notifyAndSettle?.timeUnit;
+      const isSlot = timeUnit && Object.keys(timeUnit)[0] === "slot";
+
+      const baseAssetDecimals = stateModel.baseAssetDecimals;
+      const { mint } = await fetchMintAndTokenProgram(
         context.glamClient.connection,
         context.glamClient.mintPda,
       );
       const shareDecimals = mint.decimals;
 
-      console.log(`Found ${requests.length} request(s):\n`);
-      for (const r of requests as PendingRequest[]) {
+      const rows = (requests as PendingRequest[]).map((r) => {
         const type = Object.keys(r.requestType)[0];
         const isSub = RequestType.equals(
           r.requestType as RequestType,
@@ -202,19 +205,42 @@ export function installManageCommands(manage: Command, context: CliContext) {
         );
         const createdAt = new BN(r.createdAt.toString()).toNumber();
         const fulfilledAt = new BN(r.fulfilledAt.toString()).toNumber();
-        const createdDate = createdAt
-          ? new Date(createdAt * 1000).toISOString()
-          : "N/A";
         const status = fulfilledAt ? "fulfilled (claimable)" : "pending";
 
-        console.log(`  User:      ${r.user.toBase58()}`);
-        console.log(`  Type:      ${type}`);
-        console.log(`  Incoming:  ${incoming}`);
-        console.log(`  Outgoing:  ${outgoing}`);
-        console.log(`  Status:    ${status}`);
-        console.log(`  Created:   ${createdDate}`);
-        console.log();
+        return {
+          user: r.user.toBase58(),
+          type,
+          incoming,
+          outgoing,
+          status,
+          created: createdAt,
+          timeUnit: isSlot ? "slot" : "timestamp",
+        };
+      });
+
+      if (json) {
+        console.log(JSON.stringify(rows, null, 2));
+        return;
       }
+
+      printTable(
+        [
+          "User",
+          "Type",
+          "Incoming",
+          "Outgoing",
+          "Status",
+          `Created (${isSlot ? "slot" : "timestamp"})`,
+        ],
+        rows.map((r) => [
+          r.user,
+          r.type,
+          r.incoming.toString(),
+          r.outgoing.toString(),
+          r.status,
+          isSlot ? `${r.created}` : new Date(r.created * 1000).toISOString(),
+        ]),
+      );
     });
 
   manage
@@ -241,8 +267,7 @@ export function installManageCommands(manage: Command, context: CliContext) {
     .description("Claim a fulfilled request on behalf of a user")
     .action(async (pubkey, options) => {
       await executeTxWithErrorHandling(
-        () =>
-          context.glamClient.invest.claimForUser(pubkey, context.txOptions),
+        () => context.glamClient.invest.claimForUser(pubkey, context.txOptions),
         {
           skip: options?.yes,
           message: `Confirm claiming for user ${pubkey.toBase58()}?`,

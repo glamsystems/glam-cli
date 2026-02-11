@@ -11,7 +11,6 @@ import {
   executeTxWithErrorHandling,
   validatePublicKey,
 } from "../utils";
-import { BN } from "@coral-xyz/anchor";
 
 export function installTransferCommands(program: Command, context: CliContext) {
   program

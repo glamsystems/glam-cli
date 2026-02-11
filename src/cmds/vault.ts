@@ -10,7 +10,6 @@ import {
 } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
 import {
-  LAMPORTS_PER_SOL,
   PublicKey,
   TransactionInstruction,
 } from "@solana/web3.js";
@@ -20,6 +19,7 @@ import {
   executeTxWithErrorHandling,
   parseMintJson,
   parseStateJson,
+  printTable,
   validateBooleanInput,
   validateFileExists,
   validatePublicKey,
@@ -36,8 +36,12 @@ export function installVaultCommands(program: Command, context: CliContext) {
       false,
     )
     .option("-a, --all", "Show all GLAM vaults", false)
-    .option("-t, --type <type>", "Filter by type: vault or tokenizedVault")
-    .action(async ({ ownerOnly, all, type }) => {
+    .option(
+      "-t, --type <type>",
+      "Filter by type: vault, tokenizedVault, or singleAssetVault (case-insensitive)",
+    )
+    .option("-j, --json", "Output in JSON format", false)
+    .action(async ({ ownerOnly, all, type, json }) => {
       if (ownerOnly && all) {
         console.error(
           "Options '--owner-only' and '--all' cannot be used together.",
@@ -60,40 +64,37 @@ export function installVaultCommands(program: Command, context: CliContext) {
         return;
       }
 
-      // Define column widths for the table
-      const colWidths = [15, 45, 45, 12, 25];
-      const printRow = (items: string[]) => {
+      const sorted = glamStates.sort((a, b) =>
+        a.launchDate > b.launchDate ? -1 : 1,
+      );
+
+      if (json) {
         console.log(
-          items[0].padEnd(colWidths[0]),
-          items[1].padEnd(colWidths[1]),
-          items[2].padEnd(colWidths[2]),
-          items[3].padEnd(colWidths[3]),
-          items[4].padEnd(colWidths[4]),
+          JSON.stringify(
+            sorted.map((s) => ({
+              type: s.productType,
+              vaultState: s.idStr,
+              vaultPda: s.vault.toBase58(),
+              launchDate: s.launchDate,
+              name: charsToString(s.name),
+            })),
+            null,
+            2,
+          ),
         );
-      };
+        return;
+      }
 
-      // Print header
-      printRow(["Type", "Glam State", "Vault Address", "Launch Date", "Name"]);
-      printRow([
-        "-".repeat(colWidths[0]),
-        "-".repeat(colWidths[1]),
-        "-".repeat(colWidths[2]),
-        "-".repeat(colWidths[3]),
-        "-".repeat(colWidths[4]),
-      ]);
-
-      // Print vault data
-      glamStates
-        .sort((a, b) => (a.launchDate > b.launchDate ? -1 : 1))
-        .forEach((stateModel) => {
-          printRow([
-            stateModel.productType,
-            stateModel.idStr,
-            stateModel.vault.toBase58(),
-            stateModel.launchDate,
-            charsToString(stateModel.name),
-          ]);
-        });
+      printTable(
+        ["Type", "Vault State", "Vault PDA", "Launch Date", "Name"],
+        sorted.map((s) => [
+          s.productType,
+          s.idStr,
+          s.vault.toBase58(),
+          s.launchDate,
+          charsToString(s.name),
+        ]),
+      );
     });
 
   program
@@ -370,9 +371,7 @@ export function installVaultCommands(program: Command, context: CliContext) {
         const vault = context.glamClient.vaultPda;
         const { tokenAccounts } =
           await context.glamClient.getSolAndTokenBalances(vault);
-        const emptyAccounts = tokenAccounts.filter(
-          (ta) => ta.uiAmount === 0,
-        );
+        const emptyAccounts = tokenAccounts.filter((ta) => ta.uiAmount === 0);
 
         if (emptyAccounts.length === 0) {
           console.log("No empty token accounts to close.");
@@ -420,10 +419,7 @@ export function installVaultCommands(program: Command, context: CliContext) {
       );
     });
 
-  const tokenBalances = async (options: {
-    all?: boolean;
-    json?: boolean;
-  }) => {
+  const tokenBalances = async (options: { all?: boolean; json?: boolean }) => {
     const { all, json } = options;
     const vault = context.glamClient.vaultPda;
     const { uiAmount: solUiAmount, tokenAccounts } =
@@ -467,19 +463,9 @@ export function installVaultCommands(program: Command, context: CliContext) {
       return;
     }
 
-    const colWidths = [12, 45, 15, 20];
-    const printRow = (items: string[]) => {
-      console.log(
-        items[0].padEnd(colWidths[0]),
-        items[1].padEnd(colWidths[1]),
-        items[2].padEnd(colWidths[2]),
-        items[3].padEnd(colWidths[3]),
-      );
-    };
-
-    printRow(["Token", "Mint", "Amount", "Value (USD)"]);
-    rows.forEach((r) =>
-      printRow([
+    printTable(
+      ["Token", "Mint", "Amount", "Value (USD)"],
+      rows.map((r) => [
         r.token,
         r.mint,
         r.token === "SOL" ? r.amount.toFixed(9) : r.amount.toString(),

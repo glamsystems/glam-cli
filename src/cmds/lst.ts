@@ -1,4 +1,3 @@
-import { BN } from "@coral-xyz/anchor";
 import { Command } from "commander";
 import { PublicKey } from "@solana/web3.js";
 import {

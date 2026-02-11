@@ -413,6 +413,23 @@ export async function executeTxWithErrorHandling(
   }
 }
 
+/**
+ * Print a formatted table with auto-sized columns.
+ * Each row is an array of strings; the first row is treated as the header.
+ */
+export function printTable(headers: string[], rows: string[][]) {
+  const colWidths = headers.map((h, i) =>
+    Math.max(h.length, ...rows.map((r) => (r[i] || "").length)),
+  );
+
+  const formatRow = (items: string[]) =>
+    items.map((item, i) => item.padEnd(colWidths[i])).join("  ");
+
+  console.log(formatRow(headers));
+  console.log(colWidths.map((w) => "-".repeat(w)).join("  "));
+  rows.forEach((row) => console.log(formatRow(row)));
+}
+
 export function levenshtein(a: string, b: string): number {
   const m = a.length,
     n = b.length;
