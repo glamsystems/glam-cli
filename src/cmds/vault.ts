@@ -144,28 +144,48 @@ export function installVaultCommands(program: Command, context: CliContext) {
       );
     });
 
+  const setEnabled = async (enabled: boolean, options: { yes: boolean }) => {
+    const stateAccount = await context.glamClient.fetchStateAccount();
+    const name = charsToString(stateAccount.name);
+
+    await executeTxWithErrorHandling(
+      () =>
+        context.glamClient.access.emergencyAccessUpdate(
+          { stateEnabled: enabled },
+          context.txOptions,
+        ),
+      {
+        skip: options?.yes,
+        message: `Confirm ${enabled ? "enabling" : "disabling"} vault: ${name}`,
+      },
+      (txSig) =>
+        `GLAM vault ${name} ${enabled ? "enabled" : "disabled"}: ${txSig}`,
+    );
+  };
+
+  program
+    .command("enable")
+    .description("Enable a GLAM vault")
+    .option("-y, --yes", "Skip confirmation prompt", false)
+    .action(async (options) => setEnabled(true, options));
+
+  program
+    .command("disable")
+    .description("Disable a GLAM vault")
+    .option("-y, --yes", "Skip confirmation prompt", false)
+    .action(async (options) => setEnabled(false, options));
+
+  // Deprecated: use 'enable' or 'disable' instead
   program
     .command("set-enabled")
     .argument("<enabled>", "New vault state", validateBooleanInput)
-    .description("Enable or disable a GLAM vault")
+    .description("[deprecated] Use 'enable' or 'disable' instead")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .action(async (enabled, options) => {
-      const stateAccount = await context.glamClient.fetchStateAccount();
-      const name = charsToString(stateAccount.name);
-
-      await executeTxWithErrorHandling(
-        () =>
-          context.glamClient.access.emergencyAccessUpdate(
-            { stateEnabled: enabled },
-            context.txOptions,
-          ),
-        {
-          skip: options?.yes,
-          message: `Confirm ${enabled ? "enabling" : "disabling"} vault: ${name}`,
-        },
-        (txSig) =>
-          `GLAM vault ${name} ${enabled ? "enabled" : "disabled"}: ${txSig}`,
+      console.warn(
+        "Warning: 'set-enabled' is deprecated, use 'enable' or 'disable' instead.",
       );
+      await setEnabled(enabled, options);
     });
 
   program
@@ -338,63 +358,159 @@ export function installVaultCommands(program: Command, context: CliContext) {
     });
 
   program
+    .command("close-token-accounts")
+    .argument("[mints...]", "Mint address(es) of token accounts to close")
+    .option("--empty", "Close all empty (zero-balance) token accounts", false)
+    .option("-y, --yes", "Skip confirmation prompt", false)
+    .description("Close vault token accounts")
+    .action(async (mints: string[], options) => {
+      let tokenAccountPubkeys: PublicKey[] = [];
+
+      if (options.empty) {
+        const vault = context.glamClient.vaultPda;
+        const { tokenAccounts } =
+          await context.glamClient.getSolAndTokenBalances(vault);
+        const emptyAccounts = tokenAccounts.filter(
+          (ta) => ta.uiAmount === 0,
+        );
+
+        if (emptyAccounts.length === 0) {
+          console.log("No empty token accounts to close.");
+          return;
+        }
+
+        const emptyMints = emptyAccounts.map((ta) => ta.mint);
+        const mintInfos = await fetchMintsAndTokenPrograms(
+          context.glamClient.connection,
+          emptyMints,
+        );
+        tokenAccountPubkeys = mintInfos.map(
+          ({ mint: { address }, tokenProgram }) =>
+            context.glamClient.getVaultAta(address, tokenProgram),
+        );
+      } else if (mints.length > 0) {
+        const mintPubkeys = mints.map((m) => validatePublicKey(m));
+        const mintInfos = await fetchMintsAndTokenPrograms(
+          context.glamClient.connection,
+          mintPubkeys,
+        );
+        tokenAccountPubkeys = mintInfos.map(
+          ({ mint: { address }, tokenProgram }) =>
+            context.glamClient.getVaultAta(address, tokenProgram),
+        );
+      } else {
+        console.error(
+          "Provide mint address(es) or use --empty to close all empty token accounts.",
+        );
+        process.exit(1);
+      }
+
+      const count = tokenAccountPubkeys.length;
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.vault.closeTokenAccounts(
+            tokenAccountPubkeys,
+            context.txOptions,
+          ),
+        {
+          skip: options?.yes,
+          message: `Confirm closing ${count} token account(s)`,
+        },
+        (txSig) => `Closed ${count} token account(s): ${txSig}`,
+      );
+    });
+
+  const tokenBalances = async (options: {
+    all?: boolean;
+    json?: boolean;
+  }) => {
+    const { all, json } = options;
+    const vault = context.glamClient.vaultPda;
+    const { uiAmount: solUiAmount, tokenAccounts } =
+      await context.glamClient.getSolAndTokenBalances(vault);
+
+    const mints = tokenAccounts.map((ta) => ta.mint.toBase58());
+    if (!mints.includes(WSOL.toBase58())) {
+      mints.push(WSOL.toBase58());
+    }
+
+    const jupApi = context.glamClient.jupiterSwap.jupApi;
+    const tokenList = await jupApi.fetchTokensList();
+
+    const solPrice = tokenList.getByMint(WSOL)?.usdPrice || 0;
+    const rows = [
+      {
+        token: "SOL",
+        mint: "N/A",
+        amount: solUiAmount,
+        value: solPrice * solUiAmount,
+      },
+      ...tokenAccounts
+        .filter((ta) => all || ta.uiAmount > 0)
+        .map((ta) => {
+          const mintStr = ta.mint.toBase58();
+          const token = tokenList.getByMint(mintStr);
+          const tokenSymbol =
+            token?.symbol === "SOL" ? "wSOL" : token?.symbol || "Unknown";
+          const value = (token?.usdPrice || 0) * ta.uiAmount;
+          return {
+            token: tokenSymbol,
+            mint: mintStr,
+            amount: ta.uiAmount,
+            value,
+          };
+        }),
+    ];
+
+    if (json) {
+      console.log(JSON.stringify(rows, null, 2));
+      return;
+    }
+
+    const colWidths = [12, 45, 15, 20];
+    const printRow = (items: string[]) => {
+      console.log(
+        items[0].padEnd(colWidths[0]),
+        items[1].padEnd(colWidths[1]),
+        items[2].padEnd(colWidths[2]),
+        items[3].padEnd(colWidths[3]),
+      );
+    };
+
+    printRow(["Token", "Mint", "Amount", "Value (USD)"]);
+    rows.forEach((r) =>
+      printRow([
+        r.token,
+        r.mint,
+        r.token === "SOL" ? r.amount.toFixed(9) : r.amount.toString(),
+        r.value ? r.value.toFixed(6) : "NaN",
+      ]),
+    );
+  };
+
+  program
+    .command("token-balances")
+    .description("Get token balances")
+    .option(
+      "-a, --all",
+      "Show all assets including token accounts with 0 balance",
+    )
+    .option("-j, --json", "Output in JSON format", false)
+    .action(tokenBalances);
+
+  // Deprecated: use 'token-balances' instead
+  program
     .command("balances")
-    .description("Get balances")
+    .description("[deprecated] Use 'token-balances' instead")
     .option(
       "-a, --all",
       "Show all assets including token accounts with 0 balance",
     )
     .action(async (options) => {
-      const { all } = options;
-      const vault = context.glamClient.vaultPda;
-      const { uiAmount: solUiAmount, tokenAccounts } =
-        await context.glamClient.getSolAndTokenBalances(vault);
-
-      const mints = tokenAccounts.map((ta) => ta.mint.toBase58());
-      if (!mints.includes(WSOL.toBase58())) {
-        mints.push(WSOL.toBase58());
-      }
-
-      const jupApi = context.glamClient.jupiterSwap.jupApi;
-      const tokenList = await jupApi.fetchTokensList();
-
-      // Define column widths
-      const colWidths = [12, 45, 15, 20];
-      const printRow = (items: string[]) => {
-        console.log(
-          items[0].padEnd(colWidths[0]),
-          items[1].padEnd(colWidths[1]),
-          items[2].padEnd(colWidths[2]),
-          items[3].padEnd(colWidths[3]),
-        );
-      };
-
-      printRow(["Token", "Mint", "Amount", "Value (USD)"]); // header row
-      printRow([
-        "SOL",
-        "N/A",
-        solUiAmount.toFixed(9).toString(),
-        ((tokenList.getByMint(WSOL)?.usdPrice || 0) * solUiAmount).toFixed(6),
-      ]);
-
-      tokenAccounts.forEach((ta) => {
-        const { uiAmount, mint } = ta;
-        const mintStr = mint.toBase58();
-
-        if (all || uiAmount > 0) {
-          const token = tokenList.getByMint(mintStr);
-          const tokenSymbol =
-            token?.symbol === "SOL" ? "wSOL" : token?.symbol || "Unknown";
-          const value = (token?.usdPrice || 0) * uiAmount;
-
-          printRow([
-            tokenSymbol,
-            mintStr,
-            uiAmount.toString(),
-            value ? value.toFixed(6) : "NaN",
-          ]);
-        }
-      });
+      console.warn(
+        "Warning: 'balances' is deprecated, use 'token-balances' instead.",
+      );
+      await tokenBalances(options);
     });
 
   program

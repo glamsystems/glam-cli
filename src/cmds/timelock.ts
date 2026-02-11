@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { CliContext, executeTxWithErrorHandling } from "../utils";
+import { PublicKey } from "@solana/web3.js";
 import {
   IntegrationAcl,
   DelegateAcl,
@@ -7,6 +8,7 @@ import {
   getPermissionNamesFromBitmask,
   compareIntegrationAcls,
   compareDelegateAcls,
+  comparePublicKeyArrays,
 } from "@glamsystems/glam-sdk";
 
 export function installTimelockCommands(program: Command, context: CliContext) {
@@ -205,6 +207,23 @@ export function installTimelockCommands(program: Command, context: CliContext) {
                     }
                   });
                 }
+              });
+            }
+          } else if (name === "assets" || name === "borrowable") {
+            const { added, removed } = comparePublicKeyArrays(
+              (stateModel[name] as PublicKey[] | null) || [],
+              value as PublicKey[],
+            );
+
+            if (added.length === 0 && removed.length === 0) {
+              console.log(`  ${name}: No changes`);
+            } else {
+              console.log(`  ${name}:`);
+              added.forEach((pk) => {
+                console.log(`    [+] ${pk.toBase58()}`);
+              });
+              removed.forEach((pk) => {
+                console.log(`    [-] ${pk.toBase58()}`);
               });
             }
           } else if (name === "timelockDuration") {
