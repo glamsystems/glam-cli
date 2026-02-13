@@ -113,6 +113,42 @@ export function installDriftProtocolCommands(
     });
 
   drift
+    .command("set-order-price-tolerance")
+    .argument(
+      "<tolerance_bps>",
+      "Tolerance in basis points (0 to disable, e.g. 500 = 5%)",
+      parseInt,
+    )
+    .option("-y, --yes", "Skip confirmation prompt", false)
+    .description(
+      "Set max allowed deviation from oracle price for limit orders (in bps)",
+    )
+    .action(async (toleranceBps, { yes }) => {
+      const policy =
+        (await context.glamClient.fetchProtocolPolicy(
+          context.glamClient.extDriftProgram.programId,
+          0b01,
+          DriftProtocolPolicy,
+        )) ?? new DriftProtocolPolicy([], [], []);
+
+      policy.orderPriceToleranceBps = toleranceBps;
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.access.setProtocolPolicy(
+            context.glamClient.extDriftProgram.programId,
+            0b01,
+            policy.encode(),
+            context.txOptions,
+          ),
+        {
+          skip: yes,
+          message: `Set order price tolerance to ${toleranceBps} bps${toleranceBps === 0 ? " (disabled)" : ""}`,
+        },
+        (txSig) => `Order price tolerance set to ${toleranceBps} bps: ${txSig}`,
+      );
+    });
+
+  drift
     .command("allowlist-borrowable-asset")
     .argument("<token_mint>", "Token mint public key", validatePublicKey)
     .option("-y, --yes", "Skip confirmation prompt", false)
