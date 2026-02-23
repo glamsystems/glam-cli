@@ -455,8 +455,8 @@ export function levenshtein(a: string, b: string): number {
  *
  * Returns the canonical protocol name or exits with an error.
  */
-export function resolveProtocolName(name: string): string {
-  const lookup = getProgramAndBitflagByProtocolName();
+export function resolveProtocolName(name: string, staging: boolean): string {
+  const lookup = getProgramAndBitflagByProtocolName(staging);
   const validNames = Object.keys(lookup);
 
   // 1. Exact match
@@ -502,8 +502,9 @@ export function resolveProtocolName(name: string): string {
 export function resolvePermissionNames(
   protocolName: string,
   inputNames: string[],
+  staging: boolean,
 ): string[] {
-  const protocolConfig = getProgramAndBitflagByProtocolName()[protocolName];
+  const protocolConfig = getProgramAndBitflagByProtocolName(staging)[protocolName];
   if (!protocolConfig) {
     console.error(`Unknown protocol name: ${protocolName}`);
     process.exit(1);
@@ -511,7 +512,7 @@ export function resolvePermissionNames(
 
   const [programIdStr, bitflagStr] = protocolConfig;
   const protocolPermissions =
-    getProtocolsAndPermissions()[programIdStr]?.[bitflagStr];
+    getProtocolsAndPermissions(staging)[programIdStr]?.[bitflagStr];
   if (!protocolPermissions) {
     console.error(
       `Protocol mapping not found for protocol name ${protocolName}`,

@@ -13,23 +13,26 @@ import {
 } from "../utils";
 import { PublicKey } from "@solana/web3.js";
 
-const validateIntegrationProgram = (input: string) => {
+function validateIntegrationProgram(input: string, staging: boolean) {
   const pubkey = validatePublicKey(input);
-  if (pubkey.equals(getGlamMintProgramId())) {
+  if (pubkey.equals(getGlamMintProgramId(staging))) {
     console.error("Mint integration is not allowed");
     process.exit(1);
   }
   return pubkey;
-};
+}
 
-function resolveProtocolNames(names: string[]): Record<string, number> {
-  const lookup = getProgramAndBitflagByProtocolName();
+function resolveProtocolNames(
+  names: string[],
+  staging: boolean,
+): Record<string, number> {
+  const lookup = getProgramAndBitflagByProtocolName(staging);
   const groups: Record<string, number> = {};
 
   for (const name of names) {
-    const resolved = resolveProtocolName(name);
+    const resolved = resolveProtocolName(name, staging);
     const [programIdStr, bitflagStr] = lookup[resolved];
-    if (programIdStr === getGlamMintProgramId().toBase58()) {
+    if (programIdStr === getGlamMintProgramId(staging).toBase58()) {
       console.error("Mint integration is not allowed");
       process.exit(1);
     }
@@ -44,6 +47,8 @@ export function installIntegrationCommands(
   integration: Command,
   context: CliContext,
 ) {
+  const staging = context.glamClient.staging;
+
   integration
     .command("list")
     .description("List enabled integration programs and protocols")
@@ -62,6 +67,7 @@ export function installIntegrationCommands(
         const { protocols } = parseProtocolsBitmask(
           integrationProgram,
           protocolsBitmask,
+          staging,
         );
 
         console.log(
@@ -81,10 +87,10 @@ export function installIntegrationCommands(
     )
     .option("-y, --yes", "Skip confirmation")
     .action(async (protocols: string[], { yes }) => {
-      const groups = resolveProtocolNames(protocols);
+      const groups = resolveProtocolNames(protocols, staging);
 
       const details = Object.entries(groups).map(([pid, mask]) => {
-        const { protocols } = parseProtocolsBitmask(new PublicKey(pid), mask);
+        const { protocols } = parseProtocolsBitmask(new PublicKey(pid), mask, staging);
         const names = protocols.map((p) => p.name).join(", ");
         return `${pid} -> ${names}`;
       });
@@ -93,7 +99,7 @@ export function installIntegrationCommands(
       for (let i = 0; i < entries.length; i++) {
         const [pid, mask] = entries[i];
         const programId = new PublicKey(pid);
-        const { protocols } = parseProtocolsBitmask(programId, mask);
+        const { protocols } = parseProtocolsBitmask(programId, mask, staging);
         const names = protocols.map((p) => p.name).join(", ");
         await executeTxWithErrorHandling(
           () =>
@@ -120,10 +126,10 @@ export function installIntegrationCommands(
     )
     .option("-y, --yes", "Skip confirmation")
     .action(async (protocols: string[], { yes }) => {
-      const groups = resolveProtocolNames(protocols);
+      const groups = resolveProtocolNames(protocols, staging);
 
       const details = Object.entries(groups).map(([pid, mask]) => {
-        const { protocols } = parseProtocolsBitmask(new PublicKey(pid), mask);
+        const { protocols } = parseProtocolsBitmask(new PublicKey(pid), mask, staging);
         const names = protocols.map((p) => p.name).join(", ");
         return `${pid} -> ${names}`;
       });
@@ -132,7 +138,7 @@ export function installIntegrationCommands(
       for (let i = 0; i < entries.length; i++) {
         const [pid, mask] = entries[i];
         const programId = new PublicKey(pid);
-        const { protocols } = parseProtocolsBitmask(programId, mask);
+        const { protocols } = parseProtocolsBitmask(programId, mask, staging);
         const names = protocols.map((p) => p.name).join(", ");
         await executeTxWithErrorHandling(
           () =>
@@ -155,7 +161,7 @@ export function installIntegrationCommands(
     .argument(
       "<integration_program>",
       "Integration program ID",
-      validateIntegrationProgram,
+      (input: string) => validateIntegrationProgram(input, staging),
     )
     .option("-y, --yes", "Skip confirmation")
     .description("Disable all protocols from an integration")
