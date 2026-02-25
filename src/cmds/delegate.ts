@@ -58,8 +58,6 @@ export function installDelegateCommands(
   delegate: Command,
   context: CliContext,
 ) {
-  const staging = context.glamClient.staging;
-
   delegate
     .command("list")
     .description("List delegates and their permissions")
@@ -83,7 +81,7 @@ export function installDelegateCommands(
                     integrationProgram,
                     protocolBitflag,
                     permissionsBitmask,
-                    staging,
+                    context.glamClient.staging,
                   );
                 const permissionNames =
                   permissions.map((perm) => perm.name).join(", ") ||
@@ -108,17 +106,17 @@ export function installDelegateCommands(
     .description("Grant delegate permissions for a single protocol")
     .action(
       async (delegate: PublicKey, permissions: string[], { protocol, yes }) => {
-        const resolvedProtocol = resolveProtocolName(protocol, staging);
+        const resolvedProtocol = resolveProtocolName(protocol, context.glamClient.staging);
         const resolvedPermissions = resolvePermissionNames(
           resolvedProtocol,
           permissions,
-          staging,
+          context.glamClient.staging,
         );
         const { integrationProgram, protocolBitflag, permissionsBitmask } =
           parsePermissionNames({
             protocolName: resolvedProtocol,
             permissionNames: resolvedPermissions,
-            staging,
+            staging: context.glamClient.staging,
           });
         await handleDelegatePermissions(
           "grant",
@@ -146,17 +144,17 @@ export function installDelegateCommands(
     .description("Revoke delegate permissions for a single protocol by name")
     .action(
       async (delegate: PublicKey, permissions: string[], { protocol, yes }) => {
-        const resolvedProtocol = resolveProtocolName(protocol, staging);
+        const resolvedProtocol = resolveProtocolName(protocol, context.glamClient.staging);
         const resolvedPermissions = resolvePermissionNames(
           resolvedProtocol,
           permissions,
-          staging,
+          context.glamClient.staging,
         );
         const { integrationProgram, protocolBitflag, permissionsBitmask } =
           parsePermissionNames({
             protocolName: resolvedProtocol,
             permissionNames: resolvedPermissions,
-            staging,
+            staging: context.glamClient.staging,
           });
         await handleDelegatePermissions(
           "revoke",

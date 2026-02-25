@@ -12,8 +12,6 @@ import {
 } from "@glamsystems/glam-sdk";
 
 export function installTimelockCommands(program: Command, context: CliContext) {
-  const staging = context.glamClient.staging;
-
   program
     .command("view")
     .description("View current timelock")
@@ -52,7 +50,7 @@ export function installTimelockCommands(program: Command, context: CliContext) {
             const diff = compareIntegrationAcls(
               stateModel.integrationAcls,
               value as IntegrationAcl[],
-              staging,
+              context.glamClient.staging,
             );
 
             if (
@@ -73,7 +71,7 @@ export function installTimelockCommands(program: Command, context: CliContext) {
                 const protocols = getProtocolNamesFromBitmask(
                   acl.integrationProgram,
                   acl.protocolsBitmask,
-                  staging,
+                  context.glamClient.staging,
                 );
                 console.log(
                   `      [+] ${acl.integrationProgram.toBase58().slice(0, 8)}... (${protocols.join(", ")})`,
@@ -88,7 +86,7 @@ export function installTimelockCommands(program: Command, context: CliContext) {
                 const protocols = getProtocolNamesFromBitmask(
                   acl.integrationProgram,
                   acl.protocolsBitmask,
-                  staging,
+                  context.glamClient.staging,
                 );
                 console.log(
                   `      [-] ${acl.integrationProgram.toBase58().slice(0, 8)}... (${protocols.join(", ")})`,
@@ -120,7 +118,7 @@ export function installTimelockCommands(program: Command, context: CliContext) {
             const diff = compareDelegateAcls(
               stateModel.delegateAcls,
               value as DelegateAcl[],
-              staging,
+              context.glamClient.staging,
             );
 
             if (
@@ -150,13 +148,13 @@ export function installTimelockCommands(program: Command, context: CliContext) {
                       const protocolNames = getProtocolNamesFromBitmask(
                         intPerm.integrationProgram,
                         protoPerm.protocolBitflag,
-                        staging,
+                        context.glamClient.staging,
                       );
                       const permissions = getPermissionNamesFromBitmask(
                         intPerm.integrationProgram,
                         protoPerm.protocolBitflag,
                         protoPerm.permissionsBitmask,
-                        staging,
+                        context.glamClient.staging,
                       );
                       console.log(
                         `            ${protocolNames[0] || "Unknown"}: ${permissions.join(", ")}`,
