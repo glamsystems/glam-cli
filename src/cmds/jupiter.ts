@@ -205,14 +205,14 @@ export function installJupiterCommands(program: Command, context: CliContext) {
       "Slippage bps, defaults to 5 (0.05%)",
       "5",
     )
-    .option("--use-v2", "Use v2 instruction", false)
+    .option("--use-v1", "Use v1 instruction (default: v2)", false)
     .option("-d, --only-direct-routes", "Direct routes only")
     .option("-y, --yes", "Skip confirmation", false)
     .action(async (from, to, amount, options) => {
       const jupApi = context.glamClient.jupiterSwap.jupApi;
       const tokenFrom = await findToken(jupApi, from);
       const tokenTo = await findToken(jupApi, to);
-      const { maxAccounts, slippageBps, onlyDirectRoutes, useV2 } = options;
+      const { maxAccounts, slippageBps, onlyDirectRoutes, useV1 } = options;
 
       const quoteParams = {
         inputMint: tokenFrom.address,
@@ -224,7 +224,7 @@ export function installJupiterCommands(program: Command, context: CliContext) {
         asLegacyTransaction: false,
         ...(maxAccounts ? { maxAccounts: parseInt(maxAccounts) } : {}),
         ...(onlyDirectRoutes ? { onlyDirectRoutes } : {}),
-        instructionVersion: useV2 ? "V2" : "V1",
+        instructionVersion: useV1 ? "V1" : "V2",
       } as QuoteParams;
 
       await executeTxWithErrorHandling(
