@@ -29,7 +29,6 @@ export function installManageCommands(manage: Command, context: CliContext) {
         context.glamClient.vaultPda,
         context.glamClient.connection,
       );
-
       const lookupTables = [
         ...context.glamClient.price.lookupTables,
         ...glamLookupTables.map((t) => t.key),
@@ -55,7 +54,16 @@ export function installManageCommands(manage: Command, context: CliContext) {
     .description("Fulfill queued subscriptions and redemptions")
     .action(async () => {
       const preInstructions = await context.glamClient.price.priceVaultIxs(); // this loads lookup tables
-      const lookupTables = context.glamClient.price.lookupTables;
+
+      const glamLookupTables = await findGlamLookupTables(
+        context.glamClient.statePda,
+        context.glamClient.vaultPda,
+        context.glamClient.connection,
+      );
+      const lookupTables = [
+        ...context.glamClient.price.lookupTables,
+        ...glamLookupTables.map((t) => t.key),
+      ];
 
       await executeTxWithErrorHandling(
         () =>

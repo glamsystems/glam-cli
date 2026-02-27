@@ -32,7 +32,6 @@ export class CliConfig {
   tx_rpc_url: string;
   websocket_disabled: boolean;
   keypair_path: string;
-  glam_api?: string;
   glam_staging?: boolean;
   priority_fee?: {
     micro_lamports?: number;
@@ -51,7 +50,6 @@ export class CliConfig {
     this.tx_rpc_url = config.tx_rpc_url || "";
     this.websocket_disabled = config.websocket_disabled || false;
     this.keypair_path = config.keypair_path || "";
-    this.glam_api = config.glam_api;
     this.glam_staging = config.glam_staging;
     this.priority_fee = config.priority_fee;
     this.glam_state = config.glam_state;
@@ -114,10 +112,6 @@ export class CliConfig {
         process.env.WEBSOCKET_DISABLED = "1";
       }
 
-      if (cliConfig.glam_api) {
-        process.env.GLAM_API = cliConfig.glam_api || "https://api.glam.systems";
-      }
-
       if (cliConfig.glam_staging) {
         process.env.GLAM_STAGING = "1";
       }
@@ -165,7 +159,12 @@ export const parseTxError = (error: any) => {
     return error.error.errorMessage;
   }
 
-  return error?.message || "Unknown error";
+  const message = error?.message || "Unknown error";
+  if (message.includes("encoding overruns Uint8Array")) {
+    return "Transaction too large: the transaction exceeds the maximum size limit. Try using an address lookup table (glam alt create) to reduce transaction size.";
+  }
+
+  return message;
 };
 
 export async function confirmOperation(message: string) {
@@ -504,7 +503,8 @@ export function resolvePermissionNames(
   inputNames: string[],
   staging: boolean,
 ): string[] {
-  const protocolConfig = getProgramAndBitflagByProtocolName(staging)[protocolName];
+  const protocolConfig =
+    getProgramAndBitflagByProtocolName(staging)[protocolName];
   if (!protocolConfig) {
     console.error(`Unknown protocol name: ${protocolName}`);
     process.exit(1);
