@@ -8,11 +8,9 @@ import {
   TxOptions,
   getProgramAndBitflagByProtocolName,
   getProtocolsAndPermissions,
+  parseTxError as sdkParseTxError,
 } from "@glamsystems/glam-sdk";
-import {
-  PublicKey,
-  TransactionExpiredBlockheightExceededError,
-} from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
 import { InitMintParams } from "anchor/src/client/mint";
 import { InitStateParams } from "anchor/src/client/state";
 import fs from "fs";
@@ -151,20 +149,11 @@ const defaultConfigPath = () => {
 };
 
 export const parseTxError = (error: any) => {
-  if (error instanceof TransactionExpiredBlockheightExceededError) {
-    return "Transaction expired";
-  }
-
   if (error instanceof AnchorError) {
     return error.error.errorMessage;
   }
 
-  const message = error?.message || "Unknown error";
-  if (message.includes("encoding overruns Uint8Array")) {
-    return "Transaction too large: the transaction exceeds the maximum size limit. Try using an address lookup table (glam alt create) to reduce transaction size.";
-  }
-
-  return message;
+  return sdkParseTxError(error);
 };
 
 export async function confirmOperation(message: string) {
