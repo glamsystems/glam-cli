@@ -5,6 +5,7 @@ import {
   TokenListItem,
   fromUiAmount,
 } from "@glamsystems/glam-sdk";
+import { PublicKey } from "@solana/web3.js";
 import { Command } from "commander";
 import {
   CliContext,
@@ -207,12 +208,19 @@ export function installJupiterCommands(program: Command, context: CliContext) {
     )
     .option("--use-v1", "Use v1 instruction (default: v2)", false)
     .option("-d, --only-direct-routes", "Direct routes only")
+    .option("-t, --tracking-account <pubkey>", "Tracking account public key")
     .option("-y, --yes", "Skip confirmation", false)
     .action(async (from, to, amount, options) => {
       const jupApi = context.glamClient.jupiterSwap.jupApi;
       const tokenFrom = await findToken(jupApi, from);
       const tokenTo = await findToken(jupApi, to);
-      const { maxAccounts, slippageBps, onlyDirectRoutes, useV1 } = options;
+      const {
+        maxAccounts,
+        slippageBps,
+        onlyDirectRoutes,
+        useV1,
+        trackingAccount,
+      } = options;
 
       const quoteParams = {
         inputMint: tokenFrom.address,
@@ -230,7 +238,12 @@ export function installJupiterCommands(program: Command, context: CliContext) {
       await executeTxWithErrorHandling(
         () =>
           context.glamClient.jupiterSwap.swap(
-            { quoteParams },
+            {
+              quoteParams,
+              trackingAccount: trackingAccount
+                ? new PublicKey(trackingAccount)
+                : undefined,
+            },
             context.txOptions,
           ),
         {
