@@ -373,4 +373,27 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
         (txSig) => `Repaid ${amount} ${asset}: ${txSig}`,
       );
     });
+
+  klend
+    .command("request-elevation-group")
+    .argument("<market>", "Kamino lending market public key", validatePublicKey)
+    .argument("<elevation-group>", "Elevation group number", parseInt)
+    .option("-y, --yes", "Skip confirmation prompt", false)
+    .description("Request elevation group for an obligation (staging only)")
+    .action(async (market, elevationGroup, options) => {
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.kaminoLending.requestElevationGroup(
+            market,
+            elevationGroup,
+            context.txOptions,
+          ),
+        {
+          skip: options?.yes,
+          message: `Confirm requesting elevation group ${elevationGroup} for market ${market}`,
+        },
+        (txSig) =>
+          `Requested elevation group ${elevationGroup} for market ${market}: ${txSig}`,
+      );
+    });
 }
