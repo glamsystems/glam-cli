@@ -27,6 +27,7 @@ import { installManageCommands } from "./cmds/manage";
 import { installCctpCommands } from "./cmds/cctp";
 import { installTransferCommands } from "./cmds/transfer";
 import { installTimelockCommands } from "./cmds/timelock";
+import { installTokenAclCommands } from "./cmds/token-acl";
 
 const context = {} as CliContext;
 
@@ -197,6 +198,11 @@ installTimelockCommands(timelock, context);
 
 const cctp = program.command("cctp").description("CCTP operations");
 installCctpCommands(cctp, context);
+
+const tokenAcl = program
+  .command("token-acl")
+  .description("Token ACL (sRFC-37) operations");
+installTokenAclCommands(tokenAcl, context);
 
 if (process.env.NODE_ENV === "development") {
   // Commands that use unaudited integrations are disallowed by default
