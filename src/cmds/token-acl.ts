@@ -69,7 +69,6 @@ export function installTokenAclCommands(
       await executeTxWithErrorHandling(
         () =>
           glamClient.mint.enableTokenAcl(
-            glamClient.mintPda,
             undefined,
             txOptions,
           ),
@@ -93,12 +92,12 @@ export function installTokenAclCommands(
       const seed = parseSeed(seedStr);
       const mode = parseMode(options.mode);
       const listConfigPda = getTokenAclGateListConfigPda(
-        glamClient.signer,
+        glamClient.mintPda,
         seed,
       );
 
       await executeTxWithErrorHandling(
-        () => glamClient.mint.createTokenAclAllowlist(seed, mode, txOptions),
+        () => glamClient.mint.aclGateCreateList(seed, mode, txOptions),
         {
           skip: options?.yes,
           message: `Create ${options.mode} list "${seedStr}"? ListConfig PDA: ${listConfigPda.toBase58()}`,
@@ -117,10 +116,14 @@ export function installTokenAclCommands(
     .action(async (wallet, options) => {
       const { glamClient, txOptions } = context;
       const seed = parseSeed(options.seed);
+      const listConfigPda = getTokenAclGateListConfigPda(
+        glamClient.mintPda,
+        seed,
+      );
 
       await executeTxWithErrorHandling(
         () =>
-          glamClient.mint.addWalletToTokenAclAllowlist(seed, wallet, txOptions),
+          glamClient.mint.aclGateAddWallet(listConfigPda, wallet, txOptions),
         {
           skip: options?.yes,
           message: `Add wallet ${wallet.toBase58()} to allowlist "${options.seed}"?`,
@@ -140,12 +143,12 @@ export function installTokenAclCommands(
     .action(async (options) => {
       const { glamClient, txOptions } = context;
       const listConfigs = options.seed.map((seedStr: string) =>
-        getTokenAclGateListConfigPda(glamClient.signer, parseSeed(seedStr)),
+        getTokenAclGateListConfigPda(glamClient.mintPda, parseSeed(seedStr)),
       );
 
       await executeTxWithErrorHandling(
         () =>
-          glamClient.mint.setupTokenAclGateExtraMetas(listConfigs, txOptions),
+          glamClient.mint.aclGateSetupExtraMetas(listConfigs, txOptions),
         {
           skip: options?.yes,
           message: `Setup gate extra metas with ${listConfigs.length} list config(s)?`,
@@ -162,11 +165,9 @@ export function installTokenAclCommands(
     .description("Permissionless thaw for an allowlisted wallet")
     .action(async (wallet, options) => {
       const { glamClient, txOptions } = context;
-      const stateModel = await glamClient.fetchStateModel();
-
       const seed = parseSeed(options.seed);
       const listConfigPda = getTokenAclGateListConfigPda(
-        stateModel.owner, // TODO: verify this is correct assumption
+        glamClient.mintPda,
         seed,
       );
       const walletEntryPda = getTokenAclGateWalletEntryPda(
