@@ -1,5 +1,9 @@
 import { BN } from "@coral-xyz/anchor";
-import { GlamClient, fetchMintAndTokenProgram, fromUiAmount } from "@glamsystems/glam-sdk";
+import {
+  GlamClient,
+  fetchMintAndTokenProgram,
+  fromUiAmount,
+} from "@glamsystems/glam-sdk";
 import { Command } from "commander";
 import {
   CliContext,
