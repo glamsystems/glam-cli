@@ -99,7 +99,7 @@ export function installDelegateCommands(
     .argument("<pubkey>", "Delegate pubkey", validatePublicKey)
     .requiredOption(
       "--protocol <name>",
-      "Protocol name (e.g., DriftProtocol, KaminoLend, SplToken)",
+      "Protocol name (e.g., KaminoLend, SplToken, JupiterSwap)",
     )
     .argument("<permissions...>", "Permission names for the given protocol")
     .option("-y, --yes", "Skip confirmation prompt")
@@ -137,7 +137,7 @@ export function installDelegateCommands(
     .argument("<pubkey>", "Delegate pubkey", validatePublicKey)
     .requiredOption(
       "--protocol <name>",
-      "Protocol name (e.g., DriftProtocol, KaminoLend, SplToken)",
+      "Protocol name (e.g., KaminoLend, SplToken, JupiterSwap)",
     )
     .argument("<permissions...>", "Permission names for the given protocol")
     .option("-y, --yes", "Skip confirmation prompt")

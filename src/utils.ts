@@ -362,14 +362,6 @@ export function validateBooleanInput(input: string) {
   );
 }
 
-export function validateDriftMarketType(input: string) {
-  if (input !== "spot" && input !== "perp") {
-    console.error("Invalid market type. Allowed values: spot, perp");
-    process.exit(1);
-  }
-  return input;
-}
-
 /**
  * Execute a transaction with standardized error handling
  * @param txFn - Async function that returns a transaction signature

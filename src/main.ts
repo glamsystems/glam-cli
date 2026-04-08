@@ -8,8 +8,6 @@ import { Command } from "commander";
 
 import { CliConfig, CliContext } from "./utils";
 import { VersionedTransaction } from "@solana/web3.js";
-import { installDriftProtocolCommands } from "./cmds/drift-protocol";
-import { installDriftVaultsCommands } from "./cmds/drift-vaults";
 import { installLstCommands } from "./cmds/lst";
 import { installMarinadeCommands } from "./cmds/marinade";
 import { installKaminoLendCommands } from "./cmds/kamino-lend";
@@ -173,12 +171,6 @@ installKaminoVaultsCommands(kvaults, context);
 
 const kfarms = program.command("kamino-farms").description("Kamino farms");
 installKaminoFarmsCommands(kfarms, context);
-
-const drift = program.command("drift-protocol").description("Drift protocol");
-installDriftProtocolCommands(drift, context);
-
-const driftVaults = program.command("drift-vaults").description("Drift vaults");
-installDriftVaultsCommands(driftVaults, context);
 
 const invest = program
   .command("invest")

@@ -81,7 +81,7 @@ export function installIntegrationCommands(
     .description("Enable protocols by name (grouped per integration program)")
     .argument(
       "<protocols...>",
-      "Protocol names (e.g., SplToken, JupiterSwap, DriftProtocol)",
+      "Protocol names (e.g., SplToken, JupiterSwap, KaminoLend)",
     )
     .option("-y, --yes", "Skip confirmation")
     .action(async (protocols: string[], { yes }) => {
@@ -120,7 +120,7 @@ export function installIntegrationCommands(
     .description("Disable protocols by name (grouped per integration program)")
     .argument(
       "<protocols...>",
-      "Protocol names (e.g., SplToken, JupiterSwap, DriftProtocol)",
+      "Protocol names (e.g., SplToken, JupiterSwap, KaminoLend)",
     )
     .option("-y, --yes", "Skip confirmation")
     .action(async (protocols: string[], { yes }) => {
