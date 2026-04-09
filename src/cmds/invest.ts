@@ -27,7 +27,10 @@ export function installInvestCommands(invest: Command, context: CliContext) {
     .action(async (amount, state, options) => {
       let glamClient = context.glamClient;
       if (state) {
-        glamClient = new GlamClient({ statePda: state });
+        glamClient = new GlamClient({
+          cluster: context.cliConfig.cluster,
+          statePda: state,
+        });
       }
 
       const stateModel = await glamClient.fetchStateModel();
