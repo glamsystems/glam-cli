@@ -1,15 +1,16 @@
 import {
   bfToDecimal,
   Fraction,
-  getAssetMeta,
   KaminoLendingPolicy,
   PkMap,
   PkSet,
+  fromUiAmount,
 } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
 import {
   CliContext,
   executeTxWithErrorHandling,
+  resolveTokenMint,
   validatePublicKey,
 } from "../utils";
 import { PublicKey } from "@solana/web3.js";
@@ -274,18 +275,19 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
     .command("deposit")
     .argument("<market>", "Kamino lending market public key", validatePublicKey)
     .argument("<asset>", "Asset public key", validatePublicKey)
-    .argument("<amount>", "Amount to deposit", parseFloat)
+    .argument("<amount>", "Amount to deposit")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Deposit to Kamino Lending market")
     .action(async (market, asset, amount, options) => {
-      const { decimals } = getAssetMeta(asset);
+      const token = await resolveTokenMint(context.glamClient, asset);
+      const amountBN = fromUiAmount(amount, token.decimals);
 
       await executeTxWithErrorHandling(
         () =>
           context.glamClient.kaminoLending.deposit(
             market,
             asset,
-            amount * 10 ** decimals,
+            amountBN,
             context.txOptions,
           ),
         {
@@ -300,18 +302,19 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
     .command("withdraw")
     .argument("<market>", "Kamino lending market public key", validatePublicKey)
     .argument("<asset>", "Asset public key", validatePublicKey)
-    .argument("<amount>", "Amount to withdraw", parseFloat)
+    .argument("<amount>", "Amount to withdraw")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Withdraw asset from Kamino Lending market")
     .action(async (market, asset, amount, options) => {
-      const { decimals } = getAssetMeta(asset);
+      const token = await resolveTokenMint(context.glamClient, asset);
+      const amountBN = fromUiAmount(amount, token.decimals);
 
       await executeTxWithErrorHandling(
         () =>
           context.glamClient.kaminoLending.withdraw(
             market,
             asset,
-            amount * 10 ** decimals,
+            amountBN,
             context.txOptions,
           ),
         {
@@ -326,18 +329,19 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
     .command("borrow")
     .argument("<market>", "Kamino lending market public key", validatePublicKey)
     .argument("<asset>", "Asset public key", validatePublicKey)
-    .argument("<amount>", "Amount to repay", parseFloat)
+    .argument("<amount>", "Amount to repay")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Borrow from Kamino Lending market")
     .action(async (market, asset, amount, options) => {
-      const { decimals } = getAssetMeta(asset);
+      const token = await resolveTokenMint(context.glamClient, asset);
+      const amountBN = fromUiAmount(amount, token.decimals);
 
       await executeTxWithErrorHandling(
         () =>
           context.glamClient.kaminoLending.borrow(
             market,
             asset,
-            amount * 10 ** decimals,
+            amountBN,
             context.txOptions,
           ),
         {
@@ -352,18 +356,19 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
     .command("repay")
     .argument("<market>", "Kamino lending market public key", validatePublicKey)
     .argument("<asset>", "Asset public key", validatePublicKey)
-    .argument("<amount>", "Amount to repay", parseFloat)
+    .argument("<amount>", "Amount to repay")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Repay loan from Kamino Lending market")
     .action(async (market, asset, amount, options) => {
-      const { decimals } = getAssetMeta(asset);
+      const token = await resolveTokenMint(context.glamClient, asset);
+      const amountBN = fromUiAmount(amount, token.decimals);
 
       await executeTxWithErrorHandling(
         () =>
           context.glamClient.kaminoLending.repay(
             market,
             asset,
-            amount * 10 ** decimals,
+            amountBN,
             context.txOptions,
           ),
         {

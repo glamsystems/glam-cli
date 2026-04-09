@@ -9,6 +9,8 @@ import {
   getProgramAndBitflagByProtocolName,
   getProtocolsAndPermissions,
   parseTxError as sdkParseTxError,
+  TokenListItem,
+  fetchMintAndTokenProgram,
 } from "@glamsystems/glam-sdk";
 import { PublicKey } from "@solana/web3.js";
 import { InitMintParams } from "anchor/src/client/mint";
@@ -557,4 +559,41 @@ export function resolvePermissionNames(
   }
 
   return resolved;
+}
+
+export async function resolveTokenMint(
+  glamClient: GlamClient,
+  value: string, // mint address or symbol
+): Promise<TokenListItem> {
+  try {
+    const tokenList = await glamClient.jupiterSwap.jupApi.fetchTokensList();
+    const tokenInfo =
+      tokenList.getByMint(value) || tokenList.getBySymbol(value);
+    if (tokenInfo) {
+      return tokenInfo;
+    }
+  } catch {}
+
+  // Not in the verified token list — if `value` is a valid mint address,
+  // fall back to fetching decimals on-chain.
+  try {
+    const mintPubkey = new PublicKey(value);
+    const { mint } = await fetchMintAndTokenProgram(
+      glamClient.connection,
+      mintPubkey,
+    );
+    return {
+      address: mintPubkey.toBase58(),
+      name: mintPubkey.toBase58(),
+      symbol: mintPubkey.toBase58(),
+      decimals: mint.decimals,
+      logoURI: "",
+      tags: [],
+      usdPrice: 0,
+      slot: 0,
+    };
+  } catch {
+    console.error(`Cannot resolve token ${value}: ${value}`);
+    process.exit(1);
+  }
 }

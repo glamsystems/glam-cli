@@ -1,6 +1,5 @@
 import {
   getAssetMeta,
-  JupiterApiClient,
   JupiterSwapPolicy,
   QuoteParams,
   SOL_ORACLE,
@@ -12,24 +11,9 @@ import { Command } from "commander";
 import {
   CliContext,
   executeTxWithErrorHandling,
+  resolveTokenMint,
   validatePublicKey,
 } from "../utils";
-
-async function findToken(
-  jupApi: JupiterApiClient,
-  value: string,
-): Promise<TokenListItem> {
-  const tokenList = await jupApi.fetchTokensList();
-  const tokenInfo = tokenList.tokens.find(
-    (t) =>
-      t.address === value || t.symbol.toLowerCase() === value.toLowerCase(),
-  );
-  if (!tokenInfo) {
-    console.error(`Unverified token: ${value}`);
-    process.exit(1);
-  }
-  return tokenInfo;
-}
 
 function buildQuoteParams(
   tokenFrom: TokenListItem,
@@ -374,9 +358,8 @@ export function installJupiterCommands(program: Command, context: CliContext) {
     .option("-t, --tracking-account <pubkey>", "Tracking account public key")
     .option("-y, --yes", "Skip confirmation", false)
     .action(async (from, to, amount, options) => {
-      const jupApi = context.glamClient.jupiterSwap.jupApi;
-      const tokenFrom = await findToken(jupApi, from);
-      const tokenTo = await findToken(jupApi, to);
+      const tokenFrom = await resolveTokenMint(context.glamClient, from);
+      const tokenTo = await resolveTokenMint(context.glamClient, to);
       const {
         maxAccounts,
         slippageBps,
@@ -437,9 +420,8 @@ export function installJupiterCommands(program: Command, context: CliContext) {
     .option("-t, --tracking-account <pubkey>", "Tracking account public key")
     .option("-y, --yes", "Skip confirmation", false)
     .action(async (from, to, amount, options) => {
-      const jupApi = context.glamClient.jupiterSwap.jupApi;
-      const tokenFrom = await findToken(jupApi, from);
-      const tokenTo = await findToken(jupApi, to);
+      const tokenFrom = await resolveTokenMint(context.glamClient, from);
+      const tokenTo = await resolveTokenMint(context.glamClient, to);
       const {
         maxAccounts,
         slippageBps,
