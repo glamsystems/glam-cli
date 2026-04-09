@@ -9,10 +9,7 @@ import {
   fromUiAmount,
 } from "@glamsystems/glam-sdk";
 import { Command } from "commander";
-import {
-  PublicKey,
-  TransactionInstruction,
-} from "@solana/web3.js";
+import { PublicKey, TransactionInstruction } from "@solana/web3.js";
 import fs from "fs";
 import {
   CliContext,
@@ -322,10 +319,10 @@ export function installVaultCommands(program: Command, context: CliContext) {
 
   program
     .command("wrap")
-    .argument("<amount>", "Amount to wrap", parseFloat)
+    .argument("<amount>", "Amount to wrap")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Wrap SOL")
-    .action(async (amount: number, options) => {
+    .action(async (amount: string, options) => {
       const lamports = fromUiAmount(amount, 9);
 
       if (lamports.lte(new BN(0))) {

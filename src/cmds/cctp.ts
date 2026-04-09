@@ -125,7 +125,7 @@ export function installCctpCommands(program: Command, context: CliContext) {
   // https://developers.circle.com/cctp/cctp-supported-blockchains#cctp-v2-supported-domains
   program
     .command("bridge-usdc")
-    .argument("<amount>", "USDC amount", parseFloat)
+    .argument("<amount>", "USDC amount")
     .argument("<domain>", "CCTP domain", parseInt)
     .argument("<destination_address>", "Recipient EVM address")
     .option("-d, --destination-caller <address>", "Destination caller address")

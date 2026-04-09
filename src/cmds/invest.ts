@@ -15,7 +15,7 @@ import tokens from "../tokens-verified.json";
 export function installInvestCommands(invest: Command, context: CliContext) {
   invest
     .command("subscribe")
-    .argument("<amount>", "Amount to subscribe", parseFloat)
+    .argument("<amount>", "Amount to subscribe")
     .argument(
       "[state]",
       "State pubkey of the vault to subscribe to. Leave empty to use the active GLAM in CLI config.",
@@ -99,7 +99,7 @@ export function installInvestCommands(invest: Command, context: CliContext) {
 
   invest
     .command("redeem")
-    .argument("<amount>", "Amount to redeem", parseFloat)
+    .argument("<amount>", "Amount to redeem")
     .description("Request to redeem share tokens")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .action(async (amount, options) => {

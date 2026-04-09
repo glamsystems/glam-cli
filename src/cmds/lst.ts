@@ -11,11 +11,11 @@ export function installLstCommands(lst: Command, context: CliContext) {
   lst
     .command("stake")
     .argument("<stakepool>", "Stake pool address", validatePublicKey)
-    .argument("<amount>", "Amount to stake", parseFloat)
+    .argument("<amount>", "Amount to stake")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Stake SOL into a LST pool")
     .action(async (stakepool, amount, options) => {
-      const amountBN = fromUiAmount(parseFloat(amount), 9);
+      const amountBN = fromUiAmount(amount, 9);
 
       await executeTxWithErrorHandling(
         () =>
@@ -34,7 +34,7 @@ export function installLstCommands(lst: Command, context: CliContext) {
   lst
     .command("unstake")
     .argument("<asset>", "LST mint address", validatePublicKey)
-    .argument("<amount>", "Amount to unstake", parseFloat)
+    .argument("<amount>", "Amount to unstake")
     .option("-d, --deactivate", "Deactivate the stake account", false)
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Unstake LST and receive SOL in a stake account")

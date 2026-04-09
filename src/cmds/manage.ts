@@ -91,7 +91,7 @@ export function installManageCommands(manage: Command, context: CliContext) {
 
   manage
     .command("update-min-subscription")
-    .argument("<amount>", "Minimum subscription amount", parseFloat)
+    .argument("<amount>", "Minimum subscription amount")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Update the minimum subscription amount")
     .action(async (amount, options) => {
@@ -114,7 +114,7 @@ export function installManageCommands(manage: Command, context: CliContext) {
 
   manage
     .command("update-min-redemption")
-    .argument("<amount>", "Minimum redemption amount", parseFloat)
+    .argument("<amount>", "Minimum redemption amount")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Update the minimum redemption amount")
     .action(async (amount, options) => {

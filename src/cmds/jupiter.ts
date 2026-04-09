@@ -18,7 +18,7 @@ import {
 function buildQuoteParams(
   tokenFrom: TokenListItem,
   tokenTo: TokenListItem,
-  amount: number,
+  amount: string | number,
   options: {
     maxAccounts?: string;
     slippageBps: string;
@@ -346,7 +346,7 @@ export function installJupiterCommands(program: Command, context: CliContext) {
     .description("Swap assets held in the vault")
     .argument("<from>", "Source token mint or symbol")
     .argument("<to>", "Destination token mint or symbol")
-    .argument("<amount>", "Decimal-adjusted UI amount", parseFloat)
+    .argument("<amount>", "Decimal-adjusted UI amount")
     .option("-m, --max-accounts <num>", "Specify max accounts allowed")
     .option(
       "-s, --slippage-bps <bps>",
@@ -404,7 +404,7 @@ export function installJupiterCommands(program: Command, context: CliContext) {
     .description("Swap assets held in the vault using jupiter_swap_v2")
     .argument("<from>", "Source token mint or symbol")
     .argument("<to>", "Destination token mint or symbol")
-    .argument("<amount>", "Decimal-adjusted UI amount", parseFloat)
+    .argument("<amount>", "Decimal-adjusted UI amount")
     .option("-m, --max-accounts <num>", "Specify max accounts allowed")
     .option(
       "-s, --slippage-bps <bps>",

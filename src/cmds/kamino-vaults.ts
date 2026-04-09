@@ -105,7 +105,7 @@ export function installKaminoVaultsCommands(
   kvaults
     .command("deposit")
     .argument("<vault>", "Kamino vault public key", validatePublicKey)
-    .argument("<amount>", "Amount to deposit", parseFloat)
+    .argument("<amount>", "Amount to deposit")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Deposit to a Kamino vault")
     .action(async (vault, amount, options) => {
@@ -131,11 +131,7 @@ export function installKaminoVaultsCommands(
   kvaults
     .command("withdraw")
     .argument("<vault>", "Kamino vault public key", validatePublicKey)
-    .argument(
-      "<amount>",
-      "Burn Kamino vault tokens and withdraw deposit asset",
-      parseFloat,
-    )
+    .argument("<amount>", "Burn Kamino vault tokens and withdraw deposit asset")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Deposit to a Kamino vault")
     .action(async (vault, amount, options) => {

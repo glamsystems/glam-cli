@@ -8,11 +8,11 @@ export function installMarinadeCommands(
 ) {
   marinade
     .command("stake")
-    .argument("<amount>", "amount of SOL to stake", parseFloat)
+    .argument("<amount>", "amount of SOL to stake")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Stake SOL and get mSOL")
     .action(async (amount, options) => {
-      const amountBN = fromUiAmount(parseFloat(amount), 9);
+      const amountBN = fromUiAmount(amount, 9);
       await executeTxWithErrorHandling(
         () => context.glamClient.marinade.deposit(amountBN, context.txOptions),
         {
@@ -25,11 +25,11 @@ export function installMarinadeCommands(
 
   marinade
     .command("stake-native")
-    .argument("<amount>", "amount of SOL to stake", parseFloat)
+    .argument("<amount>", "amount of SOL to stake")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Stake SOL to Marinade Native")
     .action(async (amount, options) => {
-      const amountBN = fromUiAmount(parseFloat(amount), 9);
+      const amountBN = fromUiAmount(amount, 9);
       await executeTxWithErrorHandling(
         () =>
           context.glamClient.marinade.depositNative(
@@ -46,7 +46,7 @@ export function installMarinadeCommands(
 
   marinade
     .command("withdraw-stake")
-    .argument("<amount>", "mSOL amount", parseFloat)
+    .argument("<amount>", "mSOL amount")
     .option("-d, --deactivate", "Deactivate the stake account", false)
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Withdraw <amount> mSOL into a stake account")

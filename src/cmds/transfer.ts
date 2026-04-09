@@ -114,7 +114,7 @@ export function installTransferCommands(program: Command, context: CliContext) {
     });
 
   program
-    .argument("<amount>", "Amount to transfer", parseFloat)
+    .argument("<amount>", "Amount to transfer")
     .argument("<to>", "Destination address (pubkey)", validatePublicKey)
     .option(
       "-t, --token <mint>",

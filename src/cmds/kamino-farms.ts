@@ -1,4 +1,5 @@
 import { Command } from "commander";
+import { fromUiAmount } from "@glamsystems/glam-sdk";
 import {
   CliContext,
   executeTxWithErrorHandling,
@@ -70,10 +71,10 @@ export function installKaminoFarmsCommands(
   kfarms
     .command("stake")
     .argument("<farm_state>", "Farm state to stake to", validatePublicKey)
-    .argument("<amount>", "Amount of farm token to stake", parseFloat)
+    .argument("<amount>", "Amount of farm token to stake")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Stake token to a delegated farm")
-    .action(async (farmState: PublicKey, amount: number, options) => {
+    .action(async (farmState: PublicKey, amount: string, options) => {
       const farms = await context.glamClient.kaminoFarm.fetchAndParseFarmStates(
         [farmState],
       );
@@ -82,7 +83,7 @@ export function installKaminoFarmsCommands(
         throw new Error("Farm state not found");
       }
       const { farmTokenDecimals } = parsedFarmState;
-      const amountBN = new BN(amount * 10 ** farmTokenDecimals.toNumber());
+      const amountBN = fromUiAmount(amount, farmTokenDecimals.toNumber());
 
       await executeTxWithErrorHandling(
         () =>
@@ -102,10 +103,10 @@ export function installKaminoFarmsCommands(
   kfarms
     .command("unstake")
     .argument("<farm_state>", "Farm state to unstake from", validatePublicKey)
-    .argument("<amount>", "Amount of farm token to unstake", parseFloat)
+    .argument("<amount>", "Amount of farm token to unstake")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Unstake token from a delegated farm")
-    .action(async (farmState: PublicKey, amount: number, options) => {
+    .action(async (farmState: PublicKey, amount: string, options) => {
       const farms = await context.glamClient.kaminoFarm.fetchAndParseFarmStates(
         [farmState],
       );
@@ -114,7 +115,7 @@ export function installKaminoFarmsCommands(
         throw new Error("Farm state not found");
       }
       const { farmTokenDecimals } = parsedFarmState;
-      const amountBN = new BN(amount * 10 ** farmTokenDecimals.toNumber()).mul(
+      const amountBN = fromUiAmount(amount, farmTokenDecimals.toNumber()).mul(
         new BN(10).pow(new BN(18)),
       );
 
