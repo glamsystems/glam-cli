@@ -1,20 +1,20 @@
 import { AnchorError, BN } from "@coral-xyz/anchor";
 import {
   ClusterNetwork,
-  GlamClient,
+  type GlamClient,
   stringToChars,
-  PriorityLevel,
+  type PriorityLevel,
   StateAccountType,
-  TxOptions,
+  type TxOptions,
   getProgramAndBitflagByProtocolName,
   getProtocolsAndPermissions,
   parseTxError as sdkParseTxError,
-  TokenListItem,
+  type TokenListItem,
   fetchMintAndTokenProgram,
 } from "@glamsystems/glam-sdk";
 import { PublicKey } from "@solana/web3.js";
-import { InitMintParams } from "anchor/src/client/mint";
-import { InitStateParams } from "anchor/src/client/state";
+import { type InitMintParams } from "anchor/src/client/mint";
+import { type InitStateParams } from "anchor/src/client/state";
 import fs from "fs";
 import inquirer from "inquirer";
 import os from "os";

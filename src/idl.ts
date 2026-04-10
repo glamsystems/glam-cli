@@ -1,5 +1,5 @@
 import { PublicKey } from "@solana/web3.js";
-import { GlamClient } from "@glamsystems/glam-sdk";
+import { type GlamClient } from "@glamsystems/glam-sdk";
 
 export const idlCheck = async (glamClient: GlamClient) => {
   // Fetch anchor idl and parse it

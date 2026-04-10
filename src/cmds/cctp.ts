@@ -1,5 +1,5 @@
-import { Command } from "commander";
-import { CliContext, executeTxWithErrorHandling } from "../utils";
+import { type Command } from "commander";
+import { type CliContext, executeTxWithErrorHandling } from "../utils";
 import { BN } from "@coral-xyz/anchor";
 import {
   CctpPolicy,

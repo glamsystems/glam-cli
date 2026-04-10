@@ -1,7 +1,7 @@
 import { BN } from "@coral-xyz/anchor";
-import { Command } from "commander";
+import { type Command } from "commander";
 import {
-  CliContext,
+  type CliContext,
   executeTxWithErrorHandling,
   printTable,
   validateInvestorAction,
@@ -13,7 +13,7 @@ import {
   fromUiAmount,
   toUiAmount,
   RequestType,
-  PendingRequest,
+  type PendingRequest,
   fetchMintAndTokenProgram,
 } from "@glamsystems/glam-sdk";
 

@@ -6,8 +6,8 @@ import {
 import { PublicKey } from "@solana/web3.js";
 import { Command } from "commander";
 
-import { CliConfig, CliContext } from "./utils";
-import { VersionedTransaction } from "@solana/web3.js";
+import { CliConfig, type CliContext } from "./utils";
+import { type VersionedTransaction } from "@solana/web3.js";
 import { installLstCommands } from "./cmds/lst";
 import { installMarinadeCommands } from "./cmds/marinade";
 import { installKaminoLendCommands } from "./cmds/kamino-lend";

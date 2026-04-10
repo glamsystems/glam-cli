@@ -8,11 +8,11 @@ import {
   PkSet,
   fromUiAmount,
 } from "@glamsystems/glam-sdk";
-import { Command } from "commander";
-import { PublicKey, TransactionInstruction } from "@solana/web3.js";
+import { type Command } from "commander";
+import { type PublicKey, type TransactionInstruction } from "@solana/web3.js";
 import fs from "fs";
 import {
-  CliContext,
+  type CliContext,
   executeTxWithErrorHandling,
   parseMintJson,
   parseStateJson,

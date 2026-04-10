@@ -4,9 +4,9 @@ import {
   parseProtocolsBitmask,
   getGlamMintProgramId,
 } from "@glamsystems/glam-sdk";
-import { Command } from "commander";
+import { type Command } from "commander";
 import {
-  CliContext,
+  type CliContext,
   executeTxWithErrorHandling,
   resolveProtocolName,
   validatePublicKey,
@@ -85,10 +85,17 @@ export function installIntegrationCommands(
     )
     .option("-y, --yes", "Skip confirmation")
     .action(async (protocols: string[], { yes }) => {
-      const groups = resolveProtocolNames(protocols, context.glamClient.staging);
+      const groups = resolveProtocolNames(
+        protocols,
+        context.glamClient.staging,
+      );
 
       const details = Object.entries(groups).map(([pid, mask]) => {
-        const { protocols } = parseProtocolsBitmask(new PublicKey(pid), mask, context.glamClient.staging);
+        const { protocols } = parseProtocolsBitmask(
+          new PublicKey(pid),
+          mask,
+          context.glamClient.staging,
+        );
         const names = protocols.map((p) => p.name).join(", ");
         return `${pid} -> ${names}`;
       });
@@ -97,7 +104,11 @@ export function installIntegrationCommands(
       for (let i = 0; i < entries.length; i++) {
         const [pid, mask] = entries[i];
         const programId = new PublicKey(pid);
-        const { protocols } = parseProtocolsBitmask(programId, mask, context.glamClient.staging);
+        const { protocols } = parseProtocolsBitmask(
+          programId,
+          mask,
+          context.glamClient.staging,
+        );
         const names = protocols.map((p) => p.name).join(", ");
         await executeTxWithErrorHandling(
           () =>
@@ -124,10 +135,17 @@ export function installIntegrationCommands(
     )
     .option("-y, --yes", "Skip confirmation")
     .action(async (protocols: string[], { yes }) => {
-      const groups = resolveProtocolNames(protocols, context.glamClient.staging);
+      const groups = resolveProtocolNames(
+        protocols,
+        context.glamClient.staging,
+      );
 
       const details = Object.entries(groups).map(([pid, mask]) => {
-        const { protocols } = parseProtocolsBitmask(new PublicKey(pid), mask, context.glamClient.staging);
+        const { protocols } = parseProtocolsBitmask(
+          new PublicKey(pid),
+          mask,
+          context.glamClient.staging,
+        );
         const names = protocols.map((p) => p.name).join(", ");
         return `${pid} -> ${names}`;
       });
@@ -136,7 +154,11 @@ export function installIntegrationCommands(
       for (let i = 0; i < entries.length; i++) {
         const [pid, mask] = entries[i];
         const programId = new PublicKey(pid);
-        const { protocols } = parseProtocolsBitmask(programId, mask, context.glamClient.staging);
+        const { protocols } = parseProtocolsBitmask(
+          programId,
+          mask,
+          context.glamClient.staging,
+        );
         const names = protocols.map((p) => p.name).join(", ");
         await executeTxWithErrorHandling(
           () =>
@@ -159,7 +181,8 @@ export function installIntegrationCommands(
     .argument(
       "<integration_program>",
       "Integration program ID",
-      (input: string) => validateIntegrationProgram(input, context.glamClient.staging),
+      (input: string) =>
+        validateIntegrationProgram(input, context.glamClient.staging),
     )
     .option("-y, --yes", "Skip confirmation")
     .description("Disable all protocols from an integration")

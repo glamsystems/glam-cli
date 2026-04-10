@@ -1,7 +1,7 @@
-import { Command } from "commander";
 import { fromUiAmount } from "@glamsystems/glam-sdk";
+import { type Command } from "commander";
 import {
-  CliContext,
+  type CliContext,
   executeTxWithErrorHandling,
   validatePublicKey,
 } from "../utils";

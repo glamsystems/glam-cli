@@ -1,15 +1,15 @@
 import {
   getAssetMeta,
   JupiterSwapPolicy,
-  QuoteParams,
+  type QuoteParams,
   SOL_ORACLE,
-  TokenListItem,
+  type TokenListItem,
   fromUiAmount,
 } from "@glamsystems/glam-sdk";
 import { PublicKey } from "@solana/web3.js";
-import { Command } from "commander";
+import { type Command } from "commander";
 import {
-  CliContext,
+  type CliContext,
   executeTxWithErrorHandling,
   resolveTokenMint,
   validatePublicKey,

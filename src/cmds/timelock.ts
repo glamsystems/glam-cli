@@ -1,9 +1,9 @@
-import { Command } from "commander";
-import { CliContext, executeTxWithErrorHandling } from "../utils";
-import { PublicKey } from "@solana/web3.js";
+import { type Command } from "commander";
+import { type CliContext, executeTxWithErrorHandling } from "../utils";
+import { type PublicKey } from "@solana/web3.js";
 import {
-  IntegrationAcl,
-  DelegateAcl,
+  type IntegrationAcl,
+  type DelegateAcl,
   getProtocolNamesFromBitmask,
   getPermissionNamesFromBitmask,
   compareIntegrationAcls,

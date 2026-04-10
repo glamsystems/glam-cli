@@ -4,10 +4,10 @@ import {
   fetchMintAndTokenProgram,
   fromUiAmount,
 } from "@glamsystems/glam-sdk";
-import { Command } from "commander";
-import { PublicKey } from "@solana/web3.js";
+import { type Command } from "commander";
+import { type PublicKey } from "@solana/web3.js";
 import {
-  CliContext,
+  type CliContext,
   executeTxWithErrorHandling,
   validatePublicKey,
 } from "../utils";

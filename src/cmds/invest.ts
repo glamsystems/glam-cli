@@ -4,9 +4,9 @@ import {
   fetchMintAndTokenProgram,
   fromUiAmount,
 } from "@glamsystems/glam-sdk";
-import { Command } from "commander";
+import { type Command } from "commander";
 import {
-  CliContext,
+  type CliContext,
   executeTxWithErrorHandling,
   validatePublicKey,
 } from "../utils";

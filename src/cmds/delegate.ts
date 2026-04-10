@@ -1,18 +1,18 @@
-import { BN } from "@coral-xyz/anchor";
+import { type BN } from "@coral-xyz/anchor";
 import {
   formatBits,
   parseProtocolPermissionsBitmask,
   parsePermissionNames,
 } from "@glamsystems/glam-sdk";
-import { Command } from "commander";
+import { type Command } from "commander";
 import {
-  CliContext,
+  type CliContext,
   executeTxWithErrorHandling,
   resolvePermissionNames,
   resolveProtocolName,
   validatePublicKey,
 } from "../utils";
-import { PublicKey } from "@solana/web3.js";
+import { type PublicKey } from "@solana/web3.js";
 
 async function handleDelegatePermissions(
   operation: "grant" | "revoke",
@@ -106,7 +106,10 @@ export function installDelegateCommands(
     .description("Grant delegate permissions for a single protocol")
     .action(
       async (delegate: PublicKey, permissions: string[], { protocol, yes }) => {
-        const resolvedProtocol = resolveProtocolName(protocol, context.glamClient.staging);
+        const resolvedProtocol = resolveProtocolName(
+          protocol,
+          context.glamClient.staging,
+        );
         const resolvedPermissions = resolvePermissionNames(
           resolvedProtocol,
           permissions,
@@ -144,7 +147,10 @@ export function installDelegateCommands(
     .description("Revoke delegate permissions for a single protocol by name")
     .action(
       async (delegate: PublicKey, permissions: string[], { protocol, yes }) => {
-        const resolvedProtocol = resolveProtocolName(protocol, context.glamClient.staging);
+        const resolvedProtocol = resolveProtocolName(
+          protocol,
+          context.glamClient.staging,
+        );
         const resolvedPermissions = resolvePermissionNames(
           resolvedProtocol,
           permissions,

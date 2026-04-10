@@ -1,10 +1,10 @@
-import { Command } from "commander";
+import { type Command } from "commander";
 import {
-  CliContext,
+  type CliContext,
   executeTxWithErrorHandling,
   validatePublicKey,
 } from "../utils";
-import { PublicKey, Transaction } from "@solana/web3.js";
+import { type PublicKey, Transaction } from "@solana/web3.js";
 import {
   buildCreateAltInstructions,
   buildExtendAltInstructions,
