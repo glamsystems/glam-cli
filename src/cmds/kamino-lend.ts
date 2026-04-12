@@ -10,7 +10,6 @@ import { type Command } from "commander";
 import {
   type CliContext,
   executeTxWithErrorHandling,
-  resolveTokenMint,
   validatePublicKey,
 } from "../utils";
 import { PublicKey } from "@solana/web3.js";
@@ -279,8 +278,8 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Deposit to Kamino Lending market")
     .action(async (market, asset, amount, options) => {
-      const token = await resolveTokenMint(context.glamClient, asset);
-      const amountBN = fromUiAmount(amount, token.decimals);
+      const { decimals } = await context.glamClient.getAssetMeta(asset);
+      const amountBN = fromUiAmount(amount, decimals);
 
       await executeTxWithErrorHandling(
         () =>
@@ -306,8 +305,8 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Withdraw asset from Kamino Lending market")
     .action(async (market, asset, amount, options) => {
-      const token = await resolveTokenMint(context.glamClient, asset);
-      const amountBN = fromUiAmount(amount, token.decimals);
+      const { decimals } = await context.glamClient.getAssetMeta(asset);
+      const amountBN = fromUiAmount(amount, decimals);
 
       await executeTxWithErrorHandling(
         () =>
@@ -333,8 +332,8 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Borrow from Kamino Lending market")
     .action(async (market, asset, amount, options) => {
-      const token = await resolveTokenMint(context.glamClient, asset);
-      const amountBN = fromUiAmount(amount, token.decimals);
+      const { decimals } = await context.glamClient.getAssetMeta(asset);
+      const amountBN = fromUiAmount(amount, decimals);
 
       await executeTxWithErrorHandling(
         () =>
@@ -360,8 +359,8 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Repay loan from Kamino Lending market")
     .action(async (market, asset, amount, options) => {
-      const token = await resolveTokenMint(context.glamClient, asset);
-      const amountBN = fromUiAmount(amount, token.decimals);
+      const { decimals } = await context.glamClient.getAssetMeta(asset);
+      const amountBN = fromUiAmount(amount, decimals);
 
       await executeTxWithErrorHandling(
         () =>

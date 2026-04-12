@@ -1,8 +1,6 @@
 import {
-  getAssetMeta,
   JupiterSwapPolicy,
   type QuoteParams,
-  SOL_ORACLE,
   type TokenListItem,
   fromUiAmount,
 } from "@glamsystems/glam-sdk";
@@ -14,6 +12,9 @@ import {
   resolveTokenMint,
   validatePublicKey,
 } from "../utils";
+
+const JUPITER_INVALID_TOKEN_ACCOUNT_ERROR =
+  "Jupiter swap failed: Invalid token account";
 
 function buildQuoteParams(
   tokenFrom: TokenListItem,
@@ -43,53 +44,72 @@ function buildQuoteParams(
   };
 }
 
+function isJupiterInvalidTokenAccountError(error: unknown): boolean {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : null;
+
+  return !!message?.includes(JUPITER_INVALID_TOKEN_ACCOUNT_ERROR);
+}
+
+export async function addJupiterOnlyDirectRoutesSuggestion<T>(
+  quoteParams: QuoteParams,
+  execute: (quoteParams: QuoteParams) => Promise<T>,
+  operationLabel = "swap",
+): Promise<T> {
+  try {
+    return await execute(quoteParams);
+  } catch (error) {
+    if (
+      quoteParams.onlyDirectRoutes ||
+      !isJupiterInvalidTokenAccountError(error)
+    ) {
+      throw error;
+    }
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : typeof error === "string"
+          ? error
+          : JUPITER_INVALID_TOKEN_ACCOUNT_ERROR;
+
+    throw new Error(
+      `${message}\nSuggestion: retry ${operationLabel} with --only-direct-routes.`,
+    );
+  }
+}
+
 type SwapV2OracleOptions = {
   skipQuotePriceCheck?: boolean;
 };
 
-function getJupiterSwapV2OracleAccounts(
+async function getJupiterSwapV2OracleAccounts(
   context: CliContext,
   tokenFrom: TokenListItem,
   tokenTo: TokenListItem,
   options: SwapV2OracleOptions,
-): {
+): Promise<{
   solUsdOracle?: PublicKey;
   inputTokenOracle?: PublicKey;
   outputTokenOracle?: PublicKey;
-} {
+}> {
   let inputAssetMeta = null;
   let outputAssetMeta = null;
 
   try {
-    inputAssetMeta = getAssetMeta(
-      tokenFrom.address,
-      context.glamClient.cluster,
-    );
-  } catch {
-    inputAssetMeta = null;
-  }
+    inputAssetMeta = await context.glamClient.getAssetMeta(tokenFrom.address);
+  } catch {}
 
   try {
-    outputAssetMeta = getAssetMeta(tokenTo.address, context.glamClient.cluster);
-  } catch {
-    outputAssetMeta = null;
-  }
-
-  if (!options.skipQuotePriceCheck) {
-    const unsupportedToken = [
-      { token: tokenFrom, assetMeta: inputAssetMeta },
-      { token: tokenTo, assetMeta: outputAssetMeta },
-    ].find(({ assetMeta }) => assetMeta?.aggIndex !== undefined)?.token;
-
-    if (unsupportedToken) {
-      throw new Error(
-        `swap-v2 quote price checks do not support Scope-based oracles for ${unsupportedToken.symbol}. Pass --skip-quote-price-check if your signer has the SkipQuotePriceCheck permission.`,
-      );
-    }
-  }
+    outputAssetMeta = await context.glamClient.getAssetMeta(tokenTo.address);
+  } catch {}
 
   const oracleAccounts = {
-    solUsdOracle: SOL_ORACLE,
+    solUsdOracle: await context.glamClient.getSolOracle(),
     inputTokenOracle: inputAssetMeta?.oracle,
     outputTokenOracle: outputAssetMeta?.oracle,
   };
@@ -377,14 +397,19 @@ export function installJupiterCommands(program: Command, context: CliContext) {
 
       await executeTxWithErrorHandling(
         () =>
-          context.glamClient.jupiterSwap.swap(
-            {
-              quoteParams,
-              trackingAccount: trackingAccount
-                ? new PublicKey(trackingAccount)
-                : undefined,
-            },
-            context.txOptions,
+          addJupiterOnlyDirectRoutesSuggestion(
+            quoteParams,
+            (retryQuoteParams) =>
+              context.glamClient.jupiterSwap.swap(
+                {
+                  quoteParams: retryQuoteParams,
+                  trackingAccount: trackingAccount
+                    ? new PublicKey(trackingAccount)
+                    : undefined,
+                },
+                context.txOptions,
+              ),
+            "swap",
           ),
         {
           skip: options?.yes,
@@ -436,7 +461,7 @@ export function installJupiterCommands(program: Command, context: CliContext) {
         onlyDirectRoutes,
         instructionVersion: "V2",
       });
-      const oracleAccounts = getJupiterSwapV2OracleAccounts(
+      const oracleAccounts = await getJupiterSwapV2OracleAccounts(
         context,
         tokenFrom,
         tokenTo,
@@ -445,16 +470,21 @@ export function installJupiterCommands(program: Command, context: CliContext) {
 
       await executeTxWithErrorHandling(
         () =>
-          context.glamClient.jupiterSwap.swapV2(
-            {
-              quoteParams,
-              skipQuotePriceCheck,
-              oracleAccounts,
-              trackingAccount: trackingAccount
-                ? new PublicKey(trackingAccount)
-                : undefined,
-            },
-            context.txOptions,
+          addJupiterOnlyDirectRoutesSuggestion(
+            quoteParams,
+            (retryQuoteParams) =>
+              context.glamClient.jupiterSwap.swapV2(
+                {
+                  quoteParams: retryQuoteParams,
+                  skipQuotePriceCheck,
+                  oracleAccounts,
+                  trackingAccount: trackingAccount
+                    ? new PublicKey(trackingAccount)
+                    : undefined,
+                },
+                context.txOptions,
+              ),
+            "swap-v2",
           ),
         {
           skip: options?.yes,
