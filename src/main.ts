@@ -23,6 +23,7 @@ import { installVaultCommands } from "./cmds/vault";
 import { idlCheck } from "./idl";
 import { installManageCommands } from "./cmds/manage";
 import { installCctpCommands } from "./cmds/cctp";
+import { installBridgeCommands } from "./cmds/bridge";
 import { installTransferCommands } from "./cmds/transfer";
 import { installTimelockCommands } from "./cmds/timelock";
 import { installTokenAclCommands } from "./cmds/token-acl";
@@ -190,6 +191,9 @@ installTimelockCommands(timelock, context);
 
 const cctp = program.command("cctp").description("CCTP operations");
 installCctpCommands(cctp, context);
+
+const bridge = program.command("bridge").description("Bridge operations");
+installBridgeCommands(bridge, context);
 
 const tokenAcl = program
   .command("token-acl")
