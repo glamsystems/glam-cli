@@ -24,6 +24,7 @@ import { idlCheck } from "./idl";
 import { installManageCommands } from "./cmds/manage";
 import { installCctpCommands } from "./cmds/cctp";
 import { installBridgeCommands } from "./cmds/bridge";
+import { installEpiCommands } from "./cmds/epi";
 import { installTransferCommands } from "./cmds/transfer";
 import { installTimelockCommands } from "./cmds/timelock";
 import { installTokenAclCommands } from "./cmds/token-acl";
@@ -194,6 +195,11 @@ installCctpCommands(cctp, context);
 
 const bridge = program.command("bridge").description("Bridge operations");
 installBridgeCommands(bridge, context);
+
+const epi = program
+  .command("epi")
+  .description("External position observation operations");
+installEpiCommands(epi, context);
 
 const tokenAcl = program
   .command("token-acl")
