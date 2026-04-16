@@ -1,8 +1,5 @@
 import {
-  AssetMeta,
   JupiterSwapPolicy,
-  JupiterSwapV2OracleAccounts,
-  PkSet,
   type QuoteParams,
   type TokenListItem,
   fromUiAmount,
@@ -15,9 +12,6 @@ import {
   resolveTokenMint,
   validatePublicKey,
 } from "../utils";
-
-const JUPITER_INVALID_TOKEN_ACCOUNT_ERROR =
-  "Jupiter swap failed: Invalid token account";
 
 function buildQuoteParams(
   tokenFrom: TokenListItem,

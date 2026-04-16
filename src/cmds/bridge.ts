@@ -8,50 +8,15 @@ import {
   RouteManagementMode,
   USDT,
 } from "@glamsystems/glam-sdk";
-import { Keypair, PublicKey, TransactionInstruction } from "@solana/web3.js";
+import { Keypair, PublicKey } from "@solana/web3.js";
 import { Command } from "commander";
-import fs from "fs";
 
-import { type CliContext, executeTxWithErrorHandling } from "../utils";
-
-type SerializableInstruction = {
-  programId: string;
-  keys: { pubkey: string; isSigner: boolean; isWritable: boolean }[];
-  data: string;
-};
-
-type ProviderIxFile = {
-  instructions: SerializableInstruction[];
-  signers?: string[];
-};
-
-function loadKeypair(path: string): Keypair {
-  return Keypair.fromSecretKey(
-    Buffer.from(JSON.parse(fs.readFileSync(path, "utf8"))),
-  );
-}
-
-function parseInstructionFile(path: string): {
-  instructions: TransactionInstruction[];
-  additionalSigners: Keypair[];
-} {
-  const raw = JSON.parse(fs.readFileSync(path, "utf8")) as ProviderIxFile;
-  return {
-    instructions: (raw.instructions || []).map(
-      (ix) =>
-        new TransactionInstruction({
-          programId: new PublicKey(ix.programId),
-          keys: ix.keys.map((key) => ({
-            pubkey: new PublicKey(key.pubkey),
-            isSigner: key.isSigner,
-            isWritable: key.isWritable,
-          })),
-          data: Buffer.from(ix.data, "base64"),
-        }),
-    ),
-    additionalSigners: (raw.signers || []).map(loadKeypair),
-  };
-}
+import {
+  type CliContext,
+  collectPublicKeys,
+  executeTxWithErrorHandling,
+  validatePublicKey,
+} from "../utils";
 
 function parseHexOrBase64Bytes(value: string, label: string): Buffer {
   const normalized = value.trim();
@@ -93,6 +58,14 @@ function parseFixedBytes(
     throw new Error(`${label} must decode to exactly ${expectedLength} bytes`);
   }
   return bytes;
+}
+
+function parseTransferId(value: string): PublicKey {
+  try {
+    return new PublicKey(value.trim());
+  } catch {
+    return new PublicKey(parseFixedBytes(value, "transferId", 32));
+  }
 }
 
 function formatBytesHex(value: Buffer | Uint8Array | number[]) {
@@ -239,11 +212,6 @@ function parseRecipientPublicKey(recipient: string): PublicKey {
   return new PublicKey(normalized);
 }
 
-function collectPublicKeys(value: string, previous: PublicKey[]) {
-  previous.push(new PublicKey(value));
-  return previous;
-}
-
 function printLayerzeroOftPolicy(policy: LayerzeroOftPolicy | null) {
   if (!policy || policy.routes.length === 0) {
     console.log("No LayerZero OFT routes configured.");
@@ -257,6 +225,17 @@ function printLayerzeroOftPolicy(policy: LayerzeroOftPolicy | null) {
     })),
   );
 }
+
+type OftSendOptions = {
+  nativeFeeLamports: BN;
+  minAmount?: number;
+  lzTokenFee?: BN;
+  options?: string;
+  composeMsg?: string;
+  managed: boolean;
+  lookupTable: PublicKey[];
+  yes: boolean;
+};
 
 function installLayerzeroOftCommands(program: Command, context: CliContext) {
   program
@@ -449,7 +428,7 @@ function installLayerzeroOftCommands(program: Command, context: CliContext) {
 
   program
     .command("derive-aux-account")
-    .argument("<transfer_id>", "32-byte hex or base64 transfer id")
+    .argument("<transfer_id>", "transfer id pubkey or 32-byte hex/base64")
     .argument("<source_mint>")
     .option(
       "--signer <pubkey>",
@@ -464,7 +443,7 @@ function installLayerzeroOftCommands(program: Command, context: CliContext) {
         sourceMint: string,
         { signer }: { signer?: string },
       ) => {
-        const parsedTransferId = parseFixedBytes(transferId, "transferId", 32);
+        const parsedTransferId = parseTransferId(transferId);
         const auxiliary =
           await context.glamClient.bridge.deriveOftAuxiliaryTokenAccount(
             parsedTransferId,
@@ -472,7 +451,7 @@ function installLayerzeroOftCommands(program: Command, context: CliContext) {
             signer ? new PublicKey(signer) : undefined,
           );
         printJson({
-          transferId: formatBytesHex(parsedTransferId),
+          transferId: parsedTransferId,
           seed: auxiliary.seed,
           address: auxiliary.address,
           tokenProgram: auxiliary.tokenProgram,
@@ -510,7 +489,7 @@ function installLayerzeroOftCommands(program: Command, context: CliContext) {
     .argument("<destination_chain>", "", parseInt)
     .argument("<destination_recipient>")
     .requiredOption(
-      "--native-fee <lamports>",
+      "--native-fee-lamports <lamports>",
       "LayerZero native fee in lamports/base units",
       (value: string) => new BN(value),
     )
@@ -532,8 +511,6 @@ function installLayerzeroOftCommands(program: Command, context: CliContext) {
       "--compose-msg <hex_or_base64>",
       "Optional raw LayerZero compose message payload; pass 'none' to encode compose_msg as None",
     )
-    .option("--nonce-account <pubkey>", "Optional nonce PDA override")
-    .option("--source-ata <pubkey>", "Optional explicit source token account")
     .option(
       "--managed",
       "Keep the inflight transfer managed until reconcile",
@@ -545,7 +522,6 @@ function installLayerzeroOftCommands(program: Command, context: CliContext) {
       collectPublicKeys,
       [],
     )
-    .option("--transfer-id <hex_or_base64>", "Optional 32-byte transfer id")
     .option("-y, --yes", "Skip confirmation", false)
     .description(
       "Bridge USDT through the checked-in direct LayerZero USDT0 OFT route",
@@ -556,51 +532,30 @@ function installLayerzeroOftCommands(program: Command, context: CliContext) {
         destinationChain: number,
         destinationRecipient: string,
         {
-          nativeFee,
+          nativeFeeLamports,
           minAmount,
           lzTokenFee,
           options,
           composeMsg,
-          nonceAccount,
-          sourceAta,
           managed,
           lookupTable,
-          transferId,
           yes,
-        }: {
-          nativeFee: BN;
-          minAmount?: number;
-          lzTokenFee?: BN;
-          options?: string;
-          composeMsg?: string;
-          nonceAccount?: string;
-          sourceAta?: string;
-          managed: boolean;
-          lookupTable: PublicKey[];
-          transferId?: string;
-          yes: boolean;
-        },
+        }: OftSendOptions,
       ) => {
-        const resolvedTransferId = transferId
-          ? parseFixedBytes(transferId, "transferId", 32)
-          : Keypair.generate().publicKey.toBuffer();
-        const transferIdHex = formatBytesHex(resolvedTransferId);
+        const transferId = Keypair.generate().publicKey;
 
         await executeTxWithErrorHandling(
           () =>
             context.glamClient.bridge.oft.send(
               {
-                transferId: resolvedTransferId,
+                transferId,
                 sourceMint: USDT,
                 sourceAmount: fromUiAmount(amount, 6),
                 destinationChain,
                 destinationRecipient:
                   parseRecipientPublicKey(destinationRecipient),
-                nativeFee,
-                minAmountLd:
-                  minAmount === undefined
-                    ? undefined
-                    : fromUiAmount(minAmount, 6),
+                nativeFeeLamports,
+                minAmountLd: minAmount ? fromUiAmount(minAmount, 6) : undefined,
                 lzTokenFee,
                 options: options
                   ? parseHexOrBase64Bytes(options, "options")
@@ -609,12 +564,6 @@ function installLayerzeroOftCommands(program: Command, context: CliContext) {
                   composeMsg,
                   "composeMsg",
                 ),
-                nonceAccount: nonceAccount
-                  ? new PublicKey(nonceAccount)
-                  : undefined,
-                sourceTokenAccount: sourceAta
-                  ? new PublicKey(sourceAta)
-                  : undefined,
                 managed,
               },
               {
@@ -630,88 +579,7 @@ function installLayerzeroOftCommands(program: Command, context: CliContext) {
             message: `Confirm LayerZero OFT send of ${amount} USDT to ${destinationRecipient} on chain ${destinationChain}?`,
           },
           (txSig) =>
-            `LayerZero OFT transfer submitted: ${txSig}\nTransfer ID: ${transferIdHex}`,
-        );
-      },
-    );
-
-  program
-    .command("send")
-    .argument("<amount>", "Source amount in UI units", parseFloat)
-    .argument("<source_mint>")
-    .argument("<destination_chain>", "", parseInt)
-    .argument("<destination_recipient>")
-    .requiredOption(
-      "--provider-ix-file <path>",
-      "JSON file with serialized provider instructions",
-    )
-    .requiredOption(
-      "--provider-receipt <pubkey>",
-      "Provider receipt account, usually the LayerZero nonce PDA",
-    )
-    .option("--source-ata <pubkey>", "Optional explicit source token account")
-    .option(
-      "--managed",
-      "Keep the inflight transfer managed until reconcile",
-      false,
-    )
-    .option("--decimals <decimals>", "Source mint decimals", parseInt, 6)
-    .option("--transfer-id <hex_or_base64>", "Optional 32-byte transfer id")
-    .option("-y, --yes", "Skip confirmation", false)
-    .description("Bridge tokens through a LayerZero OFT provider instruction")
-    .action(
-      async (
-        amount: number,
-        sourceMint: string,
-        destinationChain: number,
-        destinationRecipient: string,
-        {
-          providerIxFile,
-          providerReceipt,
-          sourceAta,
-          managed,
-          decimals,
-          transferId,
-          yes,
-        }: {
-          providerIxFile: string;
-          providerReceipt: string;
-          sourceAta?: string;
-          managed: boolean;
-          decimals: number;
-          transferId?: string;
-          yes: boolean;
-        },
-      ) => {
-        const resolvedTransferId = transferId
-          ? parseFixedBytes(transferId, "transferId", 32)
-          : Keypair.generate().publicKey.toBuffer();
-        const transferIdHex = formatBytesHex(resolvedTransferId);
-        const providerIxs = parseInstructionFile(providerIxFile);
-
-        await executeTxWithErrorHandling(
-          () =>
-            context.glamClient.bridge.sendOft(
-              {
-                transferId: resolvedTransferId,
-                sourceMint: new PublicKey(sourceMint),
-                sourceAmount: fromUiAmount(amount, decimals),
-                providerInstructions: providerIxs.instructions,
-                providerReceipt: new PublicKey(providerReceipt),
-                sourceTokenAccount: sourceAta
-                  ? new PublicKey(sourceAta)
-                  : undefined,
-                managed,
-                providerSigners: providerIxs.additionalSigners,
-              },
-              context.txOptions,
-            ),
-          {
-            skip: yes,
-            message: `Confirm LayerZero OFT send of ${amount} tokens to ${destinationRecipient} on chain ${destinationChain}?`,
-          },
-          (txSig) =>
-            `LayerZero OFT transfer submitted: ${txSig}\nTransfer ID: ${transferIdHex}`,
+            `LayerZero OFT transfer submitted: ${txSig}\nTransfer ID: ${transferId}`,
         );
       },
     );
@@ -731,72 +599,59 @@ export function installBridgeCommands(program: Command, context: CliContext) {
       printJson({
         pubkey: registryPda,
         ...registry,
+        transfers: registry.transfers.slice(
+          0,
+          toSortableNumber(registry.managedTransferCount),
+        ),
       });
-    });
-
-  program
-    .command("records")
-    .description("List bridge transfer records for the active vault")
-    .action(async () => {
-      const records =
-        await context.glamClient.extBridgeProgram.account.bridgeTransferRecord.all(
-          [
-            {
-              memcmp: {
-                offset: 8,
-                bytes: context.glamClient.statePda.toBase58(),
-              },
-            },
-          ],
-        );
-
-      printJson(
-        records
-          .map((record) => ({
-            pubkey: record.publicKey,
-            ...record.account,
-          }))
-          .sort(
-            (left, right) =>
-              toSortableNumber(right.committedSlot) -
-              toSortableNumber(left.committedSlot),
-          ),
-      );
     });
 
   program
     .command("record")
-    .argument("<transfer_id>", "32-byte hex or base64 transfer id")
+    .argument("<transfer_id>", "transfer id pubkey", validatePublicKey)
     .description("View a single bridge transfer record")
-    .action(async (transferId: string) => {
-      const parsedTransferId = parseFixedBytes(transferId, "transferId", 32);
-      const recordPda =
-        context.glamClient.bridge.getTransferRecordPda(parsedTransferId);
+    .action(async (transferId: PublicKey) => {
       const record =
-        await context.glamClient.extBridgeProgram.account.bridgeTransferRecord.fetchNullable(
-          recordPda,
-        );
+        await context.glamClient.bridge.fetchTransferRecordNullable(transferId);
 
       if (!record) {
         console.error(
-          `Bridge transfer record not found: ${recordPda.toBase58()}`,
+          `Bridge transfer record not found for transfer ${transferId}`,
         );
         process.exit(1);
       }
 
-      printJson({
-        pubkey: recordPda,
-        ...record,
-      });
+      printJson(record);
+    });
+
+  program
+    .command("validate")
+    .alias("validate-managed-transfer")
+    .argument("<transfer_id>", "transfer id pubkey", validatePublicKey)
+    .description("Validate a managed bridge transfer")
+    .option("-y, --yes", "Skip confirmation", false)
+    .action(async (transferId: PublicKey, { yes }: { yes: boolean }) => {
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.bridge.validateManagedTransfer(
+            transferId,
+            context.txOptions,
+          ),
+        {
+          skip: yes,
+          message: `Confirm validating transfer ${transferId}?`,
+        },
+        (txSig) => `Transfer validated: ${txSig}`,
+      );
     });
 
   program
     .command("settle")
-    .argument("<transfer_id>", "32-byte hex or base64 transfer id")
+    .argument("<transfer_id>", "transfer id pubkey or 32-byte hex/base64")
+    .description("Settle a managed bridge transfer")
     .option("-y, --yes", "Skip confirmation", false)
     .action(async (transferId: string, { yes }: { yes: boolean }) => {
-      const parsedTransferId = parseFixedBytes(transferId, "transferId", 32);
-      const transferIdHex = formatBytesHex(parsedTransferId);
+      const parsedTransferId = parseTransferId(transferId);
       await executeTxWithErrorHandling(
         () =>
           context.glamClient.bridge.settleManagedTransfer(
@@ -805,76 +660,9 @@ export function installBridgeCommands(program: Command, context: CliContext) {
           ),
         {
           skip: yes,
-          message: `Confirm marking transfer ${transferIdHex} as settled?`,
+          message: `Confirm settling transfer ${parsedTransferId}?`,
         },
         (txSig) => `Transfer settled: ${txSig}`,
-      );
-    });
-
-  program
-    .command("reconcile")
-    .argument("<transfer_id>", "32-byte hex or base64 transfer id")
-    .option("-y, --yes", "Skip confirmation", false)
-    .action(async (transferId: string, { yes }: { yes: boolean }) => {
-      const parsedTransferId = parseFixedBytes(transferId, "transferId", 32);
-      const transferIdHex = formatBytesHex(parsedTransferId);
-      await executeTxWithErrorHandling(
-        () =>
-          context.glamClient.bridge.reconcileManagedTransfer(
-            parsedTransferId,
-            context.txOptions,
-          ),
-        {
-          skip: yes,
-          message: `Confirm reconciling transfer ${transferIdHex}?`,
-        },
-        (txSig) => `Transfer reconciled: ${txSig}`,
-      );
-    });
-
-  program
-    .command("fail")
-    .argument("<transfer_id>", "32-byte hex or base64 transfer id")
-    .argument("<reason>", "Failure reason code", parseInt)
-    .option("-y, --yes", "Skip confirmation", false)
-    .action(
-      async (transferId: string, reason: number, { yes }: { yes: boolean }) => {
-        const parsedTransferId = parseFixedBytes(transferId, "transferId", 32);
-        const transferIdHex = formatBytesHex(parsedTransferId);
-        await executeTxWithErrorHandling(
-          () =>
-            context.glamClient.bridge.failManagedTransfer(
-              parsedTransferId,
-              reason,
-              context.txOptions,
-            ),
-          {
-            skip: yes,
-            message: `Confirm failing transfer ${transferIdHex}?`,
-          },
-          (txSig) => `Transfer failed: ${txSig}`,
-        );
-      },
-    );
-
-  program
-    .command("cleanup")
-    .argument("<transfer_id>", "32-byte hex or base64 transfer id")
-    .option("-y, --yes", "Skip confirmation", false)
-    .action(async (transferId: string, { yes }: { yes: boolean }) => {
-      const parsedTransferId = parseFixedBytes(transferId, "transferId", 32);
-      const transferIdHex = formatBytesHex(parsedTransferId);
-      await executeTxWithErrorHandling(
-        () =>
-          context.glamClient.bridge.cleanupTransferRecord(
-            parsedTransferId,
-            context.txOptions,
-          ),
-        {
-          skip: yes,
-          message: `Confirm closing transfer record ${transferIdHex}?`,
-        },
-        (txSig) => `Transfer record closed: ${txSig}`,
       );
     });
 

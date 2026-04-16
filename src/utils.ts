@@ -326,6 +326,11 @@ export function validatePublicKey(value: string) {
   }
 }
 
+export function collectPublicKeys(value: string, previous: PublicKey[]) {
+  previous.push(validatePublicKey(value));
+  return previous;
+}
+
 export function validateSubAccountId(subAccountId: string): number {
   const parsed = parseInt(subAccountId);
   if (isNaN(parsed) || parsed < 0) {
