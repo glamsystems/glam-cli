@@ -593,7 +593,7 @@ export async function resolveTokenMint(
       slot: 0,
     };
   } catch {
-    console.error(`Cannot resolve token ${value}: ${value}`);
+    console.error(`Cannot resolve token: ${value}`);
     process.exit(1);
   }
 }

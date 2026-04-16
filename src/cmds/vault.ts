@@ -581,6 +581,66 @@ export function installVaultCommands(program: Command, context: CliContext) {
     });
 
   program
+    .command("allowlist-borrowable-asset")
+    .argument("<asset>", "Borrowable asset mint public key", validatePublicKey)
+    .option("-y, --yes", "Skip confirmation prompt", false)
+    .description("Add a borrowable asset to the vault's borrowable allowlist")
+    .action(async (asset: PublicKey, options) => {
+      const stateModel = await context.glamClient.fetchStateModel();
+      const borrowableSet = new PkSet(stateModel.borrowable || []);
+
+      if (borrowableSet.has(asset)) {
+        console.error(`Borrowable asset ${asset} already allowlisted`);
+        process.exit(1);
+      }
+
+      const borrowable = Array.from(borrowableSet.add(asset));
+
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.state.update({ borrowable }, context.txOptions),
+        {
+          skip: options?.yes,
+          message: `Confirm adding ${asset} to the vault's borrowable allowlist?`,
+        },
+        (txSig) =>
+          `${asset} added to the vault's borrowable allowlist: ${txSig}`,
+      );
+    });
+
+  program
+    .command("remove-borrowable-asset")
+    .argument("<asset>", "Borrowable asset mint public key", validatePublicKey)
+    .option("-y, --yes", "Skip confirmation prompt", false)
+    .description(
+      "Remove a borrowable asset from the vault's borrowable allowlist",
+    )
+    .action(async (asset: PublicKey, options) => {
+      const stateModel = await context.glamClient.fetchStateModel();
+      const borrowableSet = new PkSet(stateModel.borrowable || []);
+      const removed = borrowableSet.delete(asset);
+
+      if (!removed) {
+        console.error(
+          `${asset} not found in the vault's borrowable allowlist, nothing to remove`,
+        );
+        process.exit(1);
+      }
+
+      const borrowable = Array.from(borrowableSet);
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.state.update({ borrowable }, context.txOptions),
+        {
+          skip: options?.yes,
+          message: `Confirm removing ${asset} from the vault's borrowable allowlist?`,
+        },
+        (txSig) =>
+          `${asset} removed from the vault's borrowable allowlist: ${txSig}`,
+      );
+    });
+
+  program
     .command("holdings")
     .description("Get all vault holdings")
     .action(async () => {
