@@ -28,6 +28,7 @@ import { installEpiCommands } from "./cmds/epi";
 import { installTransferCommands } from "./cmds/transfer";
 import { installTimelockCommands } from "./cmds/timelock";
 import { installTokenAclCommands } from "./cmds/token-acl";
+import { installLoopscaleCommands } from "./cmds/loopscale";
 
 const context = {} as CliContext;
 
@@ -206,18 +207,26 @@ const tokenAcl = program
   .description("Token ACL (sRFC-37) operations");
 installTokenAclCommands(tokenAcl, context);
 
+const unauditedCommandHook = async (thisCommand: Command) => {
+  const { bypassWarning } = thisCommand.opts();
+  if (!bypassWarning) {
+    console.error(
+      "Unaudited integration. Use with caution. Use --bypass-warning to bypass this warning.",
+    );
+    process.exit(1);
+  }
+};
+
+const loopscale = program
+  .command("loopscale")
+  .option("-b, --bypass-warning", "Bypass warning", false)
+  .description("[Unaudited] Loopscale loans")
+  .hook("preSubcommand", unauditedCommandHook);
+installLoopscaleCommands(loopscale, context);
+
 if (process.env.NODE_ENV === "development") {
   // Commands that use unaudited integrations are disallowed by default
   // Unleash them with --bypass-warning
-  const unauditedCommandHook = async (thisCommand: Command) => {
-    const { bypassWarning } = thisCommand.opts();
-    if (!bypassWarning) {
-      console.error(
-        "Unaudited integration. Use with caution. Use --bypass-warning to bypass this warning.",
-      );
-      process.exit(1);
-    }
-  };
   const marinade = program
     .command("marinade")
     .option("-b, --bypass-warning", "Bypass warning", false)

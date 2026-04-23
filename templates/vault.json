@@ -1,7 +1,7 @@
 {
   "state": {
     "accountType": "vault",
-    "name": "GLAM Vault Devnet",
+    "name": "GLAM Loopscale Test",
     "enabled": true,
     "baseAssetMint": "So11111111111111111111111111111111111111112",
     "assets": [
