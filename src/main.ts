@@ -3,11 +3,18 @@ import {
   getPriorityFeeEstimate,
   GlamClient,
 } from "@glamsystems/glam-sdk";
-import { PublicKey } from "@solana/web3.js";
+import {
+  Connection,
+  PublicKey,
+  type VersionedTransaction,
+} from "@solana/web3.js";
 import { Command } from "commander";
 
-import { CliConfig, type CliContext } from "./utils";
-import { type VersionedTransaction } from "@solana/web3.js";
+import {
+  CliConfig,
+  resolveStagingFromStateOwner,
+  type CliContext,
+} from "./utils";
 import { installLstCommands } from "./cmds/lst";
 import { installMarinadeCommands } from "./cmds/marinade";
 import { installKaminoLendCommands } from "./cmds/kamino-lend";
@@ -53,14 +60,31 @@ function setupGracefulShutdown() {
   });
 }
 
-function initialize(configPath?: string, skipSimulation = false) {
+async function initialize(configPath?: string, skipSimulation = false) {
   const cliConfig = CliConfig.get(configPath);
   const { cluster, glam_state } = cliConfig;
+  let useStaging = cliConfig.glam_staging;
+
+  if (glam_state && glam_state !== "") {
+    const statePda = new PublicKey(glam_state);
+    const account = await new Connection(cliConfig.json_rpc_url, {
+      commitment: "confirmed",
+    }).getAccountInfo(statePda);
+    if (!account) {
+      throw new Error(`GLAM state account not found: ${statePda.toBase58()}`);
+    }
+    useStaging = resolveStagingFromStateOwner(account.owner, useStaging);
+  }
+
+  if (useStaging !== undefined) {
+    process.env.GLAM_STAGING = useStaging ? "1" : "0";
+  }
 
   context.glamClient = new GlamClient({
     cluster,
     statePda:
       glam_state && glam_state !== "" ? new PublicKey(glam_state) : undefined,
+    useStaging,
   });
 
   context.cliConfig = cliConfig;
@@ -107,7 +131,7 @@ program
   .hook("preSubcommand", async (thisCommand: Command) => {
     const { config, skipSimulation } = thisCommand.opts();
 
-    initialize(config, skipSimulation);
+    await initialize(config, skipSimulation);
     await idlCheck(context.glamClient);
   })
   .version("1.0.13");
@@ -121,7 +145,7 @@ program
       "GLAM Protocol program:",
       glamClient.protocolProgram.programId.toBase58(),
     );
-    console.log("Staging:", cliConfig.glam_staging ? true : false);
+    console.log("Staging:", glamClient.staging);
     console.log("Wallet connected:", glamClient.signer.toBase58());
     console.log("RPC endpoint:", glamClient.connection.rpcEndpoint);
     console.log("Priority fee:", cliConfig.priority_fee);

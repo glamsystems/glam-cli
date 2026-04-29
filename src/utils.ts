@@ -8,6 +8,7 @@ import {
   type TxOptions,
   getProgramAndBitflagByProtocolName,
   getProtocolsAndPermissions,
+  getGlamProtocolProgramId,
   parseTxError as sdkParseTxError,
   type TokenListItem,
   fetchMintAndTokenProgram,
@@ -157,6 +158,39 @@ export const parseTxError = (error: any) => {
 
   return sdkParseTxError(error);
 };
+
+export function inferStagingFromStateOwner(owner: PublicKey): boolean | null {
+  if (owner.equals(getGlamProtocolProgramId(true))) {
+    return true;
+  }
+  if (owner.equals(getGlamProtocolProgramId(false))) {
+    return false;
+  }
+  return null;
+}
+
+export function resolveStagingFromStateOwner(
+  owner: PublicKey,
+  configuredStaging?: boolean,
+): boolean {
+  const inferredStaging = inferStagingFromStateOwner(owner);
+  if (inferredStaging === null) {
+    throw new Error(
+      `Configured GLAM state is owned by ${owner.toBase58()}, not a known GLAM protocol program`,
+    );
+  }
+
+  if (
+    configuredStaging !== undefined &&
+    configuredStaging !== inferredStaging
+  ) {
+    throw new Error(
+      `Config glam_staging=${configuredStaging} does not match GLAM state owner ${owner.toBase58()} (${inferredStaging ? "staging" : "production"})`,
+    );
+  }
+
+  return inferredStaging;
+}
 
 export async function confirmOperation(message: string) {
   try {
