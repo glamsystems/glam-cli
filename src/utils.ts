@@ -136,20 +136,8 @@ export class CliConfig {
   }
 }
 
-const defaultConfigPath = () => {
-  // By default config.json is under ~/.config/glam/
-  // If running in docker, config.json is expected to be at /workspace/config.json
-  const configHomeDefault = path.join(os.homedir(), ".config/glam/");
-  const docker = process.env.DOCKER;
-  // Treat "0", "false", "", undefined, null as false
-  // Treat "1", "true", or any other truthy string as true
-  const isDocker = !!(docker && docker !== "0" && docker !== "false");
-  const configPath = path.join(
-    isDocker ? "/workspace" : configHomeDefault,
-    "config.json",
-  );
-  return configPath;
-};
+const defaultConfigPath = () =>
+  path.join(os.homedir(), ".config/glam/", "config.json");
 
 export const parseTxError = (error: any) => {
   if (error instanceof AnchorError) {
