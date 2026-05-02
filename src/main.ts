@@ -3,6 +3,7 @@ import {
   getPriorityFeeEstimate,
   GlamClient,
 } from "@glamsystems/glam-sdk";
+import { AnchorProvider } from "@coral-xyz/anchor";
 import {
   Connection,
   PublicKey,
@@ -15,6 +16,7 @@ import {
   resolveStagingFromStateOwner,
   type CliContext,
 } from "./utils";
+import { DEFAULT_DERIVATION_PATH, LedgerWallet } from "./ledger";
 import { installLstCommands } from "./cmds/lst";
 import { installMarinadeCommands } from "./cmds/marinade";
 import { installKaminoLendCommands } from "./cmds/kamino-lend";
@@ -50,23 +52,44 @@ function setupGracefulShutdown() {
   });
 
   process.on("uncaughtException", (error) => {
-    console.error("\nUncaught Exception:", error);
+    printCliError(error);
     process.exit(1);
   });
 
-  process.on("unhandledRejection", (reason, promise) => {
-    console.error("\nUnhandled Rejection at:", promise, "reason:", reason);
+  process.on("unhandledRejection", (reason) => {
+    printCliError(reason);
     process.exit(1);
   });
 }
 
-async function initialize(configPath?: string, skipSimulation = false) {
-  const cliConfig = CliConfig.get(configPath);
+function printCliError(error: unknown) {
+  if (error instanceof Error) {
+    console.error(`${error.message}`);
+    return;
+  }
+
+  console.error(`${String(error)}`);
+}
+
+async function initialize(
+  configPath?: string,
+  skipSimulation = false,
+  staging?: boolean,
+  wallet?: string,
+  ledgerDerivationPath?: string,
+) {
+  const cliConfig = CliConfig.get(configPath, {
+    glam_staging: staging,
+    wallet,
+    ledger_derivation_path: ledgerDerivationPath,
+  });
   const { cluster, glam_state } = cliConfig;
+
   let useStaging = cliConfig.glam_staging;
+  let statePda: PublicKey | undefined;
 
   if (glam_state && glam_state !== "") {
-    const statePda = new PublicKey(glam_state);
+    statePda = new PublicKey(glam_state);
     const account = await new Connection(cliConfig.json_rpc_url, {
       commitment: "confirmed",
     }).getAccountInfo(statePda);
@@ -80,10 +103,23 @@ async function initialize(configPath?: string, skipSimulation = false) {
     process.env.GLAM_STAGING = useStaging ? "1" : "0";
   }
 
+  let provider: AnchorProvider | undefined;
+  if (cliConfig.useLedger()) {
+    const ledgerWallet = new LedgerWallet(cliConfig.ledger_derivation_path);
+    await ledgerWallet.connect();
+    const connection = new Connection(cliConfig.json_rpc_url, {
+      commitment: "confirmed",
+    });
+    provider = new AnchorProvider(connection, ledgerWallet, {
+      commitment: "confirmed",
+      preflightCommitment: "confirmed",
+    });
+  }
+
   context.glamClient = new GlamClient({
+    provider, // if undefined, GlamClient builds one from ANCHOR_WALLET env
     cluster,
-    statePda:
-      glam_state && glam_state !== "" ? new PublicKey(glam_state) : undefined,
+    statePda,
     useStaging,
   });
 
@@ -118,8 +154,6 @@ async function initialize(configPath?: string, skipSimulation = false) {
   };
 }
 
-// Initialize with default config first so subcommands have valid values
-// initialize();
 setupGracefulShutdown();
 
 const program = new Command();
@@ -128,10 +162,23 @@ program
   .description("CLI for interacting with the GLAM Protocol")
   .option("-C, --config <path>", "path to config file")
   .option("-S, --skip-simulation", "skip simulation", false)
+  .option("--staging", "use staging environment")
+  .option("--wallet <wallet>", "Keypair file path or USB path (usb://ledger)")
+  .option(
+    "--ledger-derivation-path <path>",
+    `Ledger derivation path (default: ${DEFAULT_DERIVATION_PATH})`,
+  )
   .hook("preSubcommand", async (thisCommand: Command) => {
-    const { config, skipSimulation } = thisCommand.opts();
+    const { config, skipSimulation, staging, wallet, ledgerDerivationPath } =
+      thisCommand.opts();
 
-    await initialize(config, skipSimulation);
+    await initialize(
+      config,
+      skipSimulation,
+      staging,
+      wallet,
+      ledgerDerivationPath,
+    );
     await idlCheck(context.glamClient);
   })
   .version("1.0.13");
@@ -279,13 +326,16 @@ if (process.env.NODE_ENV === "development") {
 // For example:
 // npx nx run cli:dev -- --args="list -a"
 //
-if (process.env.NODE_ENV === "development") {
-  const argv = [
-    process.argv[0], // Node.js binary path
-    process.argv[1], // Script path
-    ...process.argv[2].split(" "), // Split the concatenated arguments
-  ];
-  program.parse(argv);
-} else {
-  program.parse(process.argv);
-}
+const argv =
+  process.env.NODE_ENV === "development"
+    ? [
+        process.argv[0], // Node.js binary path
+        process.argv[1], // Script path
+        ...process.argv[2].split(" "), // Split the concatenated arguments
+      ]
+    : process.argv;
+
+program.parseAsync(argv).catch((error) => {
+  printCliError(error);
+  process.exit(1);
+});

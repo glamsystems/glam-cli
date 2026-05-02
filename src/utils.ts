@@ -32,7 +32,9 @@ export class CliConfig {
   json_rpc_url: string;
   tx_rpc_url: string;
   websocket_disabled: boolean;
-  keypair_path: string;
+  keypair_path: string; // deprecated, use wallet instead
+  wallet: string; // "/path/to/keypair" or "usb://ledger"
+  ledger_derivation_path?: string;
   glam_staging?: boolean;
   priority_fee?: {
     micro_lamports?: number;
@@ -51,12 +53,18 @@ export class CliConfig {
     this.tx_rpc_url = config.tx_rpc_url || "";
     this.websocket_disabled = config.websocket_disabled || false;
     this.keypair_path = config.keypair_path || "";
+    this.wallet = config.wallet || config.keypair_path || "";
+    this.ledger_derivation_path = config.ledger_derivation_path;
     this.glam_staging = config.glam_staging;
     this.priority_fee = config.priority_fee;
     this.glam_state = config.glam_state;
     this.jupiter_api_key = config.jupiter_api_key;
 
     this.configPath = configPath || defaultConfigPath();
+  }
+
+  useLedger(): boolean {
+    return this.wallet.startsWith("usb://");
   }
 
   get glamState(): PublicKey {
@@ -76,12 +84,12 @@ export class CliConfig {
     CliConfig.get(this.configPath);
   }
 
-  static get(configPath?: string): CliConfig {
+  static get(configPath?: string, override?: Partial<CliConfig>): CliConfig {
     if (
       !this.instance ||
       (configPath && this.instance.configPath !== configPath)
     ) {
-      this.instance = CliConfig.load(configPath);
+      this.instance = CliConfig.load(configPath, override);
     }
     return this.instance;
   }
@@ -90,19 +98,25 @@ export class CliConfig {
     this.instance = null;
   }
 
-  static load(path?: string): CliConfig {
+  static load(path?: string, override?: Partial<CliConfig>): CliConfig {
     const configPath = path || defaultConfigPath();
     try {
       const config = fs.readFileSync(configPath, "utf8");
       const parsedConfig = JSON.parse(config);
-      const cliConfig = new CliConfig(parsedConfig, configPath);
+      const definedOverride = Object.fromEntries(
+        Object.entries(override ?? {}).filter(([, v]) => v !== undefined),
+      );
+      const cliConfig = new CliConfig(
+        { ...parsedConfig, ...definedOverride },
+        configPath,
+      );
 
       if (!cliConfig.json_rpc_url) {
         throw new Error("Missing json_rpc_url in config.json");
       }
 
-      if (!cliConfig.keypair_path) {
-        throw new Error("Missing keypair_path in config.json");
+      if (!cliConfig.wallet && !cliConfig.keypair_path) {
+        throw new Error("Missing wallet or keypair_path in config.json");
       }
 
       if (cliConfig.tx_rpc_url) {
@@ -122,7 +136,9 @@ export class CliConfig {
       }
 
       process.env.ANCHOR_PROVIDER_URL = cliConfig.json_rpc_url;
-      process.env.ANCHOR_WALLET = cliConfig.keypair_path;
+      if (!cliConfig.useLedger()) {
+        process.env.ANCHOR_WALLET = cliConfig.wallet || cliConfig.keypair_path;
+      }
       process.env.HELIUS_API_KEY = cliConfig.priority_fee?.helius_api_key;
 
       return cliConfig;

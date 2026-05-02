@@ -28,6 +28,7 @@ export function installInvestCommands(invest: Command, context: CliContext) {
       let glamClient = context.glamClient;
       if (state) {
         glamClient = new GlamClient({
+          provider: context.glamClient.provider,
           cluster: context.cliConfig.cluster,
           statePda: state,
         });

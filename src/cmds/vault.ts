@@ -290,6 +290,7 @@ export function installVaultCommands(program: Command, context: CliContext) {
     .action(async (state: PublicKey | null, options) => {
       const statePda = state || context.cliConfig.glamState;
       const glamClient = new GlamClient({
+        provider: context.glamClient.provider,
         statePda,
         cluster: context.cliConfig.cluster,
       });
