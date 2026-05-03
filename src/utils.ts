@@ -317,7 +317,7 @@ export function parseMintJson(
               [mint.feeStructure.performance.hurdleType]: {},
             },
           },
-          protocol: { baseFeeBps: 0, floorFeeBps: 0 },
+          protocol: { baseFeeBps: 0, flowFeeBps: 0 },
         }
       : null,
     notifyAndSettle: mint.notifyAndSettle

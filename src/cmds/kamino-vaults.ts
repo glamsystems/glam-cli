@@ -113,7 +113,7 @@ export function installKaminoVaultsCommands(
         await context.glamClient.kaminoVaults.fetchAndParseVaultState(vault);
       const { tokenMint, tokenMintDecimals, vaultLookupTable } = vaultState;
 
-      const amountBN = fromUiAmount(amount, tokenMintDecimals);
+      const amountBN = fromUiAmount(amount, tokenMintDecimals.toNumber());
       await executeTxWithErrorHandling(
         () =>
           context.glamClient.kaminoVaults.deposit(vault, amountBN, {
@@ -139,7 +139,7 @@ export function installKaminoVaultsCommands(
         await context.glamClient.kaminoVaults.fetchAndParseVaultState(vault);
       const { sharesMintDecimals, vaultLookupTable } = vaultState;
 
-      const amountBN = fromUiAmount(amount, sharesMintDecimals);
+      const amountBN = fromUiAmount(amount, sharesMintDecimals.toNumber());
       await executeTxWithErrorHandling(
         () =>
           context.glamClient.kaminoVaults.withdraw(vault, amountBN, {
