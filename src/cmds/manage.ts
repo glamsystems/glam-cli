@@ -9,7 +9,6 @@ import {
 } from "../utils";
 import { Transaction } from "@solana/web3.js";
 import {
-  findGlamLookupTables,
   fromUiAmount,
   toUiAmount,
   RequestType,
@@ -24,15 +23,7 @@ export function installManageCommands(manage: Command, context: CliContext) {
     .action(async () => {
       const ixs = await context.glamClient.price.priceVaultIxs(); // this loads lookup tables
 
-      const glamLookupTables = await findGlamLookupTables(
-        context.glamClient.statePda,
-        context.glamClient.vaultPda,
-        context.glamClient.connection,
-      );
-      const lookupTables = [
-        ...context.glamClient.price.lookupTables,
-        ...glamLookupTables.map((t) => t.key),
-      ];
+      const lookupTables = context.glamClient.price.lookupTables;
 
       const tx = new Transaction().add(...ixs);
 
@@ -54,16 +45,7 @@ export function installManageCommands(manage: Command, context: CliContext) {
     .description("Fulfill queued subscriptions and redemptions")
     .action(async () => {
       const preInstructions = await context.glamClient.price.priceVaultIxs(); // this loads lookup tables
-
-      const glamLookupTables = await findGlamLookupTables(
-        context.glamClient.statePda,
-        context.glamClient.vaultPda,
-        context.glamClient.connection,
-      );
-      const lookupTables = [
-        ...context.glamClient.price.lookupTables,
-        ...glamLookupTables.map((t) => t.key),
-      ];
+      const lookupTables = context.glamClient.price.lookupTables; // get lookup tables from price client
 
       await executeTxWithErrorHandling(
         () =>
@@ -71,7 +53,6 @@ export function installManageCommands(manage: Command, context: CliContext) {
             ...context.txOptions,
             preInstructions,
             lookupTables,
-            simulate: true,
           }),
         { skip: true },
         (txSig) => `Fulfillment triggered: ${txSig}`,

@@ -88,6 +88,7 @@ export function installAltCommands(alt: Command, context: CliContext) {
             txSigs.push(extendSig);
           }
 
+          context.glamClient.invalidateGlamLookupTablesCache();
           return txSigs.join(", ");
         },
         {
@@ -163,6 +164,7 @@ export function installAltCommands(alt: Command, context: CliContext) {
             const txSig = await context.glamClient.sendAndConfirm(vTx);
             txSigs.push(txSig);
           }
+          context.glamClient.invalidateGlamLookupTablesCache();
           return txSigs.join(", ");
         },
         {
