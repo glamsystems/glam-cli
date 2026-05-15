@@ -2,7 +2,6 @@ import {
   formatBits,
   getProgramAndBitflagByProtocolName,
   parseProtocolsBitmask,
-  getGlamMintProgramId,
 } from "@glamsystems/glam-sdk";
 import { type Command } from "commander";
 import {
@@ -13,13 +12,8 @@ import {
 } from "../utils";
 import { PublicKey } from "@solana/web3.js";
 
-function validateIntegrationProgram(input: string, staging: boolean) {
-  const pubkey = validatePublicKey(input);
-  if (pubkey.equals(getGlamMintProgramId(staging))) {
-    console.error("Mint integration is not allowed");
-    process.exit(1);
-  }
-  return pubkey;
+function validateIntegrationProgram(input: string) {
+  return validatePublicKey(input);
 }
 
 function resolveProtocolNames(
@@ -32,10 +26,6 @@ function resolveProtocolNames(
   for (const name of names) {
     const resolved = resolveProtocolName(name, staging);
     const [programIdStr, bitflagStr] = lookup[resolved];
-    if (programIdStr === getGlamMintProgramId(staging).toBase58()) {
-      console.error("Mint integration is not allowed");
-      process.exit(1);
-    }
     const bitflag = parseInt(bitflagStr, 2);
     groups[programIdStr] = (groups[programIdStr] || 0) | bitflag;
   }
@@ -181,8 +171,7 @@ export function installIntegrationCommands(
     .argument(
       "<integration_program>",
       "Integration program ID",
-      (input: string) =>
-        validateIntegrationProgram(input, context.glamClient.staging),
+      (input: string) => validateIntegrationProgram(input),
     )
     .option("-y, --yes", "Skip confirmation")
     .description("Disable all protocols from an integration")

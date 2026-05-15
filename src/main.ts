@@ -38,6 +38,7 @@ import { installTransferCommands } from "./cmds/transfer";
 import { installTimelockCommands } from "./cmds/timelock";
 import { installTokenAclCommands } from "./cmds/token-acl";
 import { installLoopscaleCommands } from "./cmds/loopscale";
+import { installPhoenixCommands } from "./cmds/phoenix";
 
 const context = {} as CliContext;
 
@@ -294,6 +295,13 @@ const loopscale = program
   .description("[Unaudited] Loopscale loans")
   .hook("preSubcommand", unauditedCommandHook);
 installLoopscaleCommands(loopscale, context);
+
+const phoenix = program
+  .command("phoenix")
+  .option("-b, --bypass-warning", "Bypass warning", false)
+  .description("[Unaudited] Phoenix perps")
+  .hook("preSubcommand", unauditedCommandHook);
+installPhoenixCommands(phoenix, context);
 
 if (process.env.NODE_ENV === "development") {
   // Commands that use unaudited integrations are disallowed by default
