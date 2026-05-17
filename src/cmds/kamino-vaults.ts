@@ -2,6 +2,7 @@ import { type Command } from "commander";
 import {
   type CliContext,
   executeTxWithErrorHandling,
+  printPubkeyList,
   validatePublicKey,
 } from "../utils";
 import { KaminoVaultsPolicy, fromUiAmount } from "@glamsystems/glam-sdk";
@@ -23,10 +24,7 @@ export function installKaminoVaultsCommands(
         console.log("No policy found");
         return;
       }
-      console.log("Kamino vaults allowlist:");
-      for (let i = 0; i < policy.vaultsAllowlist.length; i++) {
-        console.log(`[${i}] ${policy.vaultsAllowlist[i]}`);
-      }
+      printPubkeyList("Kamino vaults allowlist", policy.vaultsAllowlist);
     });
 
   kvaults

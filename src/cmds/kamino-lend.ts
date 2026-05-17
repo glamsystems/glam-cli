@@ -10,6 +10,7 @@ import { type Command } from "commander";
 import {
   type CliContext,
   executeTxWithErrorHandling,
+  printPubkeyList,
   validatePublicKey,
 } from "../utils";
 import { PublicKey } from "@solana/web3.js";
@@ -29,14 +30,14 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
         console.log("No policy found");
         return;
       }
-      console.log("Kamino lending markets allowlist:");
-      for (let i = 0; i < policy.marketsAllowlist.length; i++) {
-        console.log(`[${i}] ${policy.marketsAllowlist[i]}`);
-      }
-      console.log("Kamino lending borrowable assets allowlist:");
-      for (let i = 0; i < policy.borrowAllowlist.length; i++) {
-        console.log(`[${i}] ${policy.borrowAllowlist[i]}`);
-      }
+      printPubkeyList(
+        "Kamino lending markets allowlist",
+        policy.marketsAllowlist,
+      );
+      printPubkeyList(
+        "Kamino lending borrowable assets allowlist",
+        policy.borrowAllowlist,
+      );
     });
 
   klend

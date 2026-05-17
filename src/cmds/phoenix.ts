@@ -13,7 +13,6 @@ import {
   type PhoenixTicks,
   PhoenixPolicy,
   fetchMintAndTokenProgram,
-  fromUiAmount,
   USDC,
 } from "@glamsystems/glam-sdk";
 import {
@@ -28,6 +27,8 @@ import { type Command } from "commander";
 import {
   type CliContext,
   executeTxWithErrorHandling,
+  fail,
+  parsePositiveUiAmount,
   printTable,
 } from "../utils";
 import {
@@ -84,11 +85,6 @@ const ORDER_SIDE_BID = 0;
 const ORDER_SIDE_ASK = 1;
 const ORDER_FLAG_NONE = 0;
 const ORDER_FLAG_REDUCE_ONLY = 128;
-
-function fail(message: string): never {
-  console.error(message);
-  process.exit(1);
-}
 
 function addTraderOptions(command: Command): Command {
   return command
@@ -183,28 +179,6 @@ function parseU128(
     label,
     U128_MAX_BIGINT,
   );
-}
-
-function parsePositiveUiAmount(
-  value: string,
-  decimals: number,
-  label: string,
-): BN {
-  const trimmed = value.trim();
-  if (!/^\d+(\.\d+)?$/.test(trimmed)) {
-    fail(`${label} must be a non-negative decimal amount`);
-  }
-
-  const fractional = trimmed.split(".")[1] ?? "";
-  if (fractional.length > decimals) {
-    fail(`${label} has more than ${decimals} decimal places`);
-  }
-
-  const parsed = fromUiAmount(trimmed, decimals);
-  if (parsed.isZero()) {
-    fail(`${label} must be greater than zero`);
-  }
-  return parsed;
 }
 
 function formatUiAmount(amount: BN, decimals: number): string {
@@ -844,177 +818,165 @@ export function installPhoenixCommands(phoenix: Command, context: CliContext) {
       .argument("[market]", "Phoenix market symbol or public key"),
   )
     .description("Show Phoenix exchange, market, and GLAM trader account info")
-    .action(
-      async (
-        marketInput: string | undefined,
-        options: TraderOptions,
-      ) => {
-        const phoenixApi = context.glamClient.phoenix.phoenixApi;
-        const snapshot = await phoenixApi.fetchPhoenixSnapshot();
-        const { traderPdaIndex, subaccountIndex } = traderArgs(options);
-        const trader = context.glamClient.phoenix.getTraderPda(
-          traderPdaIndex,
-          subaccountIndex,
-        );
-        const canonicalMint = new PublicKey(snapshot.exchange.canonicalMint);
-        const usdcMint = new PublicKey(snapshot.exchange.usdcMint);
-        const [canonicalBalance, usdcBalance, traderView] = await Promise.all([
-          fetchVaultTokenBalance(context, canonicalMint),
-          fetchVaultTokenBalance(context, usdcMint),
-          phoenixApi.fetchTraderView(trader),
-        ]);
+    .action(async (marketInput: string | undefined, options: TraderOptions) => {
+      const phoenixApi = context.glamClient.phoenix.phoenixApi;
+      const snapshot = await phoenixApi.fetchPhoenixSnapshot();
+      const { traderPdaIndex, subaccountIndex } = traderArgs(options);
+      const trader = context.glamClient.phoenix.getTraderPda(
+        traderPdaIndex,
+        subaccountIndex,
+      );
+      const canonicalMint = new PublicKey(snapshot.exchange.canonicalMint);
+      const usdcMint = new PublicKey(snapshot.exchange.usdcMint);
+      const [canonicalBalance, usdcBalance, traderView] = await Promise.all([
+        fetchVaultTokenBalance(context, canonicalMint),
+        fetchVaultTokenBalance(context, usdcMint),
+        phoenixApi.fetchTraderView(trader),
+      ]);
 
-        printTable(
-          ["Field", "Value"],
+      printTable(
+        ["Field", "Value"],
+        [
+          ["snapshotSlot", `${snapshot.slot ?? "-"}`],
           [
-            ["snapshotSlot", `${snapshot.slot ?? "-"}`],
+            "extPhoenixProgram",
+            context.glamClient.phoenix.programId.toBase58(),
+          ],
+          ["staging", `${context.glamClient.staging}`],
+          ["phoenixProgram", snapshot.exchange.programId],
+          ["exchangeActive", `${snapshot.exchange.active ?? "-"}`],
+          ["exchangeGated", `${snapshot.exchange.gated ?? "-"}`],
+          [
+            "riskAuthority",
+            snapshot.exchange.currentAuthorities?.riskAuthority ?? "-",
+          ],
+          ["glamState", context.glamClient.statePda.toBase58()],
+          ["glamVault", context.glamClient.vaultPda.toBase58()],
+          ["traderAccount", trader.toBase58()],
+          ["traderPdaIndex", `${traderPdaIndex}`],
+          ["subaccountIndex", `${subaccountIndex}`],
+          ["canonicalMint", canonicalMint.toBase58()],
+          ["usdcMint", usdcMint.toBase58()],
+          [
+            "canonicalVaultAta",
+            context.glamClient.getVaultAta(canonicalMint).toBase58(),
+          ],
+          [
+            "canonicalVaultBalance",
+            `${formatUiAmount(
+              canonicalBalance.amount,
+              canonicalBalance.decimals,
+            )} (${canonicalBalance.amount.toString()} raw)`,
+          ],
+          ["usdcVaultAta", context.glamClient.getVaultAta(usdcMint).toBase58()],
+          [
+            "usdcVaultBalance",
+            `${formatUiAmount(
+              usdcBalance.amount,
+              usdcBalance.decimals,
+            )} (${usdcBalance.amount.toString()} raw)`,
+          ],
+          ["globalVault", snapshot.exchange.globalVault],
+          ["perpAssetMap", snapshot.exchange.perpAssetMap],
+          [
+            "globalTraderIndexLen",
+            `${snapshot.exchange.globalTraderIndex.length}`,
+          ],
+          [
+            "activeTraderBufferLen",
+            `${snapshot.exchange.activeTraderBuffer.length}`,
+          ],
+          ["withdrawQueue", snapshot.exchange.withdrawQueue],
+        ],
+      );
+
+      console.log("");
+      if (traderView) {
+        printTable(
+          ["Trader Field", "Value"],
+          [
+            ["state", traderView.state ?? "-"],
+            ["flags", `${traderView.flags ?? "-"}`],
             [
-              "extPhoenixProgram",
-              context.glamClient.phoenix.programId.toBase58(),
+              "collateralBalance",
+              formatDisplayValue(traderView.collateralBalance),
             ],
-            ["staging", `${context.glamClient.staging}`],
-            ["phoenixProgram", snapshot.exchange.programId],
-            ["exchangeActive", `${snapshot.exchange.active ?? "-"}`],
-            ["exchangeGated", `${snapshot.exchange.gated ?? "-"}`],
+            ["portfolioValue", formatDisplayValue(traderView.portfolioValue)],
             [
-              "riskAuthority",
-              snapshot.exchange.currentAuthorities?.riskAuthority ?? "-",
-            ],
-            ["glamState", context.glamClient.statePda.toBase58()],
-            ["glamVault", context.glamClient.vaultPda.toBase58()],
-            ["traderAccount", trader.toBase58()],
-            ["traderPdaIndex", `${traderPdaIndex}`],
-            ["subaccountIndex", `${subaccountIndex}`],
-            ["canonicalMint", canonicalMint.toBase58()],
-            ["usdcMint", usdcMint.toBase58()],
-            [
-              "canonicalVaultAta",
-              context.glamClient.getVaultAta(canonicalMint).toBase58(),
+              "placeLimitOrder",
+              formatCapabilityAccess(traderView.capabilities?.placeLimitOrder),
             ],
             [
-              "canonicalVaultBalance",
-              `${formatUiAmount(
-                canonicalBalance.amount,
-                canonicalBalance.decimals,
-              )} (${canonicalBalance.amount.toString()} raw)`,
+              "placeMarketOrder",
+              formatCapabilityAccess(traderView.capabilities?.placeMarketOrder),
             ],
             [
-              "usdcVaultAta",
-              context.glamClient.getVaultAta(usdcMint).toBase58(),
+              "riskIncreasingTrade",
+              formatCapabilityAccess(
+                traderView.capabilities?.riskIncreasingTrade,
+              ),
             ],
             [
-              "usdcVaultBalance",
-              `${formatUiAmount(
-                usdcBalance.amount,
-                usdcBalance.decimals,
-              )} (${usdcBalance.amount.toString()} raw)`,
-            ],
-            ["globalVault", snapshot.exchange.globalVault],
-            ["perpAssetMap", snapshot.exchange.perpAssetMap],
-            [
-              "globalTraderIndexLen",
-              `${snapshot.exchange.globalTraderIndex.length}`,
+              "riskReducingTrade",
+              formatCapabilityAccess(
+                traderView.capabilities?.riskReducingTrade,
+              ),
             ],
             [
-              "activeTraderBufferLen",
-              `${snapshot.exchange.activeTraderBuffer.length}`,
+              "depositCollateral",
+              formatCapabilityAccess(
+                traderView.capabilities?.depositCollateral,
+              ),
             ],
-            ["withdrawQueue", snapshot.exchange.withdrawQueue],
+            [
+              "withdrawCollateral",
+              formatCapabilityAccess(
+                traderView.capabilities?.withdrawCollateral,
+              ),
+            ],
           ],
         );
+      } else {
+        printTable(["Trader Field", "Value"], [["apiView", "not found"]]);
+      }
 
+      if (marketInput) {
+        const market = resolveMarket(snapshot, marketInput);
+        const marketPubkey = new PublicKey(market.marketPubkey);
         console.log("");
-        if (traderView) {
-          printTable(
-            ["Trader Field", "Value"],
+        printTable(
+          ["Market Field", "Value"],
+          [
+            ["symbol", market.symbol],
+            ["status", market.marketStatus ?? "-"],
+            ["marketPubkey", marketPubkey.toBase58()],
             [
-              ["state", traderView.state ?? "-"],
-              ["flags", `${traderView.flags ?? "-"}`],
-              [
-                "collateralBalance",
-                formatDisplayValue(traderView.collateralBalance),
-              ],
-              ["portfolioValue", formatDisplayValue(traderView.portfolioValue)],
-              [
-                "placeLimitOrder",
-                formatCapabilityAccess(
-                  traderView.capabilities?.placeLimitOrder,
-                ),
-              ],
-              [
-                "placeMarketOrder",
-                formatCapabilityAccess(
-                  traderView.capabilities?.placeMarketOrder,
-                ),
-              ],
-              [
-                "riskIncreasingTrade",
-                formatCapabilityAccess(
-                  traderView.capabilities?.riskIncreasingTrade,
-                ),
-              ],
-              [
-                "riskReducingTrade",
-                formatCapabilityAccess(
-                  traderView.capabilities?.riskReducingTrade,
-                ),
-              ],
-              [
-                "depositCollateral",
-                formatCapabilityAccess(
-                  traderView.capabilities?.depositCollateral,
-                ),
-              ],
-              [
-                "withdrawCollateral",
-                formatCapabilityAccess(
-                  traderView.capabilities?.withdrawCollateral,
-                ),
-              ],
+              "splineCollection",
+              context.glamClient.phoenix
+                .getSplineCollectionPda(marketPubkey)
+                .toBase58(),
             ],
-          );
-        } else {
-          printTable(["Trader Field", "Value"], [["apiView", "not found"]]);
-        }
-
-        if (marketInput) {
-          const market = resolveMarket(snapshot, marketInput);
-          const marketPubkey = new PublicKey(market.marketPubkey);
-          console.log("");
-          printTable(
-            ["Market Field", "Value"],
-            [
-              ["symbol", market.symbol],
-              ["status", market.marketStatus ?? "-"],
-              ["marketPubkey", marketPubkey.toBase58()],
-              [
-                "splineCollection",
-                context.glamClient.phoenix
-                  .getSplineCollectionPda(marketPubkey)
-                  .toBase58(),
-              ],
-              ["tickSize", `${market.tickSize}`],
-              ["baseLotsDecimals", `${market.baseLotsDecimals}`],
-              ["makerFee", `${market.makerFee ?? "-"}`],
-              ["takerFee", `${market.takerFee ?? "-"}`],
-              ["isolatedOnly", `${market.isolatedOnly ?? "-"}`],
-            ],
-          );
-        } else {
-          console.log("");
-          printTable(
-            ["Symbol", "Status", "Market", "Tick Size", "Base Lots Decimals"],
-            snapshot.markets.map((market) => [
-              market.symbol,
-              market.marketStatus ?? "-",
-              market.marketPubkey,
-              `${market.tickSize}`,
-              `${market.baseLotsDecimals}`,
-            ]),
-          );
-        }
-      },
-    );
+            ["tickSize", `${market.tickSize}`],
+            ["baseLotsDecimals", `${market.baseLotsDecimals}`],
+            ["makerFee", `${market.makerFee ?? "-"}`],
+            ["takerFee", `${market.takerFee ?? "-"}`],
+            ["isolatedOnly", `${market.isolatedOnly ?? "-"}`],
+          ],
+        );
+      } else {
+        console.log("");
+        printTable(
+          ["Symbol", "Status", "Market", "Tick Size", "Base Lots Decimals"],
+          snapshot.markets.map((market) => [
+            market.symbol,
+            market.marketStatus ?? "-",
+            market.marketPubkey,
+            `${market.tickSize}`,
+            `${market.baseLotsDecimals}`,
+          ]),
+        );
+      }
+    });
 
   addTraderOptions(
     phoenix
@@ -1023,50 +985,45 @@ export function installPhoenixCommands(phoenix: Command, context: CliContext) {
       .argument("[market]", "Phoenix market symbol or public key"),
   )
     .description("Print Phoenix open orders for the configured GLAM vault")
-    .action(
-      async (
-        marketInput: string | undefined,
-        options: TraderOptions,
-      ) => {
-        const phoenixApi = context.glamClient.phoenix.phoenixApi;
-        const [snapshot, { trader, traderView }] = await Promise.all([
-          phoenixApi.fetchPhoenixSnapshot(),
-          fetchConfiguredTraderView(context, options),
-        ]);
-        const market = marketInput
-          ? resolveMarket(snapshot, marketInput)
-          : undefined;
+    .action(async (marketInput: string | undefined, options: TraderOptions) => {
+      const phoenixApi = context.glamClient.phoenix.phoenixApi;
+      const [snapshot, { trader, traderView }] = await Promise.all([
+        phoenixApi.fetchPhoenixSnapshot(),
+        fetchConfiguredTraderView(context, options),
+      ]);
+      const market = marketInput
+        ? resolveMarket(snapshot, marketInput)
+        : undefined;
 
-        if (!traderView) {
-          console.log(`Phoenix trader ${trader.toBase58()} not found`);
-          return;
-        }
+      if (!traderView) {
+        console.log(`Phoenix trader ${trader.toBase58()} not found`);
+        return;
+      }
 
-        const rows = openOrderRows(snapshot, traderView, market);
-        console.log(`Trader: ${traderView.traderKey ?? trader.toBase58()}`);
-        if (rows.length === 0) {
-          console.log(
-            `No open Phoenix orders${market ? ` for ${market.symbol}` : ""}.`,
-          );
-          return;
-        }
-
-        printTable(
-          [
-            "Symbol",
-            "Side",
-            "Price",
-            "Remaining",
-            "Initial",
-            "Flags",
-            "Seq",
-            "Price Ticks",
-            "Cancel ID",
-          ],
-          rows,
+      const rows = openOrderRows(snapshot, traderView, market);
+      console.log(`Trader: ${traderView.traderKey ?? trader.toBase58()}`);
+      if (rows.length === 0) {
+        console.log(
+          `No open Phoenix orders${market ? ` for ${market.symbol}` : ""}.`,
         );
-      },
-    );
+        return;
+      }
+
+      printTable(
+        [
+          "Symbol",
+          "Side",
+          "Price",
+          "Remaining",
+          "Initial",
+          "Flags",
+          "Seq",
+          "Price Ticks",
+          "Cancel ID",
+        ],
+        rows,
+      );
+    });
 
   addTraderOptions(
     phoenix
@@ -1074,53 +1031,48 @@ export function installPhoenixCommands(phoenix: Command, context: CliContext) {
       .argument("[market]", "Phoenix market symbol or public key"),
   )
     .description("Print Phoenix positions for the configured GLAM vault")
-    .action(
-      async (
-        marketInput: string | undefined,
-        options: TraderOptions,
-      ) => {
-        const phoenixApi = context.glamClient.phoenix.phoenixApi;
-        const [snapshot, { trader, traderView }] = await Promise.all([
-          phoenixApi.fetchPhoenixSnapshot(),
-          fetchConfiguredTraderView(context, options),
-        ]);
-        const market = marketInput
-          ? resolveMarket(snapshot, marketInput)
-          : undefined;
+    .action(async (marketInput: string | undefined, options: TraderOptions) => {
+      const phoenixApi = context.glamClient.phoenix.phoenixApi;
+      const [snapshot, { trader, traderView }] = await Promise.all([
+        phoenixApi.fetchPhoenixSnapshot(),
+        fetchConfiguredTraderView(context, options),
+      ]);
+      const market = marketInput
+        ? resolveMarket(snapshot, marketInput)
+        : undefined;
 
-        if (!traderView) {
-          console.log(`Phoenix trader ${trader.toBase58()} not found`);
-          return;
-        }
+      if (!traderView) {
+        console.log(`Phoenix trader ${trader.toBase58()} not found`);
+        return;
+      }
 
-        const rows = positionRows(traderView, market);
-        console.log(`Trader: ${traderView.traderKey ?? trader.toBase58()}`);
+      const rows = positionRows(traderView, market);
+      console.log(`Trader: ${traderView.traderKey ?? trader.toBase58()}`);
+      console.log(
+        `Portfolio Value: ${formatDisplayValue(traderView.portfolioValue)} | Risk: ${traderView.riskTier ?? "-"}/${traderView.riskState ?? "-"}`,
+      );
+      if (rows.length === 0) {
         console.log(
-          `Portfolio Value: ${formatDisplayValue(traderView.portfolioValue)} | Risk: ${traderView.riskTier ?? "-"}/${traderView.riskState ?? "-"}`,
+          `No Phoenix positions${market ? ` for ${market.symbol}` : ""}.`,
         );
-        if (rows.length === 0) {
-          console.log(
-            `No Phoenix positions${market ? ` for ${market.symbol}` : ""}.`,
-          );
-          return;
-        }
+        return;
+      }
 
-        printTable(
-          [
-            "Symbol",
-            "Size",
-            "Entry",
-            "Value",
-            "uPnL",
-            "Funding",
-            "Initial Margin",
-            "Maint Margin",
-            "Liq Price",
-          ],
-          rows,
-        );
-      },
-    );
+      printTable(
+        [
+          "Symbol",
+          "Size",
+          "Entry",
+          "Value",
+          "uPnL",
+          "Funding",
+          "Initial Margin",
+          "Maint Margin",
+          "Liq Price",
+        ],
+        rows,
+      );
+    });
 
   addTraderOptions(phoenix.command("trader-address"))
     .description(
@@ -1149,43 +1101,39 @@ export function installPhoenixCommands(phoenix: Command, context: CliContext) {
     .argument("<market>", "Phoenix market symbol or public key")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Add a Phoenix market to the allowlist")
-    .action(
-      async (marketInput: string, options: TxOptions) => {
-        const phoenixApi = context.glamClient.phoenix.phoenixApi;
-        const snapshot = await phoenixApi.fetchPhoenixSnapshot();
-        const market = resolveMarket(snapshot, marketInput);
-        const marketPubkey = new PublicKey(market.marketPubkey);
+    .action(async (marketInput: string, options: TxOptions) => {
+      const phoenixApi = context.glamClient.phoenix.phoenixApi;
+      const snapshot = await phoenixApi.fetchPhoenixSnapshot();
+      const market = resolveMarket(snapshot, marketInput);
+      const marketPubkey = new PublicKey(market.marketPubkey);
 
-        const policy =
-          (await context.glamClient.phoenix.fetchPolicy()) ??
-          new PhoenixPolicy([], [], false, 0, 0);
+      const policy =
+        (await context.glamClient.phoenix.fetchPolicy()) ??
+        new PhoenixPolicy([], [], false, 0, 0);
 
-        if (
-          policy.marketsAllowlist.find((allowed) =>
-            allowed.equals(marketPubkey),
-          )
-        ) {
-          fail(`Phoenix market ${market.symbol} is already in the allowlist`);
-        }
+      if (
+        policy.marketsAllowlist.find((allowed) => allowed.equals(marketPubkey))
+      ) {
+        fail(`Phoenix market ${market.symbol} is already in the allowlist`);
+      }
 
-        policy.marketsAllowlist = uniquePublicKeys([
-          ...policy.marketsAllowlist,
-          marketPubkey,
-        ]);
-        if (policy.marketsAllowlist.length > 32) {
-          fail("Phoenix policy cannot allowlist more than 32 markets");
-        }
+      policy.marketsAllowlist = uniquePublicKeys([
+        ...policy.marketsAllowlist,
+        marketPubkey,
+      ]);
+      if (policy.marketsAllowlist.length > 32) {
+        fail("Phoenix policy cannot allowlist more than 32 markets");
+      }
 
-        await executeTxWithErrorHandling(
-          () => context.glamClient.phoenix.setPolicy(policy, context.txOptions),
-          {
-            skip: !!options.yes,
-            message: `Allowlist Phoenix market ${market.symbol} (${marketPubkey})?`,
-          },
-          (txSig) => `Allowlisted Phoenix market ${market.symbol}: ${txSig}`,
-        );
-      },
-    );
+      await executeTxWithErrorHandling(
+        () => context.glamClient.phoenix.setPolicy(policy, context.txOptions),
+        {
+          skip: !!options.yes,
+          message: `Allowlist Phoenix market ${market.symbol} (${marketPubkey})?`,
+        },
+        (txSig) => `Allowlisted Phoenix market ${market.symbol}: ${txSig}`,
+      );
+    });
 
   phoenix
     .command("set-order-types")
@@ -1632,35 +1580,30 @@ export function installPhoenixCommands(phoenix: Command, context: CliContext) {
       .option("-y, --yes", "Skip confirmation prompt", false),
   )
     .description("Cancel all Phoenix orders on a market")
-    .action(
-      async (
-        marketInput: string,
-        options: TraderOptions & TxOptions,
-      ) => {
-        const phoenixApi = context.glamClient.phoenix.phoenixApi;
-        const snapshot = await phoenixApi.fetchPhoenixSnapshot();
-        const market = resolveMarket(snapshot, marketInput);
-        const remainingAccounts =
-          context.glamClient.phoenix.getMarketRemainingAccounts(
-            snapshot,
-            market.marketPubkey,
-            traderArgs(options),
-          );
-
-        await executeTxWithErrorHandling(
-          () =>
-            context.glamClient.phoenix.cancelAll(
-              { remainingAccounts },
-              context.txOptions,
-            ),
-          {
-            skip: !!options.yes,
-            message: `Cancel all ${market.symbol} Phoenix orders?`,
-          },
-          (txSig) => `Cancelled Phoenix orders: ${txSig}`,
+    .action(async (marketInput: string, options: TraderOptions & TxOptions) => {
+      const phoenixApi = context.glamClient.phoenix.phoenixApi;
+      const snapshot = await phoenixApi.fetchPhoenixSnapshot();
+      const market = resolveMarket(snapshot, marketInput);
+      const remainingAccounts =
+        context.glamClient.phoenix.getMarketRemainingAccounts(
+          snapshot,
+          market.marketPubkey,
+          traderArgs(options),
         );
-      },
-    );
+
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.phoenix.cancelAll(
+            { remainingAccounts },
+            context.txOptions,
+          ),
+        {
+          skip: !!options.yes,
+          message: `Cancel all ${market.symbol} Phoenix orders?`,
+        },
+        (txSig) => `Cancelled Phoenix orders: ${txSig}`,
+      );
+    });
 
   addTraderOptions(
     phoenix

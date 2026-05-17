@@ -13,6 +13,7 @@ import { Command } from "commander";
 
 import {
   CliConfig,
+  markUnauditedCommand,
   resolveStagingFromStateOwner,
   type CliContext,
 } from "./utils";
@@ -24,7 +25,8 @@ import { installKaminoVaultsCommands } from "./cmds/kamino-vaults";
 import { installKaminoFarmsCommands } from "./cmds/kamino-farms";
 import { installIntegrationCommands } from "./cmds/integration";
 import { installDelegateCommands } from "./cmds/delegate";
-import { installJupiterCommands } from "./cmds/jupiter";
+import { installJupiterSwapCommands } from "./cmds/jupiter";
+import { installJupiterLendCommands } from "./cmds/jupiter-lend";
 import { installInvestCommands } from "./cmds/invest";
 import { installAltCommands } from "./cmds/alt";
 import { installStakeCommands } from "./cmds/stake";
@@ -235,8 +237,21 @@ const integration = program
   .description("Manage integrations");
 installIntegrationCommands(integration, context);
 
-const jupiter = program.command("jupiter").description("Jupiter protocols");
-installJupiterCommands(jupiter, context);
+const jupiterSwap = program
+  .command("jupiter-swap")
+  .alias("jupiter")
+  .description("Jupiter swap");
+installJupiterSwapCommands(jupiterSwap, context);
+
+const jupiterEarn = markUnauditedCommand(
+  program.command("jupiter-earn"),
+  "Jupiter Earn",
+);
+const jupiterBorrow = markUnauditedCommand(
+  program.command("jupiter-borrow"),
+  "Jupiter Borrow",
+);
+installJupiterLendCommands(jupiterEarn, jupiterBorrow, context);
 
 const klend = program.command("kamino-lend").description("Kamino lending");
 installKaminoLendCommands(klend, context);
@@ -279,48 +294,30 @@ const tokenAcl = program
   .description("Token ACL (sRFC-37) operations");
 installTokenAclCommands(tokenAcl, context);
 
-const unauditedCommandHook = async (thisCommand: Command) => {
-  const { bypassWarning } = thisCommand.opts();
-  if (!bypassWarning) {
-    console.error(
-      "Unaudited integration. Use with caution. Use --bypass-warning to bypass this warning.",
-    );
-    process.exit(1);
-  }
-};
-
-const loopscale = program
-  .command("loopscale")
-  .option("-b, --bypass-warning", "Bypass warning", false)
-  .description("[Unaudited] Loopscale loans")
-  .hook("preSubcommand", unauditedCommandHook);
+const loopscale = markUnauditedCommand(
+  program.command("loopscale"),
+  "Loopscale loans",
+);
 installLoopscaleCommands(loopscale, context);
 
-const phoenix = program
-  .command("phoenix")
-  .option("-b, --bypass-warning", "Bypass warning", false)
-  .description("[Unaudited] Phoenix perps")
-  .hook("preSubcommand", unauditedCommandHook);
+const phoenix = markUnauditedCommand(
+  program.command("phoenix"),
+  "Phoenix perps",
+);
 installPhoenixCommands(phoenix, context);
 
 if (process.env.NODE_ENV === "development") {
   // Commands that use unaudited integrations are disallowed by default
   // Unleash them with --bypass-warning
-  const marinade = program
-    .command("marinade")
-    .option("-b, --bypass-warning", "Bypass warning", false)
-    .description("[Unaudited] Marinade staking")
-    .hook("preSubcommand", unauditedCommandHook);
-  const lst = program
-    .command("lst")
-    .option("-b, --bypass-warning", "Bypass warning", false)
-    .description("[Unaudited] Liquid staking")
-    .hook("preSubcommand", unauditedCommandHook);
-  const stake = program
-    .command("stake")
-    .option("-b, --bypass-warning", "Bypass warning", false)
-    .description("[Unaudited] Native staking")
-    .hook("preSubcommand", unauditedCommandHook);
+  const marinade = markUnauditedCommand(
+    program.command("marinade"),
+    "Marinade staking",
+  );
+  const lst = markUnauditedCommand(program.command("lst"), "Liquid staking");
+  const stake = markUnauditedCommand(
+    program.command("stake"),
+    "Native staking",
+  );
 
   installMarinadeCommands(marinade, context);
   installLstCommands(lst, context);

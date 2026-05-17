@@ -2,7 +2,6 @@ import { BN } from "@coral-xyz/anchor";
 import {
   LOOPSCALE_PROGRAM_ID,
   LoopscalePolicy,
-  fromUiAmount,
   type TokenListItem,
 } from "@glamsystems/glam-sdk";
 import { type AccountMeta, PublicKey, Transaction } from "@solana/web3.js";
@@ -11,6 +10,9 @@ import { type Command } from "commander";
 import {
   type CliContext,
   executeTxWithErrorHandling,
+  fail,
+  parsePositiveUiAmount,
+  printPubkeyList,
   resolveTokenMint,
   validatePublicKey,
 } from "../utils";
@@ -103,11 +105,6 @@ const DEFAULT_PUBKEY = PublicKey.default;
 
 const LOOPSCALE_PROTOCOL = 0b01;
 
-function fail(message: string): never {
-  console.error(message);
-  process.exit(1);
-}
-
 function parseU64(value: string, label: string): BN {
   const trimmed = value.trim();
   if (!/^\d+$/.test(trimmed)) {
@@ -189,28 +186,6 @@ function parseHexBytes(value: string, label: string): Buffer {
     fail(`${label} must be an even-length hex string`);
   }
   return Buffer.from(trimmed, "hex");
-}
-
-function parsePositiveUiAmount(
-  value: string,
-  decimals: number,
-  label: string,
-): BN {
-  const trimmed = value.trim();
-  if (!/^\d+(\.\d+)?$/.test(trimmed)) {
-    fail(`${label} must be a non-negative decimal amount`);
-  }
-
-  const fractionalPart = trimmed.split(".")[1] ?? "";
-  if (fractionalPart.length > decimals) {
-    fail(`${label} has more than ${decimals} decimal places`);
-  }
-
-  const parsed = fromUiAmount(trimmed, decimals);
-  if (parsed.isZero()) {
-    fail(`${label} must be greater than zero`);
-  }
-  return parsed;
 }
 
 function bnToSafeNumber(value: BN, label: string): number {
@@ -648,10 +623,10 @@ export function installLoopscaleCommands(
         return;
       }
 
-      console.log("Loopscale strategies allowlist:");
-      for (let i = 0; i < loopscalePolicy.strategiesAllowlist.length; i++) {
-        console.log(`[${i}] ${loopscalePolicy.strategiesAllowlist[i]}`);
-      }
+      printPubkeyList(
+        "Loopscale strategies allowlist",
+        loopscalePolicy.strategiesAllowlist,
+      );
     });
 
   policy

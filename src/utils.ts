@@ -6,6 +6,7 @@ import {
   type PriorityLevel,
   StateAccountType,
   type TxOptions,
+  fromUiAmount,
   getProgramAndBitflagByProtocolName,
   getProtocolsAndPermissions,
   getGlamProtocolProgramId,
@@ -16,6 +17,7 @@ import {
 import { PublicKey } from "@solana/web3.js";
 import { type InitMintParams } from "anchor/src/client/mint";
 import { type InitStateParams } from "anchor/src/client/state";
+import { type Command } from "commander";
 import fs from "fs";
 import inquirer from "inquirer";
 import os from "os";
@@ -355,6 +357,51 @@ export function parseMintJson(
   };
 }
 
+export function fail(message: string): never {
+  console.error(message);
+  process.exit(1);
+}
+
+/**
+ * Mark a command as using an unaudited integration. Adds `--bypass-warning`,
+ * prefixes the description with `[Unaudited]`, and exits before any subcommand
+ * runs unless the user passed the bypass flag.
+ */
+export function markUnauditedCommand(command: Command, label: string): Command {
+  return command
+    .description(`[Unaudited] ${label}`)
+    .option("-b, --bypass-warning", "Bypass warning", false)
+    .hook("preSubcommand", async (thisCommand) => {
+      if (!thisCommand.opts().bypassWarning) {
+        fail(
+          "Unaudited integration. Use with caution. Use --bypass-warning to bypass this warning.",
+        );
+      }
+    });
+}
+
+export function parsePositiveUiAmount(
+  value: string,
+  decimals: number,
+  label: string,
+): BN {
+  const trimmed = value.trim();
+  if (!/^\d+(\.\d+)?$/.test(trimmed)) {
+    fail(`${label} must be a non-negative decimal amount`);
+  }
+
+  const fractional = trimmed.split(".")[1] ?? "";
+  if (fractional.length > decimals) {
+    fail(`${label} has more than ${decimals} decimal places`);
+  }
+
+  const parsed = fromUiAmount(trimmed, decimals);
+  if (parsed.isZero()) {
+    fail(`${label} must be greater than zero`);
+  }
+  return parsed;
+}
+
 export function validatePublicKey(value: string) {
   try {
     return new PublicKey(value);
@@ -453,6 +500,17 @@ export function printTable(headers: string[], rows: string[][]) {
   console.log(formatRow(headers));
   console.log(colWidths.map((w) => "-".repeat(w)).join("  "));
   rows.forEach((row) => console.log(formatRow(row)));
+}
+
+export function printPubkeyList(label: string, list: PublicKey[]) {
+  if (list.length === 0) {
+    console.log(`${label}: []`);
+    return;
+  }
+  console.log(`${label}:`);
+  for (let i = 0; i < list.length; i++) {
+    console.log(`[${i}] ${list[i]}`);
+  }
 }
 
 export function levenshtein(a: string, b: string): number {

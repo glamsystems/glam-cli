@@ -1,7 +1,7 @@
 {
   "state": {
     "accountType": "vault",
-    "name": "GLAM Vault",
+    "name": "GLAM <> Jupiter Lend",
     "enabled": true,
     "baseAssetMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
     "assets": ["EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"]

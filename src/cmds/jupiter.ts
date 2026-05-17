@@ -9,6 +9,7 @@ import { type Command } from "commander";
 import {
   type CliContext,
   executeTxWithErrorHandling,
+  printPubkeyList,
   resolveTokenMint,
   validatePublicKey,
 } from "../utils";
@@ -59,7 +60,10 @@ export async function addJupiterOnlyDirectRoutesSuggestion<T>(
   }
 }
 
-export function installJupiterCommands(program: Command, context: CliContext) {
+export function installJupiterSwapCommands(
+  program: Command,
+  context: CliContext,
+) {
   program
     .command("view-policy")
     .description("View Jupiter swap policy")
@@ -75,14 +79,7 @@ export function installJupiterCommands(program: Command, context: CliContext) {
       }
       console.log(`Max slippage BPS: ${policy.maxSlippageBps}`);
       console.log(`Max deviation BPS: ${policy.maxDeviationBps}`);
-      if (policy.swapAllowlist) {
-        console.log("Swap allowlist:");
-        for (let i = 0; i < policy.swapAllowlist.length; i++) {
-          console.log(`[${i}] ${policy.swapAllowlist[i]}`);
-        }
-      } else {
-        console.log("Swap allowlist: []");
-      }
+      printPubkeyList("Swap allowlist", policy.swapAllowlist ?? []);
     });
 
   program

@@ -9,6 +9,7 @@ import { type PublicKey } from "@solana/web3.js";
 import {
   type CliContext,
   executeTxWithErrorHandling,
+  printPubkeyList,
   validatePublicKey,
 } from "../utils";
 
@@ -26,12 +27,10 @@ export function installTransferCommands(program: Command, context: CliContext) {
         console.error("Token transfer policy not found.");
         process.exit(1);
       }
-      if (tokenTransferPolicy) {
-        console.log("Token transfer allowlist:");
-        tokenTransferPolicy.allowlist.forEach((pk, i) => {
-          console.log(`[${i}] ${pk}`);
-        });
-      }
+      printPubkeyList(
+        "Token transfer allowlist",
+        tokenTransferPolicy.allowlist,
+      );
     });
 
   program
