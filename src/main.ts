@@ -164,9 +164,9 @@ const program = new Command();
 program
   .name("glam-cli")
   .description("CLI for interacting with the GLAM Protocol")
-  .option("-C, --config <path>", "path to config file")
-  .option("-S, --skip-simulation", "skip simulation", false)
-  .option("--staging", "use staging environment")
+  .option("-C, --config <path>", "Path to config file")
+  .option("-S, --skip-simulation", "Skip simulation", false)
+  .option("--staging", "Use staging environment")
   .option("--wallet <wallet>", "Keypair file path or USB path (usb://ledger)")
   .option(
     "--ledger-derivation-path <path>",

@@ -62,7 +62,7 @@ export class CliConfig {
     this.glam_state = config.glam_state;
     this.jupiter_api_key = config.jupiter_api_key;
 
-    this.configPath = configPath || defaultConfigPath();
+    this.configPath = resolveConfigPath(configPath);
   }
 
   useLedger(): boolean {
@@ -87,11 +87,9 @@ export class CliConfig {
   }
 
   static get(configPath?: string, override?: Partial<CliConfig>): CliConfig {
-    if (
-      !this.instance ||
-      (configPath && this.instance.configPath !== configPath)
-    ) {
-      this.instance = CliConfig.load(configPath, override);
+    const resolvedConfigPath = resolveConfigPath(configPath);
+    if (!this.instance || this.instance.configPath !== resolvedConfigPath) {
+      this.instance = CliConfig.load(resolvedConfigPath, override);
     }
     return this.instance;
   }
@@ -100,17 +98,17 @@ export class CliConfig {
     this.instance = null;
   }
 
-  static load(path?: string, override?: Partial<CliConfig>): CliConfig {
-    const configPath = path || defaultConfigPath();
+  static load(configPath?: string, override?: Partial<CliConfig>): CliConfig {
+    const resolvedConfigPath = resolveConfigPath(configPath);
     try {
-      const config = fs.readFileSync(configPath, "utf8");
+      const config = fs.readFileSync(resolvedConfigPath, "utf8");
       const parsedConfig = JSON.parse(config);
       const definedOverride = Object.fromEntries(
         Object.entries(override ?? {}).filter(([, v]) => v !== undefined),
       );
       const cliConfig = new CliConfig(
         { ...parsedConfig, ...definedOverride },
-        configPath,
+        resolvedConfigPath,
       );
 
       if (!cliConfig.json_rpc_url) {
@@ -146,7 +144,7 @@ export class CliConfig {
       return cliConfig;
     } catch (err) {
       console.error(
-        `Could not load glam cli config at ${configPath}:`,
+        `Could not load glam cli config at ${resolvedConfigPath}:`,
         (err as any).message,
       );
       throw err;
@@ -156,6 +154,9 @@ export class CliConfig {
 
 const defaultConfigPath = () =>
   path.join(os.homedir(), ".config/glam/", "config.json");
+
+export const resolveConfigPath = (configPath?: string) =>
+  configPath || process.env.GLAM_CONFIG || defaultConfigPath();
 
 export const parseTxError = (error: any) => {
   if (error instanceof AnchorError) {
