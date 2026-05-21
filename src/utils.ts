@@ -363,21 +363,30 @@ export function fail(message: string): never {
   process.exit(1);
 }
 
+type StagingOnlyContext = Pick<CliContext, "cliConfig" | "glamClient">;
+
+export function assertStagingOnlyVault(context?: StagingOnlyContext) {
+  const activeVault = context?.cliConfig?.glam_state;
+  if (activeVault && context?.glamClient?.staging === false) {
+    fail(
+      `Staging-only command cannot be used with non-staging vault ${activeVault}. Switch to a staging vault or remove glam_state from the CLI config.`,
+    );
+  }
+}
+
 /**
- * Mark a command as using an unaudited integration. Adds `--bypass-warning`,
- * prefixes the description with `[Unaudited]`, and exits before any subcommand
- * runs unless the user passed the bypass flag.
+ * Mark a command as using a staging-only integration. Prefixes the description
+ * with `[Staging only]` and rejects commands against non-staging active vaults.
  */
-export function markUnauditedCommand(command: Command, label: string): Command {
+export function markStagingOnlyCommand(
+  command: Command,
+  label: string,
+  context?: StagingOnlyContext,
+): Command {
   return command
-    .description(`[Unaudited] ${label}`)
-    .option("-b, --bypass-warning", "Bypass warning", false)
-    .hook("preSubcommand", async (thisCommand) => {
-      if (!thisCommand.opts().bypassWarning) {
-        fail(
-          "Unaudited integration. Use with caution. Use --bypass-warning to bypass this warning.",
-        );
-      }
+    .description(`[Staging only] ${label}`)
+    .hook("preSubcommand", async () => {
+      assertStagingOnlyVault(context);
     });
 }
 

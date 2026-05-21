@@ -59,9 +59,8 @@ async function setBorrowPolicy(
   );
 }
 
-export function installJupiterLendCommands(
+export function installJupiterEarnCommands(
   earnProgram: Command,
-  borrowProgram: Command,
   context: CliContext,
 ) {
   earnProgram
@@ -147,17 +146,9 @@ export function installJupiterLendCommands(
       ) => {
         const token = await resolveTokenMint(context.glamClient, options.mint);
         const mint = new PublicKey(token.address);
-        const assets = parsePositiveUiAmount(
-          amount,
-          token.decimals,
-          "amount",
-        );
+        const assets = parsePositiveUiAmount(amount, token.decimals, "amount");
         const minAmountOut = options.minOut
-          ? parsePositiveUiAmount(
-              options.minOut,
-              token.decimals,
-              "min-out",
-            )
+          ? parsePositiveUiAmount(options.minOut, token.decimals, "min-out")
           : new BN(0);
         await executeTxWithErrorHandling(
           () =>
@@ -226,7 +217,12 @@ export function installJupiterLendCommands(
         );
       },
     );
+}
 
+export function installJupiterBorrowCommands(
+  borrowProgram: Command,
+  context: CliContext,
+) {
   borrowProgram
     .command("view-policy")
     .description("View Jupiter Lend borrow policy")
@@ -283,13 +279,7 @@ export function installJupiterLendCommands(
         return;
       }
       printTable(
-        [
-          "Vault ID",
-          "Position",
-          "Mode",
-          "Tick",
-          "Tick ID",
-        ],
+        ["Vault ID", "Position", "Mode", "Tick", "Tick ID"],
         positions.map((p) => [
           p.vaultId.toString(),
           p.pubkey.toBase58(),

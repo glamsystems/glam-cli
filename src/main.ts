@@ -13,7 +13,7 @@ import { Command } from "commander";
 
 import {
   CliConfig,
-  markUnauditedCommand,
+  markStagingOnlyCommand,
   resolveStagingFromStateOwner,
   type CliContext,
 } from "./utils";
@@ -26,7 +26,10 @@ import { installKaminoFarmsCommands } from "./cmds/kamino-farms";
 import { installIntegrationCommands } from "./cmds/integration";
 import { installDelegateCommands } from "./cmds/delegate";
 import { installJupiterSwapCommands } from "./cmds/jupiter";
-import { installJupiterLendCommands } from "./cmds/jupiter-lend";
+import {
+  installJupiterBorrowCommands,
+  installJupiterEarnCommands,
+} from "./cmds/jupiter-lend";
 import { installInvestCommands } from "./cmds/invest";
 import { installAltCommands } from "./cmds/alt";
 import { installStakeCommands } from "./cmds/stake";
@@ -161,6 +164,7 @@ async function initialize(
 setupGracefulShutdown();
 
 const program = new Command();
+program.addHelpCommand(false);
 program
   .name("glam-cli")
   .description("CLI for interacting with the GLAM Protocol")
@@ -244,16 +248,6 @@ const jupiterSwap = program
   .description("Jupiter swap");
 installJupiterSwapCommands(jupiterSwap, context);
 
-const jupiterEarn = markUnauditedCommand(
-  program.command("jupiter-earn"),
-  "Jupiter Earn",
-);
-const jupiterBorrow = markUnauditedCommand(
-  program.command("jupiter-borrow"),
-  "Jupiter Borrow",
-);
-installJupiterLendCommands(jupiterEarn, jupiterBorrow, context);
-
 const klend = program.command("kamino-lend").description("Kamino lending");
 installKaminoLendCommands(klend, context);
 
@@ -282,51 +276,33 @@ installTimelockCommands(timelock, context);
 const cctp = program.command("cctp").description("CCTP operations");
 installCctpCommands(cctp, context);
 
-const bridge = program.command("bridge").description("Bridge operations");
-installBridgeCommands(bridge, context);
+type StagingOnlyCommandInstaller = (
+  command: Command,
+  context: CliContext,
+) => void;
 
-const epi = program
-  .command("epi")
-  .description("External position observation operations");
-installEpiCommands(epi, context);
+const stagingOnly = [
+  ["bridge", "Bridge operations", installBridgeCommands],
+  ["epi", "Manage external positions", installEpiCommands],
+  ["token-acl", "Token ACL (sRFC-37)", installTokenAclCommands],
+  ["jupiter-earn", "Jupiter Earn", installJupiterEarnCommands],
+  ["jupiter-borrow", "Jupiter Borrow", installJupiterBorrowCommands],
+  ["loopscale", "Loopscale loans", installLoopscaleCommands],
+  ["phoenix", "Phoenix perps", installPhoenixCommands],
+  ["orca", "Orca whirlpools", installOrcaCommands],
+  ["marinade", "Marinade liquid staking", installMarinadeCommands],
+  ["lst", "Liquid staking (SPL and Sanctum)", installLstCommands],
+  ["stake", "Solana native staking", installStakeCommands],
+] satisfies [string, string, StagingOnlyCommandInstaller][];
 
-const tokenAcl = program
-  .command("token-acl")
-  .description("Token ACL (sRFC-37) operations");
-installTokenAclCommands(tokenAcl, context);
-
-const loopscale = markUnauditedCommand(
-  program.command("loopscale"),
-  "Loopscale loans",
-);
-installLoopscaleCommands(loopscale, context);
-
-const phoenix = markUnauditedCommand(
-  program.command("phoenix"),
-  "Phoenix perps",
-);
-installPhoenixCommands(phoenix, context);
-
-const orca = markUnauditedCommand(program.command("orca"), "Orca Whirlpools");
-installOrcaCommands(orca, context);
-
-if (process.env.NODE_ENV === "development") {
-  // Commands that use unaudited integrations are disallowed by default
-  // Unleash them with --bypass-warning
-  const marinade = markUnauditedCommand(
-    program.command("marinade"),
-    "Marinade staking",
+stagingOnly.forEach(([key, description, installFn]) => {
+  const cmd = markStagingOnlyCommand(
+    program.command(key),
+    description,
+    context,
   );
-  const lst = markUnauditedCommand(program.command("lst"), "Liquid staking");
-  const stake = markUnauditedCommand(
-    program.command("stake"),
-    "Native staking",
-  );
-
-  installMarinadeCommands(marinade, context);
-  installLstCommands(lst, context);
-  installStakeCommands(stake, context);
-}
+  installFn(cmd, context);
+});
 
 //
 // Run the CLI in development mode as follows:
