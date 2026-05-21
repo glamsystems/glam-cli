@@ -41,6 +41,7 @@ import { installTimelockCommands } from "./cmds/timelock";
 import { installTokenAclCommands } from "./cmds/token-acl";
 import { installLoopscaleCommands } from "./cmds/loopscale";
 import { installPhoenixCommands } from "./cmds/phoenix";
+import { installOrcaCommands } from "./cmds/orca";
 
 const context = {} as CliContext;
 
@@ -305,6 +306,9 @@ const phoenix = markUnauditedCommand(
   "Phoenix perps",
 );
 installPhoenixCommands(phoenix, context);
+
+const orca = markUnauditedCommand(program.command("orca"), "Orca Whirlpools");
+installOrcaCommands(orca, context);
 
 if (process.env.NODE_ENV === "development") {
   // Commands that use unaudited integrations are disallowed by default
