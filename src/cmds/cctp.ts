@@ -1,11 +1,13 @@
 import { type Command } from "commander";
-import { type CliContext, executeTxWithErrorHandling } from "../utils";
-import { BN } from "@coral-xyz/anchor";
 import {
-  CctpPolicy,
-  fromUiAmount,
-  publicKeyToEvmAddress,
-} from "@glamsystems/glam-sdk";
+  type CliContext,
+  executeTxWithErrorHandling,
+  parseNonNegativeInteger,
+  parsePositiveInteger,
+  parsePositiveUiAmount,
+} from "../utils";
+import { BN } from "@coral-xyz/anchor";
+import { CctpPolicy, publicKeyToEvmAddress } from "@glamsystems/glam-sdk";
 import { evmAddressToPublicKey } from "@glamsystems/glam-sdk";
 import { PublicKey } from "@solana/web3.js";
 
@@ -33,8 +35,10 @@ export function installCctpCommands(program: Command, context: CliContext) {
 
   program
     .command("allowlist-destination")
-    .argument("<domain>", "CCTP domain", parseInt)
-    .argument("<destination_address>", "Destination address")
+    .argument("<domain>", "CCTP domain", (value: string) =>
+      parseNonNegativeInteger(value, "domain"),
+    )
+    .argument("<destination-address>", "Destination address")
     .option("--base58", "Address is a base58 string")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Add a destination to the allowlist")
@@ -83,8 +87,10 @@ export function installCctpCommands(program: Command, context: CliContext) {
 
   program
     .command("remove-destination")
-    .argument("<domain>", "CCTP domain", parseInt)
-    .argument("<destination_address>", "Destination address")
+    .argument("<domain>", "CCTP domain", (value: string) =>
+      parseNonNegativeInteger(value, "domain"),
+    )
+    .argument("<destination-address>", "Destination address")
     .option("--base58", "Address is a base58 string")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Remove a destination from the allowlist")
@@ -125,17 +131,23 @@ export function installCctpCommands(program: Command, context: CliContext) {
   // https://developers.circle.com/cctp/cctp-supported-blockchains#cctp-v2-supported-domains
   program
     .command("bridge-usdc")
-    .argument("<amount>", "USDC amount")
-    .argument("<domain>", "CCTP domain", parseInt)
-    .argument("<destination_address>", "Recipient EVM address")
+    .argument("<amount>", "USDC amount in UI units")
+    .argument("<domain>", "CCTP domain", (value: string) =>
+      parseNonNegativeInteger(value, "domain"),
+    )
+    .argument("<destination-address>", "Recipient EVM address")
     .option("-d, --destination-caller <address>", "Destination caller address")
     .option(
-      "-m, --max-fee-bps <maxFeeBps>",
+      "-m, --max-fee-bps <bps>",
       "Max fee in basis points (default 1)",
       (val) => {
-        const parsed = parseInt(val);
-        return isNaN(parsed) ? 1 : parsed;
+        const parsed = parseNonNegativeInteger(val, "max-fee-bps");
+        if (parsed > 10_000) {
+          throw new Error("max-fee-bps must be at most 10000");
+        }
+        return parsed;
       },
+      1,
     )
     .option("-b, --base58", "Address is a base58 string")
     .option("-f, --fast", "Fast transfer (lower finality threshold)", false)
@@ -175,7 +187,7 @@ export function installCctpCommands(program: Command, context: CliContext) {
         }
 
         // https://developers.circle.com/cctp/technical-guide#cctp-finality-thresholds
-        const amountBN = fromUiAmount(amount, 6);
+        const amountBN = parsePositiveUiAmount(amount, 6, "amount");
         const maxFee = amountBN.mul(new BN(maxFeeBps)).div(new BN(10000));
         const minFinalityThreshold = fast ? 1000 : 2000;
 
@@ -203,9 +215,11 @@ export function installCctpCommands(program: Command, context: CliContext) {
 
   program
     .command("receive")
-    .argument("<source_domain>", "Source domain", parseInt)
+    .argument("<source-domain>", "Source domain", (value: string) =>
+      parseNonNegativeInteger(value, "source-domain"),
+    )
     .option(
-      "-t, --txHash <txHash>",
+      "-t, --tx-hash <tx-hash>",
       "Transaction hash hex string (start with 0x)",
     )
     .option("-n, --nonce <nonce>", "Nonce hex string (start with 0x)")
@@ -235,11 +249,15 @@ export function installCctpCommands(program: Command, context: CliContext) {
 
   program
     .command("list")
-    .option("-s, --since-slot <slot>", "Fetch events since this slot", parseInt)
+    .option(
+      "-s, --since-slot <slot>",
+      "Fetch events since this slot",
+      (value: string) => parseNonNegativeInteger(value, "since-slot"),
+    )
     .option(
       "-b, --batch-size <size>",
       "Batch size of RPC requests. Higher values reduce latency but need higher RPC limits",
-      parseInt,
+      (value: string) => parsePositiveInteger(value, "batch-size"),
     )
     .option("-c, --commitment <commitment>", "Commitment level", "confirmed")
     .description("List CCTP events of incoming and outgoing bridge transfers")

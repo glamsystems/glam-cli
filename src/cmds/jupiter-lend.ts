@@ -1,5 +1,7 @@
 import { BN } from "@coral-xyz/anchor";
 import {
+  fetchMintAndTokenProgram,
+  getFTokenMintPda,
   JUPITER_BORROW_PROTOCOL,
   JUPITER_EARN_PROTOCOL,
   JupiterBorrowPolicy,
@@ -13,8 +15,10 @@ import {
   executeTxWithErrorHandling,
   printPubkeyList,
   printTable,
+  parseNonNegativeInteger,
   parsePositiveUiAmount,
   resolveTokenMint,
+  resolveTokenPublicKey,
   validatePublicKey,
 } from "../utils";
 
@@ -72,111 +76,125 @@ export function installJupiterEarnCommands(
         console.log("No policy found");
         return;
       }
-      printPubkeyList("Earn mints allowlist", policy.mintsAllowlist);
+      printPubkeyList("Earn tokens allowlist", policy.mintsAllowlist);
     });
 
   earnProgram
-    .command("allow-mint")
-    .argument("<mint>", "Mint public key", validatePublicKey)
+    .command("allowlist-token")
+    .alias("allowlist-mint")
+    .argument("<token>", "Token mint address or symbol")
     .option("-y, --yes", "Skip confirmation prompt", false)
-    .description("Add a mint to the earn allowlist")
-    .action(async (mint: PublicKey, options: { yes?: boolean }) => {
+    .description("Add a token to the earn allowlist")
+    .action(async (tokenInput: string, options: { yes?: boolean }) => {
+      const token = await resolveTokenPublicKey(context.glamClient, tokenInput);
       const policy =
         (await fetchEarnPolicy(context)) ?? new JupiterEarnPolicy([]);
-      if (policy.mintsAllowlist.find((m) => m.equals(mint))) {
-        console.error(`Mint ${mint} is already in the earn allowlist`);
+      if (policy.mintsAllowlist.find((m) => m.equals(token))) {
+        console.error(`Token ${token} is already in the earn allowlist`);
         process.exit(1);
       }
-      policy.mintsAllowlist.push(mint);
+      policy.mintsAllowlist.push(token);
       await executeTxWithErrorHandling(
         () => setEarnPolicy(context, policy),
         {
           skip: options?.yes ?? false,
-          message: `Confirm adding mint ${mint} to Jupiter Lend earn allowlist`,
+          message: `Confirm adding token ${token} to Jupiter Earn allowlist`,
         },
-        (txSig) => `Mint ${mint} added to earn allowlist: ${txSig}`,
+        (txSig) => `Token ${token} added to earn allowlist: ${txSig}`,
       );
     });
 
   earnProgram
-    .command("remove-mint")
-    .argument("<mint>", "Mint public key", validatePublicKey)
+    .command("remove-token")
+    .alias("remove-mint")
+    .argument("<token>", "Token mint address or symbol")
     .option("-y, --yes", "Skip confirmation prompt", false)
-    .description("Remove a mint from the earn allowlist")
-    .action(async (mint: PublicKey, options: { yes?: boolean }) => {
+    .description("Remove a token from the earn allowlist")
+    .action(async (tokenInput: string, options: { yes?: boolean }) => {
+      const token = await resolveTokenPublicKey(context.glamClient, tokenInput);
       const policy = await fetchEarnPolicy(context);
       if (!policy) {
         console.error("No policy found");
         process.exit(1);
       }
-      if (!policy.mintsAllowlist.find((m) => m.equals(mint))) {
-        console.error("Mint not in earn allowlist. Removal not needed.");
+      if (!policy.mintsAllowlist.find((m) => m.equals(token))) {
+        console.error("Token not in earn allowlist. Removal not needed.");
         process.exit(1);
       }
       policy.mintsAllowlist = policy.mintsAllowlist.filter(
-        (m) => !m.equals(mint),
+        (m) => !m.equals(token),
       );
       await executeTxWithErrorHandling(
         () => setEarnPolicy(context, policy),
         {
           skip: options?.yes ?? false,
-          message: `Confirm removing mint ${mint} from Jupiter Lend earn allowlist`,
+          message: `Confirm removing token ${token} from Jupiter Earn allowlist`,
         },
-        (txSig) => `Mint ${mint} removed from earn allowlist: ${txSig}`,
+        (txSig) => `Token ${token} removed from earn allowlist: ${txSig}`,
       );
     });
 
   earnProgram
     .command("deposit")
     .argument("<amount>", "UI amount of underlying to deposit")
-    .requiredOption(
-      "--mint <mintOrSymbol>",
-      "Underlying mint address or symbol",
-    )
+    .argument("<token>", "Token mint or symbol")
     .option(
-      "--min-out <uiAmount>",
-      "Minimum fToken amount to receive (UI units; defaults to 0)",
+      "--min-out <amount>",
+      "Minimum fToken amount to receive (defaults to 0)",
     )
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Deposit to Jupiter Earn")
     .action(
       async (
         amount: string,
-        options: { mint: string; minOut?: string; yes?: boolean },
+        token: string,
+        options: {
+          minOut?: string;
+          yes?: boolean;
+        },
       ) => {
-        const token = await resolveTokenMint(context.glamClient, options.mint);
-        const mint = new PublicKey(token.address);
-        const assets = parsePositiveUiAmount(amount, token.decimals, "amount");
+        const tokenInfo = await resolveTokenMint(context.glamClient, token);
+        const mint = new PublicKey(tokenInfo.address);
+        const amountBN = parsePositiveUiAmount(
+          amount,
+          tokenInfo.decimals,
+          "amount",
+        );
+
+        const { mint: fTokenMint } = await fetchMintAndTokenProgram(
+          context.glamClient.connection,
+          getFTokenMintPda(mint),
+        );
         const minAmountOut = options.minOut
-          ? parsePositiveUiAmount(options.minOut, token.decimals, "min-out")
+          ? parsePositiveUiAmount(
+              options.minOut,
+              fTokenMint.decimals,
+              "min-out",
+            )
           : new BN(0);
         await executeTxWithErrorHandling(
           () =>
             context.glamClient.jupiterEarn.deposit(
               mint,
-              assets,
+              amountBN,
               minAmountOut,
               context.txOptions,
             ),
           {
             skip: options.yes ?? false,
-            message: `Confirm Jupiter Earn deposit ${amount} ${token.symbol}`,
+            message: `Confirm Jupiter Earn deposit ${amount} ${token}`,
           },
-          (txSig) =>
-            `Jupiter Earn deposit of ${amount} ${token.symbol}: ${txSig}`,
+          (txSig) => `Jupiter Earn deposit of ${amount} ${token}: ${txSig}`,
         );
       },
     );
 
   earnProgram
     .command("withdraw")
-    .argument("<amount>", "UI amount of underlying to withdraw")
-    .requiredOption(
-      "--mint <mintOrSymbol>",
-      "Underlying mint address or symbol",
-    )
+    .argument("<amount>", "UI amount of underlying token to withdraw")
+    .argument("<token>", "Token mint or symbol of token to withdraw")
     .option(
-      "--max-shares <uiAmount>",
+      "--max-shares <amount>",
       "Max fTokens to burn (UI units; defaults to u64::MAX)",
     )
     .option("-y, --yes", "Skip confirmation prompt", false)
@@ -184,19 +202,28 @@ export function installJupiterEarnCommands(
     .action(
       async (
         amount: string,
-        options: { mint: string; maxShares?: string; yes?: boolean },
+        token: string,
+        options: {
+          maxShares?: string;
+          yes?: boolean;
+        },
       ) => {
-        const token = await resolveTokenMint(context.glamClient, options.mint);
-        const mint = new PublicKey(token.address);
-        const underlyingAmount = parsePositiveUiAmount(
+        const tokenInfo = await resolveTokenMint(context.glamClient, token);
+        const mint = new PublicKey(tokenInfo.address);
+        const amountBN = parsePositiveUiAmount(
           amount,
-          token.decimals,
+          tokenInfo.decimals,
           "amount",
+        );
+
+        const { mint: fTokenMint } = await fetchMintAndTokenProgram(
+          context.glamClient.connection,
+          getFTokenMintPda(mint),
         );
         const maxSharesBurn = options.maxShares
           ? parsePositiveUiAmount(
               options.maxShares,
-              token.decimals,
+              fTokenMint.decimals,
               "max-shares",
             )
           : undefined;
@@ -204,16 +231,15 @@ export function installJupiterEarnCommands(
           () =>
             context.glamClient.jupiterEarn.withdraw(
               mint,
-              underlyingAmount,
+              amountBN,
               maxSharesBurn,
               context.txOptions,
             ),
           {
             skip: options.yes ?? false,
-            message: `Confirm Jupiter Earn withdraw ${amount} ${token.symbol}`,
+            message: `Confirm Jupiter Earn withdraw ${amount} ${token}`,
           },
-          (txSig) =>
-            `Jupiter Earn withdraw of ${amount} ${token.symbol}: ${txSig}`,
+          (txSig) => `Jupiter Earn withdraw of ${amount} ${token}: ${txSig}`,
         );
       },
     );
@@ -234,10 +260,10 @@ export function installJupiterBorrowCommands(
       }
       printPubkeyList("Borrow vaults allowlist", policy.vaultsAllowlist);
       printPubkeyList(
-        "Collateral mints allowlist",
+        "Collateral tokens allowlist",
         policy.collateralMintsAllowlist,
       );
-      printPubkeyList("Borrow mints allowlist", policy.borrowMintsAllowlist);
+      printPubkeyList("Borrow tokens allowlist", policy.borrowMintsAllowlist);
     });
 
   borrowProgram
@@ -263,9 +289,9 @@ export function installJupiterBorrowCommands(
   borrowProgram
     .command("list-positions")
     .option(
-      "--vault-id <u16>",
+      "--vault-id <vault-id>",
       "Only list positions for this Jupiter vault_id",
-      parseInt,
+      (value: string) => parseNonNegativeInteger(value, "vault-id"),
     )
     .description("List Jupiter Lend borrow positions held by the GLAM vault")
     .action(async (options: { vaultId?: number }) => {
@@ -352,120 +378,132 @@ export function installJupiterBorrowCommands(
 
   borrowProgram
     .command("allow-collateral")
-    .argument("<mint>", "Collateral mint public key", validatePublicKey)
+    .argument("<token>", "Collateral token mint address or symbol")
     .option("-y, --yes", "Skip confirmation prompt", false)
-    .description("Add a collateral mint to the borrow allowlist")
-    .action(async (mint: PublicKey, options: { yes?: boolean }) => {
+    .description("Add a collateral token to the borrow allowlist")
+    .action(async (tokenInput: string, options: { yes?: boolean }) => {
+      const token = await resolveTokenPublicKey(context.glamClient, tokenInput);
       const policy =
         (await fetchBorrowPolicy(context)) ??
         new JupiterBorrowPolicy([], [], []);
-      if (policy.collateralMintsAllowlist.find((m) => m.equals(mint))) {
+      if (policy.collateralMintsAllowlist.find((m) => m.equals(token))) {
         console.error(
-          `Collateral mint ${mint} is already in the borrow allowlist`,
+          `Collateral token ${token} is already in the borrow allowlist`,
         );
         process.exit(1);
       }
-      policy.collateralMintsAllowlist.push(mint);
+      policy.collateralMintsAllowlist.push(token);
       await executeTxWithErrorHandling(
         () => setBorrowPolicy(context, policy),
         {
           skip: options?.yes ?? false,
-          message: `Confirm adding collateral mint ${mint} to Jupiter Lend borrow allowlist`,
+          message: `Confirm adding collateral token ${token} to Jupiter Lend borrow allowlist`,
         },
         (txSig) =>
-          `Collateral mint ${mint} added to borrow allowlist: ${txSig}`,
+          `Collateral token ${token} added to borrow allowlist: ${txSig}`,
       );
     });
 
   borrowProgram
     .command("remove-collateral")
-    .argument("<mint>", "Collateral mint public key", validatePublicKey)
+    .argument("<token>", "Collateral token mint address or symbol")
     .option("-y, --yes", "Skip confirmation prompt", false)
-    .description("Remove a collateral mint from the borrow allowlist")
-    .action(async (mint: PublicKey, options: { yes?: boolean }) => {
+    .description("Remove a collateral token from the borrow allowlist")
+    .action(async (tokenInput: string, options: { yes?: boolean }) => {
+      const token = await resolveTokenPublicKey(context.glamClient, tokenInput);
       const policy = await fetchBorrowPolicy(context);
       if (!policy) {
         console.error("No policy found");
         process.exit(1);
       }
-      if (!policy.collateralMintsAllowlist.find((m) => m.equals(mint))) {
+      if (!policy.collateralMintsAllowlist.find((m) => m.equals(token))) {
         console.error(
-          "Collateral mint not in borrow allowlist. Removal not needed.",
+          "Collateral token not in borrow allowlist. Removal not needed.",
         );
         process.exit(1);
       }
       policy.collateralMintsAllowlist = policy.collateralMintsAllowlist.filter(
-        (m) => !m.equals(mint),
+        (m) => !m.equals(token),
       );
       await executeTxWithErrorHandling(
         () => setBorrowPolicy(context, policy),
         {
           skip: options?.yes ?? false,
-          message: `Confirm removing collateral mint ${mint} from Jupiter Lend borrow allowlist`,
+          message: `Confirm removing collateral token ${token} from Jupiter Lend borrow allowlist`,
         },
         (txSig) =>
-          `Collateral mint ${mint} removed from borrow allowlist: ${txSig}`,
+          `Collateral token ${token} removed from borrow allowlist: ${txSig}`,
       );
     });
 
   borrowProgram
-    .command("allow-borrow-mint")
-    .argument("<mint>", "Borrowable debt mint public key", validatePublicKey)
+    .command("allow-borrow-token")
+    .alias("allow-borrow-mint")
+    .argument("<token>", "Borrowable debt token mint address or symbol")
     .option("-y, --yes", "Skip confirmation prompt", false)
-    .description("Add a borrowable debt mint to the allowlist")
-    .action(async (mint: PublicKey, options: { yes?: boolean }) => {
+    .description("Add a borrowable debt token to the allowlist")
+    .action(async (tokenInput: string, options: { yes?: boolean }) => {
+      const token = await resolveTokenPublicKey(context.glamClient, tokenInput);
       const policy =
         (await fetchBorrowPolicy(context)) ??
         new JupiterBorrowPolicy([], [], []);
-      if (policy.borrowMintsAllowlist.find((m) => m.equals(mint))) {
-        console.error(`Borrow mint ${mint} is already in the borrow allowlist`);
+      if (policy.borrowMintsAllowlist.find((m) => m.equals(token))) {
+        console.error(
+          `Borrow token ${token} is already in the borrow allowlist`,
+        );
         process.exit(1);
       }
-      policy.borrowMintsAllowlist.push(mint);
+      policy.borrowMintsAllowlist.push(token);
       await executeTxWithErrorHandling(
         () => setBorrowPolicy(context, policy),
         {
           skip: options?.yes ?? false,
-          message: `Confirm adding borrow mint ${mint} to Jupiter Lend borrow allowlist`,
+          message: `Confirm adding borrow token ${token} to Jupiter Lend borrow allowlist`,
         },
-        (txSig) => `Borrow mint ${mint} added to borrow allowlist: ${txSig}`,
+        (txSig) => `Borrow token ${token} added to borrow allowlist: ${txSig}`,
       );
     });
 
   borrowProgram
-    .command("remove-borrow-mint")
-    .argument("<mint>", "Borrowable debt mint public key", validatePublicKey)
+    .command("remove-borrow-token")
+    .alias("remove-borrow-mint")
+    .argument("<token>", "Borrowable debt token mint address or symbol")
     .option("-y, --yes", "Skip confirmation prompt", false)
-    .description("Remove a borrowable debt mint from the allowlist")
-    .action(async (mint: PublicKey, options: { yes?: boolean }) => {
+    .description("Remove a borrowable debt token from the allowlist")
+    .action(async (tokenInput: string, options: { yes?: boolean }) => {
+      const token = await resolveTokenPublicKey(context.glamClient, tokenInput);
       const policy = await fetchBorrowPolicy(context);
       if (!policy) {
         console.error("No policy found");
         process.exit(1);
       }
-      if (!policy.borrowMintsAllowlist.find((m) => m.equals(mint))) {
+      if (!policy.borrowMintsAllowlist.find((m) => m.equals(token))) {
         console.error(
-          "Borrow mint not in borrow allowlist. Removal not needed.",
+          "Borrow token not in borrow allowlist. Removal not needed.",
         );
         process.exit(1);
       }
       policy.borrowMintsAllowlist = policy.borrowMintsAllowlist.filter(
-        (m) => !m.equals(mint),
+        (m) => !m.equals(token),
       );
       await executeTxWithErrorHandling(
         () => setBorrowPolicy(context, policy),
         {
           skip: options?.yes ?? false,
-          message: `Confirm removing borrow mint ${mint} from Jupiter Lend borrow allowlist`,
+          message: `Confirm removing borrow token ${token} from Jupiter Lend borrow allowlist`,
         },
         (txSig) =>
-          `Borrow mint ${mint} removed from borrow allowlist: ${txSig}`,
+          `Borrow token ${token} removed from borrow allowlist: ${txSig}`,
       );
     });
 
   borrowProgram
     .command("init-position")
-    .requiredOption("--vault-id <u16>", "Jupiter Vaults vault_id", parseInt)
+    .requiredOption(
+      "--vault-id <vault-id>",
+      "Jupiter Vaults vault ID",
+      (value: string) => parseNonNegativeInteger(value, "vault-id"),
+    )
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Initialize a Jupiter Lend borrow position")
     .action(async (options: { vaultId: number; yes?: boolean }) => {

@@ -1,7 +1,6 @@
 import { BN } from "@coral-xyz/anchor";
 import {
   evmAddressToPublicKey,
-  fromUiAmount,
   isValidEvmAddress,
   LayerzeroOftPolicy,
   type LayerzeroOftRouteInput,
@@ -15,6 +14,12 @@ import {
   type CliContext,
   collectPublicKeys,
   executeTxWithErrorHandling,
+  parseNonNegativeInteger,
+  parseNonNegativeUiAmount,
+  parsePositiveBn,
+  parsePositiveInteger,
+  parsePositiveUiAmount,
+  resolveTokenPublicKey,
   validatePublicKey,
 } from "../utils";
 
@@ -158,37 +163,36 @@ function toSortableNumber(value: unknown): number {
 }
 
 function buildRoute(
-  sourceMint: string,
+  sourceMint: PublicKey,
   destinationChain: number,
   destinationRecipient: string,
-  providerProgram: string,
+  providerProgram: PublicKey,
   managementMode: string,
-  minAmount: number,
-  maxAmount: number,
+  minAmount: string,
+  maxAmount: string,
   decimals: number,
 ): LayerzeroOftRouteInput {
-  if (maxAmount <= 0) {
-    throw new Error("--max-amount must be greater than 0");
-  }
+  const minAmountBn = parseNonNegativeUiAmount(
+    minAmount,
+    decimals,
+    "min-amount",
+  );
+  const maxAmountBn = parsePositiveUiAmount(maxAmount, decimals, "max-amount");
 
-  if (minAmount < 0) {
-    throw new Error("--min-amount cannot be negative");
-  }
-
-  if (maxAmount < minAmount) {
+  if (maxAmountBn.lt(minAmountBn)) {
     throw new Error(
       "--max-amount must be greater than or equal to --min-amount",
     );
   }
 
   return {
-    sourceMint: new PublicKey(sourceMint),
+    sourceMint,
     destinationChain,
     destinationRecipient: parseRecipientPublicKey(destinationRecipient),
-    providerProgram: new PublicKey(providerProgram),
+    providerProgram,
     managementMode: parseManagementMode(managementMode),
-    minAmount: fromUiAmount(minAmount, decimals),
-    maxAmount: fromUiAmount(maxAmount, decimals),
+    minAmount: minAmountBn,
+    maxAmount: maxAmountBn,
   };
 }
 
@@ -228,7 +232,7 @@ function printLayerzeroOftPolicy(policy: LayerzeroOftPolicy | null) {
 
 type OftSendOptions = {
   nativeFeeLamports: BN;
-  minAmount?: number;
+  minAmount?: string;
   lzTokenFee?: BN;
   options?: string;
   composeMsg?: string;
@@ -249,34 +253,39 @@ function installLayerzeroOftCommands(program: Command, context: CliContext) {
 
   program
     .command("allow-route")
-    .argument("<source_mint>")
-    .argument("<destination_chain>", "", parseInt)
-    .argument("<destination_recipient>")
-    .argument("<provider_program>")
+    .argument("<source-mint>", "Source token mint address or symbol")
+    .argument("<destination-chain>", "", (value: string) =>
+      parsePositiveInteger(value, "destination-chain"),
+    )
+    .argument("<destination-recipient>")
+    .argument(
+      "<provider-program>",
+      "Provider program public key",
+      validatePublicKey,
+    )
     .requiredOption(
       "--max-amount <amount>",
       "Maximum source amount in UI units",
-      parseFloat,
     )
     .option(
       "--management-mode <mode>",
       "unmanaged | managed | either",
       "unmanaged",
     )
+    .option("--min-amount <amount>", "Minimum source amount in UI units", "0")
     .option(
-      "--min-amount <amount>",
-      "Minimum source amount in UI units",
-      parseFloat,
-      0,
+      "--decimals <decimals>",
+      "Source mint decimals",
+      (value: string) => parseNonNegativeInteger(value, "decimals"),
+      6,
     )
-    .option("--decimals <decimals>", "Source mint decimals", parseInt, 6)
     .option("-y, --yes", "Skip confirmation", false)
     .action(
       async (
-        sourceMint: string,
+        sourceMintInput: string,
         destinationChain: number,
         destinationRecipient: string,
-        providerProgram: string,
+        providerProgram: PublicKey,
         {
           managementMode,
           minAmount,
@@ -285,12 +294,16 @@ function installLayerzeroOftCommands(program: Command, context: CliContext) {
           yes,
         }: {
           managementMode: string;
-          minAmount: number;
-          maxAmount: number;
+          minAmount: string;
+          maxAmount: string;
           decimals: number;
           yes: boolean;
         },
       ) => {
+        const sourceMint = await resolveTokenPublicKey(
+          context.glamClient,
+          sourceMintInput,
+        );
         const route = buildRoute(
           sourceMint,
           destinationChain,
@@ -319,34 +332,39 @@ function installLayerzeroOftCommands(program: Command, context: CliContext) {
 
   program
     .command("update-route")
-    .argument("<source_mint>")
-    .argument("<destination_chain>", "", parseInt)
-    .argument("<destination_recipient>")
-    .argument("<provider_program>")
+    .argument("<source-mint>", "Source token mint address or symbol")
+    .argument("<destination-chain>", "", (value: string) =>
+      parsePositiveInteger(value, "destination-chain"),
+    )
+    .argument("<destination-recipient>")
+    .argument(
+      "<provider-program>",
+      "Provider program public key",
+      validatePublicKey,
+    )
     .requiredOption(
       "--max-amount <amount>",
       "Maximum source amount in UI units",
-      parseFloat,
     )
     .option(
       "--management-mode <mode>",
       "unmanaged | managed | either",
       "unmanaged",
     )
+    .option("--min-amount <amount>", "Minimum source amount in UI units", "0")
     .option(
-      "--min-amount <amount>",
-      "Minimum source amount in UI units",
-      parseFloat,
-      0,
+      "--decimals <decimals>",
+      "Source mint decimals",
+      (value: string) => parseNonNegativeInteger(value, "decimals"),
+      6,
     )
-    .option("--decimals <decimals>", "Source mint decimals", parseInt, 6)
     .option("-y, --yes", "Skip confirmation", false)
     .action(
       async (
-        sourceMint: string,
+        sourceMintInput: string,
         destinationChain: number,
         destinationRecipient: string,
-        providerProgram: string,
+        providerProgram: PublicKey,
         {
           managementMode,
           minAmount,
@@ -355,12 +373,16 @@ function installLayerzeroOftCommands(program: Command, context: CliContext) {
           yes,
         }: {
           managementMode: string;
-          minAmount: number;
-          maxAmount: number;
+          minAmount: string;
+          maxAmount: string;
           decimals: number;
           yes: boolean;
         },
       ) => {
+        const sourceMint = await resolveTokenPublicKey(
+          context.glamClient,
+          sourceMintInput,
+        );
         const route = buildRoute(
           sourceMint,
           destinationChain,
@@ -389,28 +411,38 @@ function installLayerzeroOftCommands(program: Command, context: CliContext) {
 
   program
     .command("remove-route")
-    .argument("<source_mint>")
-    .argument("<destination_chain>", "", parseInt)
-    .argument("<destination_recipient>")
-    .argument("<provider_program>")
+    .argument("<source-mint>", "Source token mint address or symbol")
+    .argument("<destination-chain>", "", (value: string) =>
+      parsePositiveInteger(value, "destination-chain"),
+    )
+    .argument("<destination-recipient>")
+    .argument(
+      "<provider-program>",
+      "Provider program public key",
+      validatePublicKey,
+    )
     .option("-y, --yes", "Skip confirmation", false)
     .action(
       async (
-        sourceMint: string,
+        sourceMintInput: string,
         destinationChain: number,
         destinationRecipient: string,
-        providerProgram: string,
+        providerProgram: PublicKey,
         { yes }: { yes: boolean },
       ) => {
+        const sourceMint = await resolveTokenPublicKey(
+          context.glamClient,
+          sourceMintInput,
+        );
         await executeTxWithErrorHandling(
           () =>
             context.glamClient.bridge.deleteLayerzeroOftRoute(
               {
-                sourceMint: new PublicKey(sourceMint),
+                sourceMint,
                 destinationChain,
                 destinationRecipient:
                   parseRecipientPublicKey(destinationRecipient),
-                providerProgram: new PublicKey(providerProgram),
+                providerProgram,
                 managementMode: RouteManagementMode.UnmanagedOnly,
                 minAmount: new BN(0),
                 maxAmount: new BN(0),
@@ -428,11 +460,12 @@ function installLayerzeroOftCommands(program: Command, context: CliContext) {
 
   program
     .command("derive-aux-account")
-    .argument("<transfer_id>", "transfer id pubkey or 32-byte hex/base64")
-    .argument("<source_mint>")
+    .argument("<transfer-id>", "transfer id pubkey or 32-byte hex/base64")
+    .argument("<source-mint>", "Source token mint address or symbol")
     .option(
       "--signer <pubkey>",
       "Optional signer override for the derived seed",
+      validatePublicKey,
     )
     .description(
       "Derive the temporary auxiliary token account used during OFT sends",
@@ -440,14 +473,18 @@ function installLayerzeroOftCommands(program: Command, context: CliContext) {
     .action(
       async (
         transferId: string,
-        sourceMint: string,
+        sourceMintInput: string,
         { signer }: { signer?: string },
       ) => {
         const parsedTransferId = parseTransferId(transferId);
+        const sourceMint = await resolveTokenPublicKey(
+          context.glamClient,
+          sourceMintInput,
+        );
         const auxiliary =
           await context.glamClient.bridge.deriveOftAuxiliaryTokenAccount(
             parsedTransferId,
-            new PublicKey(sourceMint),
+            sourceMint,
             signer ? new PublicKey(signer) : undefined,
           );
         printJson({
@@ -461,21 +498,27 @@ function installLayerzeroOftCommands(program: Command, context: CliContext) {
 
   program
     .command("derive-nonce")
-    .argument("<endpoint_program>")
-    .argument("<sender>")
-    .argument("<destination_chain>", "", parseInt)
-    .argument("<destination_recipient>")
+    .argument(
+      "<endpoint-program>",
+      "Endpoint program public key",
+      validatePublicKey,
+    )
+    .argument("<sender>", "Sender public key", validatePublicKey)
+    .argument("<destination-chain>", "", (value: string) =>
+      parsePositiveInteger(value, "destination-chain"),
+    )
+    .argument("<destination-recipient>")
     .description("Derive the LayerZero nonce PDA for an OFT route")
     .action(
       async (
-        endpointProgram: string,
-        sender: string,
+        endpointProgram: PublicKey,
+        sender: PublicKey,
         destinationChain: number,
         destinationRecipient: string,
       ) => {
         const nonce = context.glamClient.bridge.getLayerzeroNoncePda(
-          new PublicKey(endpointProgram),
-          new PublicKey(sender),
+          endpointProgram,
+          sender,
           destinationChain,
           parseRecipientPublicKey(destinationRecipient),
         );
@@ -485,30 +528,31 @@ function installLayerzeroOftCommands(program: Command, context: CliContext) {
 
   program
     .command("send-usdt")
-    .argument("<amount>", "USDT amount in UI units", parseFloat)
-    .argument("<destination_chain>", "", parseInt)
-    .argument("<destination_recipient>")
+    .argument("<amount>", "USDT amount in UI units")
+    .argument("<destination-chain>", "", (value: string) =>
+      parsePositiveInteger(value, "destination-chain"),
+    )
+    .argument("<destination-recipient>")
     .requiredOption(
       "--native-fee-lamports <lamports>",
       "LayerZero native fee in lamports/base units",
-      (value: string) => new BN(value),
+      (value: string) => parsePositiveBn(value, "native-fee-lamports"),
     )
     .option(
       "--min-amount <amount>",
       "Minimum destination amount in UI units (defaults to amount)",
-      parseFloat,
     )
     .option(
       "--lz-token-fee <amount>",
       "Optional LayerZero token fee in base units",
-      (value: string) => new BN(value),
+      (value: string) => parsePositiveBn(value, "lz-token-fee"),
     )
     .option(
-      "--options <hex_or_base64>",
+      "--options <hex-or-base64>",
       "Optional raw LayerZero options payload override",
     )
     .option(
-      "--compose-msg <hex_or_base64>",
+      "--compose-msg <hex-or-base64>",
       "Optional raw LayerZero compose message payload; pass 'none' to encode compose_msg as None",
     )
     .option(
@@ -528,7 +572,7 @@ function installLayerzeroOftCommands(program: Command, context: CliContext) {
     )
     .action(
       async (
-        amount: number,
+        amount: string,
         destinationChain: number,
         destinationRecipient: string,
         {
@@ -550,12 +594,14 @@ function installLayerzeroOftCommands(program: Command, context: CliContext) {
               {
                 transferId,
                 sourceMint: USDT,
-                sourceAmount: fromUiAmount(amount, 6),
+                sourceAmount: parsePositiveUiAmount(amount, 6, "amount"),
                 destinationChain,
                 destinationRecipient:
                   parseRecipientPublicKey(destinationRecipient),
                 nativeFeeLamports,
-                minAmountLd: minAmount ? fromUiAmount(minAmount, 6) : undefined,
+                minAmountLd: minAmount
+                  ? parsePositiveUiAmount(minAmount, 6, "min-amount")
+                  : undefined,
                 lzTokenFee,
                 options: options
                   ? parseHexOrBase64Bytes(options, "options")
@@ -608,7 +654,7 @@ export function installBridgeCommands(program: Command, context: CliContext) {
 
   program
     .command("record")
-    .argument("<transfer_id>", "transfer id pubkey", validatePublicKey)
+    .argument("<transfer-id>", "transfer id pubkey", validatePublicKey)
     .description("View a single bridge transfer record")
     .action(async (transferId: PublicKey) => {
       const record =
@@ -627,7 +673,7 @@ export function installBridgeCommands(program: Command, context: CliContext) {
   program
     .command("validate")
     .alias("validate-managed-transfer")
-    .argument("<transfer_id>", "transfer id pubkey", validatePublicKey)
+    .argument("<transfer-id>", "transfer id pubkey", validatePublicKey)
     .description("Validate a managed bridge transfer")
     .option("-y, --yes", "Skip confirmation", false)
     .action(async (transferId: PublicKey, { yes }: { yes: boolean }) => {
@@ -647,7 +693,7 @@ export function installBridgeCommands(program: Command, context: CliContext) {
 
   program
     .command("settle")
-    .argument("<transfer_id>", "transfer id pubkey or 32-byte hex/base64")
+    .argument("<transfer-id>", "transfer id pubkey or 32-byte hex/base64")
     .description("Settle a managed bridge transfer")
     .option("-y, --yes", "Skip confirmation", false)
     .action(async (transferId: string, { yes }: { yes: boolean }) => {

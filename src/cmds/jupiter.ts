@@ -2,15 +2,16 @@ import {
   JupiterSwapPolicy,
   type QuoteParams,
   type TokenListItem,
-  fromUiAmount,
 } from "@glamsystems/glam-sdk";
-import { PublicKey } from "@solana/web3.js";
 import { type Command } from "commander";
 import {
   type CliContext,
   executeTxWithErrorHandling,
+  parsePositiveInteger,
+  parsePositiveUiAmount,
   printPubkeyList,
   resolveTokenMint,
+  resolveTokenPublicKey,
   validatePublicKey,
 } from "../utils";
 
@@ -31,12 +32,18 @@ function buildQuoteParams(
   return {
     inputMint: tokenFrom.address,
     outputMint: tokenTo.address,
-    amount: fromUiAmount(amount, tokenFrom.decimals).toNumber(),
+    amount: parsePositiveUiAmount(
+      `${amount}`,
+      tokenFrom.decimals,
+      "amount",
+    ).toNumber(),
     swapMode: "ExactIn",
-    slippageBps: parseInt(slippageBps),
+    slippageBps: parsePositiveInteger(slippageBps, "slippage-bps"),
     excludeDexes: ["Obric V2"],
     asLegacyTransaction: false,
-    ...(maxAccounts ? { maxAccounts: parseInt(maxAccounts) } : {}),
+    ...(maxAccounts
+      ? { maxAccounts: parsePositiveInteger(maxAccounts, "max-accounts") }
+      : {}),
     ...(onlyDirectRoutes ? { onlyDirectRoutes } : {}),
     instructionVersion,
   };
@@ -84,7 +91,11 @@ export function installJupiterSwapCommands(
 
   program
     .command("set-max-slippage")
-    .argument("<slippage_bps>", "Maximum slippage in basis points", parseInt)
+    .argument(
+      "<slippage-bps>",
+      "Maximum slippage in basis points",
+      (value: string) => parsePositiveInteger(value, "slippage-bps"),
+    )
     .option("-y, --yes", "Skip confirmation", false)
     .description("Set the maximum allowed slippage for swaps")
     .action(async (slippageBps, options) => {
@@ -120,16 +131,16 @@ export function installJupiterSwapCommands(
   program
     .command("set-max-deviation")
     .argument(
-      "<deviation_bps>",
+      "<deviation-bps>",
       "Maximum quote price deviation in basis points (range: -32768 to 32767; 0 requires quote to match or beat oracle, negative requires the quote to beat oracle by at least that many bps)",
       (raw) => {
         const parsed = parseInt(raw, 10);
         if (!Number.isFinite(parsed) || `${parsed}` !== raw.trim()) {
-          throw new Error(`Invalid deviation_bps: "${raw}" is not an integer`);
+          throw new Error(`Invalid deviation-bps: "${raw}" is not an integer`);
         }
         if (parsed < -32768 || parsed > 32767) {
           throw new Error(
-            `Invalid deviation_bps: ${parsed} is outside the i16 range [-32768, 32767]`,
+            `Invalid deviation-bps: ${parsed} is outside the i16 range [-32768, 32767]`,
           );
         }
         return parsed;
@@ -169,10 +180,12 @@ export function installJupiterSwapCommands(
 
   program
     .command("allowlist-token")
-    .argument("<token>", "Token mint public key", validatePublicKey)
+    .alias("allowlist-mint")
+    .argument("<token>", "Token mint address or symbol")
     .option("-y, --yes", "Skip confirmation", false)
     .description("Add a token to the swap allowlist")
-    .action(async (token, options) => {
+    .action(async (tokenInput: string, options) => {
+      const token = await resolveTokenPublicKey(context.glamClient, tokenInput);
       const policy = await context.glamClient.fetchProtocolPolicy(
         context.glamClient.protocolProgram.programId,
         0b0000100,
@@ -210,10 +223,12 @@ export function installJupiterSwapCommands(
 
   program
     .command("remove-token")
-    .argument("<token>", "Token mint public key", validatePublicKey)
+    .alias("remove-mint")
+    .argument("<token>", "Token mint address or symbol")
     .option("-y, --yes", "Skip confirmation", false)
     .description("Remove a token from the swap allowlist")
-    .action(async (token, options) => {
+    .action(async (tokenInput: string, options) => {
+      const token = await resolveTokenPublicKey(context.glamClient, tokenInput);
       const policy = await context.glamClient.fetchProtocolPolicy(
         context.glamClient.protocolProgram.programId,
         0b0000100,
@@ -300,7 +315,11 @@ export function installJupiterSwapCommands(
     )
     .option("--use-v1", "Use v1 instruction (default: v2)", false)
     .option("-d, --only-direct-routes", "Direct routes only")
-    .option("-t, --tracking-account <pubkey>", "Tracking account public key")
+    .option(
+      "-t, --tracking-account <pubkey>",
+      "Tracking account public key",
+      validatePublicKey,
+    )
     .option("-y, --yes", "Skip confirmation", false)
     .action(async (from, to, amount, options) => {
       const tokenFrom = await resolveTokenMint(context.glamClient, from);
@@ -328,9 +347,7 @@ export function installJupiterSwapCommands(
               context.glamClient.jupiterSwap.swap(
                 {
                   quoteParams: retryQuoteParams,
-                  trackingAccount: trackingAccount
-                    ? new PublicKey(trackingAccount)
-                    : undefined,
+                  trackingAccount,
                 },
                 context.txOptions,
               ),
@@ -367,7 +384,11 @@ export function installJupiterSwapCommands(
       "Skip the oracle quote price check when the signer has permission",
       false,
     )
-    .option("-t, --tracking-account <pubkey>", "Tracking account public key")
+    .option(
+      "-t, --tracking-account <pubkey>",
+      "Tracking account public key",
+      validatePublicKey,
+    )
     .option("-y, --yes", "Skip confirmation", false)
     .action(async (from, to, amount, options) => {
       const tokenFrom = await resolveTokenMint(context.glamClient, from);
@@ -396,9 +417,7 @@ export function installJupiterSwapCommands(
                 {
                   quoteParams: retryQuoteParams,
                   skipQuotePriceCheck,
-                  trackingAccount: trackingAccount
-                    ? new PublicKey(trackingAccount)
-                    : undefined,
+                  trackingAccount,
                 },
                 context.txOptions,
               ),

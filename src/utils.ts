@@ -369,7 +369,7 @@ export function assertStagingOnlyVault(context?: StagingOnlyContext) {
   const activeVault = context?.cliConfig?.glam_state;
   if (activeVault && context?.glamClient?.staging === false) {
     fail(
-      `Staging-only command cannot be used with non-staging vault ${activeVault}. Switch to a staging vault or remove glam_state from the CLI config.`,
+      `Staging-only command cannot be used with non-staging vault ${activeVault}. Switch to a staging vault or set a different glam_state in the CLI config.`,
     );
   }
 }
@@ -393,21 +393,78 @@ export function markStagingOnlyCommand(
 export function parsePositiveUiAmount(
   value: string,
   decimals: number,
-  label: string,
+  label?: string,
 ): BN {
   const trimmed = value.trim();
   if (!/^\d+(\.\d+)?$/.test(trimmed)) {
-    fail(`${label} must be a non-negative decimal amount`);
+    fail(`${label ?? value} must be a positive decimal amount`);
   }
 
   const fractional = trimmed.split(".")[1] ?? "";
   if (fractional.length > decimals) {
-    fail(`${label} has more than ${decimals} decimal places`);
+    fail(`${label ?? value} has more than ${decimals} decimal places`);
   }
 
   const parsed = fromUiAmount(trimmed, decimals);
   if (parsed.isZero()) {
-    fail(`${label} must be greater than zero`);
+    fail(`${label ?? value} must be greater than zero`);
+  }
+  return parsed;
+}
+
+export function parseNonNegativeUiAmount(
+  value: string,
+  decimals: number,
+  label?: string,
+): BN {
+  const trimmed = value.trim();
+  if (!/^\d+(\.\d+)?$/.test(trimmed)) {
+    fail(`${label ?? value} must be a non-negative decimal amount`);
+  }
+
+  const fractional = trimmed.split(".")[1] ?? "";
+  if (fractional.length > decimals) {
+    fail(`${label ?? value} has more than ${decimals} decimal places`);
+  }
+
+  return fromUiAmount(trimmed, decimals);
+}
+
+export function parsePositiveInteger(value: string, label?: string): number {
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) {
+    fail(`${label ?? value} must be a positive integer`);
+  }
+
+  const parsed = Number(trimmed);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    fail(`${label ?? value} must be a positive integer`);
+  }
+  return parsed;
+}
+
+export function parseNonNegativeInteger(value: string, label?: string): number {
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) {
+    fail(`${label ?? value} must be a non-negative integer`);
+  }
+
+  const parsed = Number(trimmed);
+  if (!Number.isSafeInteger(parsed)) {
+    fail(`${label ?? value} must be a safe non-negative integer`);
+  }
+  return parsed;
+}
+
+export function parsePositiveBn(value: string, label?: string): BN {
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) {
+    fail(`${label ?? value} must be a positive big integer`);
+  }
+
+  const parsed = new BN(trimmed);
+  if (parsed.isNeg() || parsed.isZero()) {
+    fail(`${label ?? value} must be a positive big integer`);
   }
   return parsed;
 }
@@ -421,18 +478,8 @@ export function validatePublicKey(value: string) {
   }
 }
 
-export function collectPublicKeys(value: string, previous: PublicKey[]) {
-  previous.push(validatePublicKey(value));
-  return previous;
-}
-
-export function validateSubAccountId(subAccountId: string): number {
-  const parsed = parseInt(subAccountId);
-  if (isNaN(parsed) || parsed < 0) {
-    console.error("Invalid sub-account-id. Must be a valid integer.");
-    process.exit(1);
-  }
-  return parsed;
+export function collectPublicKeys(value: string, previous: PublicKey[] = []) {
+  return [...previous, validatePublicKey(value)];
 }
 
 export function validateFileExists(path: string) {
@@ -707,4 +754,12 @@ export async function resolveTokenMint(
     console.error(`Cannot resolve token: ${value}`);
     process.exit(1);
   }
+}
+
+export async function resolveTokenPublicKey(
+  glamClient: GlamClient,
+  value: string,
+): Promise<PublicKey> {
+  const token = await resolveTokenMint(glamClient, value);
+  return new PublicKey(token.address);
 }

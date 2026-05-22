@@ -3,13 +3,13 @@ import { type Command } from "commander";
 import {
   type CliContext,
   executeTxWithErrorHandling,
+  parseNonNegativeUiAmount,
   printTable,
   validateInvestorAction,
   validatePublicKey,
 } from "../utils";
 import { Transaction } from "@solana/web3.js";
 import {
-  fromUiAmount,
   toUiAmount,
   RequestType,
   type PendingRequest,
@@ -72,12 +72,16 @@ export function installManageCommands(manage: Command, context: CliContext) {
 
   manage
     .command("update-min-subscription")
-    .argument("<amount>", "Minimum subscription amount")
+    .argument("<amount>", "Minimum subscription UI amount")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Update the minimum subscription amount")
     .action(async (amount, options) => {
       const { baseAssetDecimals } = await context.glamClient.fetchStateModel();
-      const amountBN = fromUiAmount(amount, baseAssetDecimals!);
+      const amountBN = parseNonNegativeUiAmount(
+        amount,
+        baseAssetDecimals!,
+        "amount",
+      );
 
       await executeTxWithErrorHandling(
         () =>
@@ -95,12 +99,16 @@ export function installManageCommands(manage: Command, context: CliContext) {
 
   manage
     .command("update-min-redemption")
-    .argument("<amount>", "Minimum redemption amount")
+    .argument("<amount>", "Minimum redemption UI amount")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Update the minimum redemption amount")
     .action(async (amount, options) => {
       const { baseAssetDecimals } = await context.glamClient.fetchStateModel();
-      const amountBN = fromUiAmount(amount, baseAssetDecimals!);
+      const amountBN = parseNonNegativeUiAmount(
+        amount,
+        baseAssetDecimals!,
+        "amount",
+      );
 
       await executeTxWithErrorHandling(
         () =>

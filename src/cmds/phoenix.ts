@@ -13,7 +13,6 @@ import {
   type PhoenixTicks,
   PhoenixPolicy,
   fetchMintAndTokenProgram,
-  USDC,
 } from "@glamsystems/glam-sdk";
 import {
   TOKEN_PROGRAM_ID,
@@ -28,7 +27,7 @@ import {
   type CliContext,
   executeTxWithErrorHandling,
   fail,
-  parsePositiveUiAmount,
+  parseNonNegativeUiAmount,
   printTable,
 } from "../utils";
 import {
@@ -704,33 +703,6 @@ function positionRows(
     ]);
 }
 
-async function parseCollateralAmount(
-  context: CliContext,
-  amount: string,
-  mint: PublicKey,
-  raw: boolean | undefined,
-  label: string,
-): Promise<BN> {
-  if (raw) {
-    const parsed = parseU64(amount, label);
-    if (parsed.isZero()) {
-      fail(`${label} must be greater than zero`);
-    }
-    return parsed;
-  }
-
-  const { mint: mintAccount, tokenProgram } = await fetchMintAndTokenProgram(
-    context.glamClient.connection,
-    mint,
-  );
-  if (!tokenProgram.equals(TOKEN_PROGRAM_ID)) {
-    fail(
-      `Phoenix/Ember collateral mint must use the legacy SPL Token program: ${mint}`,
-    );
-  }
-  return parsePositiveUiAmount(amount, mintAccount.decimals, label);
-}
-
 async function fetchVaultTokenBalance(
   context: CliContext,
   mint: PublicKey,
@@ -766,26 +738,6 @@ async function fetchVaultTokenBalance(
       return { ata, amount: new BN(0), decimals: mintAccount.decimals };
     }
     throw error;
-  }
-}
-
-async function requireVaultTokenBalance(
-  context: CliContext,
-  mint: PublicKey,
-  amount: BN,
-  label: string,
-) {
-  const balance = await fetchVaultTokenBalance(context, mint);
-  if (balance.amount.lt(amount)) {
-    fail(
-      `Insufficient vault ${label} balance in ${balance.ata}. Has ${formatUiAmount(
-        balance.amount,
-        balance.decimals,
-      )} (${balance.amount.toString()} raw), needs ${formatUiAmount(
-        amount,
-        balance.decimals,
-      )} (${amount.toString()} raw). Fund that token account first or use a smaller amount.`,
-    );
   }
 }
 
@@ -1235,77 +1187,60 @@ export function installPhoenixCommands(phoenix: Command, context: CliContext) {
   addTraderOptions(
     phoenix
       .command("deposit")
-      .argument("<amount>", "USDC amount")
-      .option("--raw", "Treat amount as raw token units", false)
+      .argument("<amount>", "UI amount of USDC to deposit")
       .option("-y, --yes", "Skip confirmation prompt", false),
   )
     .description(
       "Convert USDC through Ember and deposit collateral into Phoenix",
     )
-    .action(
-      async (
-        amount: string,
-        options: TraderOptions & TxOptions & { raw?: boolean },
-      ) => {
-        const amountBN = await parseCollateralAmount(
-          context,
-          amount,
-          USDC,
-          options.raw,
-          "USDC amount",
-        );
-        await requireVaultTokenBalance(context, USDC, amountBN, "USDC");
+    .action(async (amount: string, options: TraderOptions & TxOptions) => {
+      const amountBN = parseNonNegativeUiAmount(amount, 6, "amount");
 
-        await executeTxWithErrorHandling(
-          () => context.glamClient.phoenix.deposit(amountBN, context.txOptions),
-          {
-            skip: !!options.yes,
-            message: `Deposit ${amount} into Phoenix trader?`,
-          },
-          (txSig) => `Deposited Phoenix collateral: ${txSig}`,
-        );
-      },
-    );
+      await executeTxWithErrorHandling(
+        () => context.glamClient.phoenix.deposit(amountBN, context.txOptions),
+        {
+          skip: !!options.yes,
+          message: `Deposit ${amount} USDC into Phoenix trader?`,
+        },
+        (txSig) => `Deposited ${amount} USDC into Phoenix: ${txSig}`,
+      );
+    });
 
   addTraderOptions(
     phoenix
       .command("withdraw")
-      .argument(
-        "<amount>",
-        "Canonical collateral amount, or raw amount with --raw",
-      )
-      .option("--raw", "Treat amount as raw token units", false)
+      .argument("<amount>", "UI amount of Phoenix collateral to withdraw")
       .option("-y, --yes", "Skip confirmation prompt", false),
   )
-    .description(
-      "Withdraw canonical collateral from Phoenix and optionally convert to USDC",
-    )
-    .action(
-      async (
-        amount: string,
-        options: TraderOptions & TxOptions & { raw?: boolean },
-      ) => {
-        const snapshot =
-          await context.glamClient.phoenix.phoenixApi.fetchPhoenixSnapshot();
-        const canonicalMint = new PublicKey(snapshot.exchange.canonicalMint);
-        const amountBN = await parseCollateralAmount(
-          context,
-          amount,
+    .description("Withdraw Phoenix collateral to USDC")
+    .action(async (amount: string, options: TraderOptions & TxOptions) => {
+      const phoenixApi = context.glamClient.phoenix.phoenixApi;
+      const snapshot = await phoenixApi.fetchPhoenixSnapshot();
+      const canonicalMint = new PublicKey(snapshot.exchange.canonicalMint);
+      const { mint: canonicalMintAccount, tokenProgram } =
+        await fetchMintAndTokenProgram(
+          context.glamClient.connection,
           canonicalMint,
-          options.raw,
-          "canonical collateral amount",
         );
-        await executeTxWithErrorHandling(
-          () =>
-            context.glamClient.phoenix.withdraw(amountBN, context.txOptions),
-          {
-            skip: !!options.yes,
-            message: `Withdraw ${amount} from Phoenix trader?`,
-          },
-          (txSig) => `Withdrew Phoenix collateral: ${txSig}`,
+      if (!tokenProgram.equals(TOKEN_PROGRAM_ID)) {
+        fail(
+          `Phoenix/Ember collateral mint must use the legacy SPL Token program: ${canonicalMint}`,
         );
-      },
-    );
+      }
+
+      const amountBN = parseNonNegativeUiAmount(
+        amount,
+        canonicalMintAccount.decimals,
+      );
+      await executeTxWithErrorHandling(
+        () => context.glamClient.phoenix.withdraw(amountBN, context.txOptions),
+        {
+          skip: !!options.yes,
+          message: `Withdraw ${amount} Phoenix collateral from Phoenix trader?`,
+        },
+        (txSig) => `Withdrew Phoenix collateral to USDC: ${txSig}`,
+      );
+    });
 
   addOrderOptions(
     phoenix
@@ -1314,7 +1249,7 @@ export function installPhoenixCommands(phoenix: Command, context: CliContext) {
       .argument("<side>", "bid/buy/long or ask/sell/short")
       .argument("<price>", "UI USD price, or raw ticks with --price-ticks")
       .argument(
-        "<base_units>",
+        "<base-units>",
         "UI base units, or raw base lots with --base-lots",
       ),
   )
@@ -1391,7 +1326,7 @@ export function installPhoenixCommands(phoenix: Command, context: CliContext) {
       .argument("<market>", "Phoenix market symbol or public key")
       .argument("<side>", "bid/buy/long or ask/sell/short")
       .argument(
-        "<base_units>",
+        "<base-units>",
         "UI base units, or raw base lots with --base-lots",
       )
       .option(
@@ -1500,7 +1435,7 @@ export function installPhoenixCommands(phoenix: Command, context: CliContext) {
       .argument("<side>", "bid/buy/long or ask/sell/short")
       .argument("<price>", "UI USD price, or raw ticks with --price-ticks")
       .argument(
-        "<base_units>",
+        "<base-units>",
         "UI base units, or raw base lots with --base-lots",
       )
       .option(
@@ -1610,7 +1545,7 @@ export function installPhoenixCommands(phoenix: Command, context: CliContext) {
       .command("cancel-by-id")
       .argument("<market>", "Phoenix market symbol or public key")
       .requiredOption(
-        "--order <node:price_ticks:sequence>",
+        "--order <node:price-ticks:sequence>",
         "Cancel id; repeat for multiple orders",
         collectCsv,
         [],
@@ -1631,7 +1566,7 @@ export function installPhoenixCommands(phoenix: Command, context: CliContext) {
             const parts = value.split(":").map((part) => part.trim());
             if (parts.length !== 3) {
               fail(
-                "--order must use node_pointer:price_ticks:order_sequence_number",
+                "--order must use node-pointer:price-ticks:order-sequence-number",
               );
             }
             return {

@@ -2,10 +2,11 @@ import { type Command } from "commander";
 import {
   type CliContext,
   executeTxWithErrorHandling,
+  parsePositiveUiAmount,
   printPubkeyList,
   validatePublicKey,
 } from "../utils";
-import { KaminoVaultsPolicy, fromUiAmount } from "@glamsystems/glam-sdk";
+import { KaminoVaultsPolicy } from "@glamsystems/glam-sdk";
 
 export function installKaminoVaultsCommands(
   kvaults: Command,
@@ -103,7 +104,7 @@ export function installKaminoVaultsCommands(
   kvaults
     .command("deposit")
     .argument("<vault>", "Kamino vault public key", validatePublicKey)
-    .argument("<amount>", "Amount to deposit")
+    .argument("<amount>", "UI amount to deposit")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Deposit to a Kamino vault")
     .action(async (vault, amount, options) => {
@@ -111,7 +112,11 @@ export function installKaminoVaultsCommands(
         await context.glamClient.kaminoVaults.fetchAndParseVaultState(vault);
       const { tokenMint, tokenMintDecimals, vaultLookupTable } = vaultState;
 
-      const amountBN = fromUiAmount(amount, tokenMintDecimals.toNumber());
+      const amountBN = parsePositiveUiAmount(
+        amount,
+        tokenMintDecimals.toNumber(),
+        "amount",
+      );
       await executeTxWithErrorHandling(
         () =>
           context.glamClient.kaminoVaults.deposit(vault, amountBN, {
@@ -129,7 +134,7 @@ export function installKaminoVaultsCommands(
   kvaults
     .command("withdraw")
     .argument("<vault>", "Kamino vault public key", validatePublicKey)
-    .argument("<amount>", "Burn Kamino vault tokens and withdraw deposit asset")
+    .argument("<amount>", "UI amount of Kamino vault shares to burn")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Deposit to a Kamino vault")
     .action(async (vault, amount, options) => {
@@ -137,7 +142,11 @@ export function installKaminoVaultsCommands(
         await context.glamClient.kaminoVaults.fetchAndParseVaultState(vault);
       const { sharesMintDecimals, vaultLookupTable } = vaultState;
 
-      const amountBN = fromUiAmount(amount, sharesMintDecimals.toNumber());
+      const amountBN = parsePositiveUiAmount(
+        amount,
+        sharesMintDecimals.toNumber(),
+        "amount",
+      );
       await executeTxWithErrorHandling(
         () =>
           context.glamClient.kaminoVaults.withdraw(vault, amountBN, {

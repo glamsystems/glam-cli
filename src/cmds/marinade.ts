@@ -1,6 +1,9 @@
 import { type Command } from "commander";
-import { type CliContext, executeTxWithErrorHandling } from "../utils";
-import { fromUiAmount } from "@glamsystems/glam-sdk";
+import {
+  type CliContext,
+  executeTxWithErrorHandling,
+  parsePositiveUiAmount,
+} from "../utils";
 
 export function installMarinadeCommands(
   marinade: Command,
@@ -8,11 +11,11 @@ export function installMarinadeCommands(
 ) {
   marinade
     .command("stake")
-    .argument("<amount>", "amount of SOL to stake")
+    .argument("<amount>", "UI amount of SOL to stake")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Stake SOL and get mSOL")
     .action(async (amount, options) => {
-      const amountBN = fromUiAmount(amount, 9);
+      const amountBN = parsePositiveUiAmount(amount, 9, "amount");
       await executeTxWithErrorHandling(
         () => context.glamClient.marinade.deposit(amountBN, context.txOptions),
         {
@@ -25,11 +28,11 @@ export function installMarinadeCommands(
 
   marinade
     .command("stake-native")
-    .argument("<amount>", "amount of SOL to stake")
+    .argument("<amount>", "UI amount of SOL to stake")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Stake SOL to Marinade Native")
     .action(async (amount, options) => {
-      const amountBN = fromUiAmount(amount, 9);
+      const amountBN = parsePositiveUiAmount(amount, 9, "amount");
       await executeTxWithErrorHandling(
         () =>
           context.glamClient.marinade.depositNative(
@@ -46,12 +49,12 @@ export function installMarinadeCommands(
 
   marinade
     .command("withdraw-stake")
-    .argument("<amount>", "mSOL amount")
+    .argument("<amount>", "UI amount of mSOL")
     .option("-d, --deactivate", "Deactivate the stake account", false)
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Withdraw <amount> mSOL into a stake account")
     .action(async (amount, options) => {
-      const amountBN = fromUiAmount(amount, 9);
+      const amountBN = parsePositiveUiAmount(amount, 9, "amount");
       await executeTxWithErrorHandling(
         () =>
           context.glamClient.marinade.withdrawStakeAccount(

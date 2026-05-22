@@ -169,7 +169,7 @@ export function installIntegrationCommands(
   integration
     .command("disable-all")
     .argument(
-      "<integration_program>",
+      "<integration-program>",
       "Integration program ID",
       (input: string) => validateIntegrationProgram(input),
     )

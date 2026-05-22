@@ -6,22 +6,23 @@ import {
   StateAccountType,
   fetchMintsAndTokenPrograms,
   PkSet,
-  fromUiAmount,
 } from "@glamsystems/glam-sdk";
 import { type Command } from "commander";
-import { type PublicKey, type TransactionInstruction } from "@solana/web3.js";
+import { PublicKey, type TransactionInstruction } from "@solana/web3.js";
 import fs from "fs";
 import {
   type CliContext,
   executeTxWithErrorHandling,
+  parsePositiveInteger,
+  parsePositiveUiAmount,
   parseMintJson,
   parseStateJson,
   printTable,
+  resolveTokenPublicKey,
   validateBooleanInput,
   validateFileExists,
   validatePublicKey,
 } from "../utils";
-import { BN } from "@coral-xyz/anchor";
 
 export function installVaultCommands(program: Command, context: CliContext) {
   program
@@ -267,7 +268,9 @@ export function installVaultCommands(program: Command, context: CliContext) {
 
   program
     .command("extend")
-    .argument("<bytes>", "New bytes", parseInt)
+    .argument("<bytes>", "New bytes", (value: string) =>
+      parsePositiveInteger(value, "bytes"),
+    )
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Extend GLAM state account")
     .action(async (bytes, options) => {
@@ -320,16 +323,11 @@ export function installVaultCommands(program: Command, context: CliContext) {
 
   program
     .command("wrap")
-    .argument("<amount>", "Amount to wrap")
+    .argument("<amount>", "UI amount of SOL to wrap")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Wrap SOL")
     .action(async (amount: string, options) => {
-      const lamports = fromUiAmount(amount, 9);
-
-      if (lamports.lte(new BN(0))) {
-        console.error("Error: amount must be greater than 0");
-        process.exit(1);
-      }
+      const lamports = parsePositiveUiAmount(amount, 9, "amount");
 
       await executeTxWithErrorHandling(
         () => context.glamClient.vault.wrap(lamports, context.txOptions),
@@ -358,11 +356,11 @@ export function installVaultCommands(program: Command, context: CliContext) {
 
   program
     .command("close-token-accounts")
-    .argument("[mints...]", "Mint address(es) of token accounts to close")
+    .argument("[tokens...]", "Token mint address(es) or symbols to close")
     .option("--empty", "Close all empty (zero-balance) token accounts", false)
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Close vault token accounts")
-    .action(async (mints: string[], options) => {
+    .action(async (tokens: string[], options) => {
       let tokenAccountPubkeys: PublicKey[] = [];
 
       if (options.empty) {
@@ -385,8 +383,12 @@ export function installVaultCommands(program: Command, context: CliContext) {
           ({ mint: { address }, tokenProgram }) =>
             context.glamClient.getVaultAta(address, tokenProgram),
         );
-      } else if (mints.length > 0) {
-        const mintPubkeys = mints.map((m) => validatePublicKey(m));
+      } else if (tokens.length > 0) {
+        const mintPubkeys = await Promise.all(
+          tokens.map((token) =>
+            resolveTokenPublicKey(context.glamClient, token),
+          ),
+        );
         const mintInfos = await fetchMintsAndTokenPrograms(
           context.glamClient.connection,
           mintPubkeys,
@@ -525,48 +527,56 @@ export function installVaultCommands(program: Command, context: CliContext) {
     });
 
   program
-    .command("allowlist-asset")
-    .argument("<asset>", "Asset mint public key", validatePublicKey)
+    .command("allowlist-token")
+    .alias("allowlist-asset")
+    .alias("allowlist-mint")
+    .argument("<token>", "Token mint address or symbol")
     .option("-y, --yes", "Skip confirmation prompt", false)
-    .description("Add an asset to the allowlist")
-    .action(async (asset: PublicKey, options) => {
+    .description("Add a token to vault allowlist")
+    .action(async (tokenInput: string, options) => {
+      const token = await resolveTokenPublicKey(context.glamClient, tokenInput);
       const state = await context.glamClient.fetchStateAccount();
       const assetsSet = new PkSet(state.assets);
 
-      if (assetsSet.has(asset)) {
-        console.error(`Asset ${asset} already allowlisted`);
+      if (assetsSet.has(token)) {
+        console.error(`Token ${token} already allowlisted`);
         process.exit(1);
       }
 
-      const assets = Array.from(assetsSet.add(asset));
+      const assets = Array.from(assetsSet.add(token));
 
       await executeTxWithErrorHandling(
         () => context.glamClient.state.update({ assets }, context.txOptions),
         {
           skip: options?.yes,
-          message: `Confirm adding ${asset} to allowlist?`,
+          message: `Confirm adding ${token} to vault allowlist?`,
         },
-        (txSig) => `${asset} added to allowlist: ${txSig}`,
+        (txSig) => `${token} added to vault allowlist: ${txSig}`,
       );
     });
 
   program
-    .command("remove-asset")
-    .argument("<asset>", "Asset mint public key", validatePublicKey)
+    .command("remove-token")
+    .alias("remove-asset")
+    .alias("remove-mint")
+    .argument("<token>", "Token mint address or symbol")
     .option("-y, --yes", "Skip confirmation prompt", false)
-    .description("Remove an asset from the allowlist")
-    .action(async (asset: PublicKey, options) => {
+    .description("Remove a token from vault allowlist")
+    .action(async (tokenInput: string, options) => {
+      const token = await resolveTokenPublicKey(context.glamClient, tokenInput);
       const state = await context.glamClient.fetchStateAccount();
 
-      if (asset.equals(state.baseAssetMint)) {
-        console.error("Base asset should not be removed from allowlist");
+      if (token.equals(state.baseAssetMint)) {
+        console.error(
+          "Vault base asset token should not be removed from allowlist",
+        );
         process.exit(1);
       }
 
       const assetsSet = new PkSet(state.assets);
-      const removed = assetsSet.delete(asset);
+      const removed = assetsSet.delete(token);
       if (!removed) {
-        console.error(`${asset} not found in allowlist, nothing to remove`);
+        console.error(`${token} not found in vault allowlist`);
         process.exit(1);
       }
 
@@ -575,56 +585,60 @@ export function installVaultCommands(program: Command, context: CliContext) {
         () => context.glamClient.state.update({ assets }, context.txOptions),
         {
           skip: options?.yes,
-          message: `Confirm removing ${asset} from allowlist?`,
+          message: `Confirm removing ${token} from vault allowlist?`,
         },
-        (txSig) => `${asset} removed from allowlist: ${txSig}`,
+        (txSig) => `${token} removed from vault allowlist: ${txSig}`,
       );
     });
 
   program
-    .command("allowlist-borrowable-asset")
-    .argument("<asset>", "Borrowable asset mint public key", validatePublicKey)
+    .command("allowlist-borrowable-token")
+    .alias("allowlist-borrowable-asset")
+    .alias("allowlist-borrowable-mint")
+    .argument("<token>", "Token mint address or symbol")
     .option("-y, --yes", "Skip confirmation prompt", false)
-    .description("Add a borrowable asset to the vault's borrowable allowlist")
-    .action(async (asset: PublicKey, options) => {
+    .description("Add a token to the vault's borrowable allowlist")
+    .action(async (tokenInput: string, options) => {
+      const token = await resolveTokenPublicKey(context.glamClient, tokenInput);
       const stateModel = await context.glamClient.fetchStateModel();
       const borrowableSet = new PkSet(stateModel.borrowable || []);
 
-      if (borrowableSet.has(asset)) {
-        console.error(`Borrowable asset ${asset} already allowlisted`);
+      if (borrowableSet.has(token)) {
+        console.error(`Token ${token} already allowlisted as borrowable`);
         process.exit(1);
       }
 
-      const borrowable = Array.from(borrowableSet.add(asset));
+      const borrowable = Array.from(borrowableSet.add(token));
 
       await executeTxWithErrorHandling(
         () =>
           context.glamClient.state.update({ borrowable }, context.txOptions),
         {
           skip: options?.yes,
-          message: `Confirm adding ${asset} to the vault's borrowable allowlist?`,
+          message: `Confirm adding ${token} to the vault's borrowable allowlist?`,
         },
         (txSig) =>
-          `${asset} added to the vault's borrowable allowlist: ${txSig}`,
+          `${token} added to the vault's borrowable allowlist: ${txSig}`,
       );
     });
 
   program
-    .command("remove-borrowable-asset")
-    .argument("<asset>", "Borrowable asset mint public key", validatePublicKey)
+    .command("remove-borrowable-token")
+    .alias("remove-borrowable-asset")
+    .alias("remove-borrowable-mint")
+    .argument("<token>", "Token mint address or symbol")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description(
-      "Remove a borrowable asset from the vault's borrowable allowlist",
+      "Remove a borrowable token from the vault's borrowable allowlist",
     )
-    .action(async (asset: PublicKey, options) => {
+    .action(async (tokenInput: string, options) => {
+      const token = await resolveTokenPublicKey(context.glamClient, tokenInput);
       const stateModel = await context.glamClient.fetchStateModel();
       const borrowableSet = new PkSet(stateModel.borrowable || []);
-      const removed = borrowableSet.delete(asset);
+      const removed = borrowableSet.delete(token);
 
       if (!removed) {
-        console.error(
-          `${asset} not found in the vault's borrowable allowlist, nothing to remove`,
-        );
+        console.error(`${token} not found in the vault's borrowable allowlist`);
         process.exit(1);
       }
 
@@ -634,10 +648,10 @@ export function installVaultCommands(program: Command, context: CliContext) {
           context.glamClient.state.update({ borrowable }, context.txOptions),
         {
           skip: options?.yes,
-          message: `Confirm removing ${asset} from the vault's borrowable allowlist?`,
+          message: `Confirm removing ${token} from the vault's borrowable allowlist?`,
         },
         (txSig) =>
-          `${asset} removed from the vault's borrowable allowlist: ${txSig}`,
+          `${token} removed from the vault's borrowable allowlist: ${txSig}`,
       );
     });
 

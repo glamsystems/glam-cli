@@ -1,9 +1,5 @@
 import { BN } from "@coral-xyz/anchor";
-import {
-  LOOPSCALE_PROGRAM_ID,
-  LoopscalePolicy,
-  type TokenListItem,
-} from "@glamsystems/glam-sdk";
+import { LOOPSCALE_PROGRAM_ID, LoopscalePolicy } from "@glamsystems/glam-sdk";
 import { type AccountMeta, PublicKey, Transaction } from "@solana/web3.js";
 import { type Command } from "commander";
 
@@ -21,11 +17,7 @@ type Tuple5 = [number, number, number, number, number];
 
 type BorrowOptions = {
   strategy?: PublicKey;
-  principalMint?: string;
   nonce: string;
-  collateralMint: string;
-  collateralAmount: string;
-  borrowAmount: string;
   assetIdentifier?: PublicKey;
   expectedApyBps?: string;
   expectedLqt?: string;
@@ -711,16 +703,16 @@ export function installLoopscaleCommands(
   loopscale
     .command("quote")
     .requiredOption(
-      "--principal-mint <mintOrSymbol>",
+      "--principal-mint <token>",
       "Principal mint address or symbol",
     )
     .requiredOption(
-      "--collateral-mint <mintOrSymbol>",
+      "--collateral-mint <token>",
       "Collateral mint address or symbol",
     )
-    .requiredOption("--collateral-amount <uiAmount>", "Collateral amount")
+    .requiredOption("--collateral-amount <amount>", "Collateral amount")
     .option(
-      "--borrow-amount <uiAmount>",
+      "--borrow-amount <amount>",
       "Optional minimum principal amount to borrow",
     )
     .option(
@@ -792,18 +784,12 @@ export function installLoopscaleCommands(
 
   loopscale
     .command("borrow")
+    .argument("<collateral-token>", "Collateral mint address or symbol")
+    .argument("<collateral-amount>", "Collateral amount")
+    .argument("<borrow-token>", "Principal mint address or symbol")
+    .argument("<borrow-amount>", "Principal amount to borrow")
     .option("--strategy <pubkey>", "Loopscale strategy", validatePublicKey)
-    .option(
-      "--principal-mint <mintOrSymbol>",
-      "Principal mint address or symbol; required when --strategy is omitted",
-    )
     .requiredOption("--nonce <u64>", "Loan nonce")
-    .requiredOption(
-      "--collateral-mint <mintOrSymbol>",
-      "Collateral mint address or symbol",
-    )
-    .requiredOption("--collateral-amount <uiAmount>", "Collateral amount")
-    .requiredOption("--borrow-amount <uiAmount>", "Principal amount to borrow")
     .option(
       "--asset-identifier <pubkey>",
       "Collateral asset identifier; defaults to collateral mint",
@@ -842,253 +828,243 @@ export function installLoopscaleCommands(
     .description(
       "Create a Loopscale loan, deposit collateral, update weights, and borrow principal",
     )
-    .action(async (options: BorrowOptions) => {
-      const nonce = parseU64(options.nonce, "nonce");
-      let expectedApy = parseOptionalU64(
-        options.expectedApyBps,
-        "expected-apy-bps",
-      );
-      let expectedLqt = options.expectedLqt
-        ? parseTuple5(options.expectedLqt, "expected-lqt")
-        : undefined;
-      const weightMatrix = parseTuple5(options.weightMatrix, "weight-matrix");
-      const collateralIndex = parseUnsignedNumber(
-        options.collateralIndex,
-        "collateral-index",
-        U8_MAX,
-      );
-      const quoteDurationType = parseUnsignedNumber(
-        options.quoteDurationType,
-        "quote-duration-type",
-        4,
-      );
-      const quoteDuration = parseUnsignedNumber(
-        options.quoteDuration,
-        "quote-duration",
-        U32_MAX,
-      );
-      const inferredDuration = inferDurationIndex(
-        quoteDurationType,
-        quoteDuration,
-      );
-      const duration =
-        options.duration !== undefined
-          ? parseUnsignedNumber(options.duration, "duration", U8_MAX)
-          : options.strategy
-            ? 0
-            : (inferredDuration ??
-              fail(
-                "--duration is required because the quote duration does not map to a Loopscale duration index",
-              ));
-      let borrowAssetIndexGuidance = options.borrowAssetIndexGuidance
-        ? parseHexBytes(
-            options.borrowAssetIndexGuidance,
-            "borrow-asset-index-guidance",
-          )
-        : undefined;
-
-      const collateralToken = await resolveTokenMint(
-        context.glamClient,
-        options.collateralMint,
-      );
-      const collateralMint = new PublicKey(collateralToken.address);
-      const assetIdentifier = options.assetIdentifier ?? collateralMint;
-      const collateralAmount = parsePositiveUiAmount(
-        options.collateralAmount,
-        collateralToken.decimals,
-        "collateral-amount",
-      );
-
-      let strategy = options.strategy;
-      let strategyInfo: StrategyInfo | undefined;
-      let principalToken: TokenListItem;
-
-      if (strategy) {
-        strategyInfo = await fetchStrategyInfo(context, strategy);
-        principalToken = await resolveTokenMint(
-          context.glamClient,
-          strategyInfo.principalMint.toBase58(),
+    .action(
+      async (
+        collateralTokenInput: string,
+        collateralAmountInput: string,
+        borrowTokenInput: string,
+        borrowAmountInput: string,
+        options: BorrowOptions,
+      ) => {
+        const nonce = parseU64(options.nonce, "nonce");
+        let expectedApy = parseOptionalU64(
+          options.expectedApyBps,
+          "expected-apy-bps",
         );
-        if (options.principalMint) {
-          const requestedPrincipalToken = await resolveTokenMint(
-            context.glamClient,
-            options.principalMint,
-          );
-          const requestedPrincipalMint = new PublicKey(
-            requestedPrincipalToken.address,
-          );
+        let expectedLqt = options.expectedLqt
+          ? parseTuple5(options.expectedLqt, "expected-lqt")
+          : undefined;
+        const weightMatrix = parseTuple5(options.weightMatrix, "weight-matrix");
+        const collateralIndex = parseUnsignedNumber(
+          options.collateralIndex,
+          "collateral-index",
+          U8_MAX,
+        );
+        const quoteDurationType = parseUnsignedNumber(
+          options.quoteDurationType,
+          "quote-duration-type",
+          4,
+        );
+        const quoteDuration = parseUnsignedNumber(
+          options.quoteDuration,
+          "quote-duration",
+          U32_MAX,
+        );
+        const inferredDuration = inferDurationIndex(
+          quoteDurationType,
+          quoteDuration,
+        );
+        const duration =
+          options.duration !== undefined
+            ? parseUnsignedNumber(options.duration, "duration", U8_MAX)
+            : options.strategy
+              ? 0
+              : (inferredDuration ??
+                fail(
+                  "--duration is required because the quote duration does not map to a Loopscale duration index",
+                ));
+        let borrowAssetIndexGuidance = options.borrowAssetIndexGuidance
+          ? parseHexBytes(
+              options.borrowAssetIndexGuidance,
+              "borrow-asset-index-guidance",
+            )
+          : undefined;
+
+        const collateralToken = await resolveTokenMint(
+          context.glamClient,
+          collateralTokenInput,
+        );
+        const principalToken = await resolveTokenMint(
+          context.glamClient,
+          borrowTokenInput,
+        );
+        const collateralMint = new PublicKey(collateralToken.address);
+        const requestedPrincipalMint = new PublicKey(principalToken.address);
+        const assetIdentifier = options.assetIdentifier ?? collateralMint;
+        const collateralAmount = parsePositiveUiAmount(
+          collateralAmountInput,
+          collateralToken.decimals,
+          "collateral-amount",
+        );
+        const borrowAmount = parsePositiveUiAmount(
+          borrowAmountInput,
+          principalToken.decimals,
+          "borrow-amount",
+        );
+
+        let strategy = options.strategy;
+        let strategyInfo: StrategyInfo | undefined;
+
+        if (strategy) {
+          strategyInfo = await fetchStrategyInfo(context, strategy);
           if (!requestedPrincipalMint.equals(strategyInfo.principalMint)) {
             fail(
-              `--principal-mint ${requestedPrincipalMint} does not match strategy principal mint ${strategyInfo.principalMint}`,
+              `Borrow token ${requestedPrincipalMint} does not match strategy principal mint ${strategyInfo.principalMint}`,
             );
           }
         }
-      } else {
-        if (!options.principalMint) {
-          fail("--principal-mint is required when --strategy is omitted");
-        }
-        principalToken = await resolveTokenMint(
-          context.glamClient,
-          options.principalMint,
-        );
-      }
 
-      const borrowAmount = parsePositiveUiAmount(
-        options.borrowAmount,
-        principalToken.decimals,
-        "borrow-amount",
-      );
+        if (!strategy) {
+          const quote = await fetchBestQuote({
+            context,
+            principalMint: requestedPrincipalMint,
+            collateralMint,
+            collateralAmount,
+            borrowAmount,
+            durationType: quoteDurationType,
+            duration: quoteDuration,
+          });
+          strategy = validatePublicKey(quote.strategy!);
 
-      if (!strategy) {
-        const requestedPrincipalMint = new PublicKey(principalToken.address);
-        const quote = await fetchBestQuote({
-          context,
-          principalMint: requestedPrincipalMint,
-          collateralMint,
-          collateralAmount,
-          borrowAmount,
-          durationType: quoteDurationType,
-          duration: quoteDuration,
-        });
-        strategy = validatePublicKey(quote.strategy!);
+          if (quote.collateralIdentifier) {
+            const quotedCollateralIdentifier = validatePublicKey(
+              quote.collateralIdentifier,
+            );
+            if (!quotedCollateralIdentifier.equals(assetIdentifier)) {
+              fail(
+                `Quote collateral identifier ${quotedCollateralIdentifier} does not match asset identifier ${assetIdentifier}`,
+              );
+            }
+          }
 
-        if (quote.collateralIdentifier) {
-          const quotedCollateralIdentifier = validatePublicKey(
-            quote.collateralIdentifier,
-          );
-          if (!quotedCollateralIdentifier.equals(assetIdentifier)) {
+          const quoteAmount = parseIntegerLikeBN(quote.amount, "quote amount");
+          if (quoteAmount.lt(borrowAmount)) {
             fail(
-              `Quote collateral identifier ${quotedCollateralIdentifier} does not match asset identifier ${assetIdentifier}`,
+              `Selected quote only supports ${quoteAmount.toString()} base units, below requested borrow amount ${borrowAmount.toString()}`,
             );
           }
-        }
 
-        const quoteAmount = parseIntegerLikeBN(quote.amount, "quote amount");
-        if (quoteAmount.lt(borrowAmount)) {
-          fail(
-            `Selected quote only supports ${quoteAmount.toString()} base units, below requested borrow amount ${borrowAmount.toString()}`,
-          );
-        }
+          strategyInfo = await fetchStrategyInfo(context, strategy);
+          if (!strategyInfo.principalMint.equals(requestedPrincipalMint)) {
+            fail(
+              `Selected strategy principal mint ${strategyInfo.principalMint} does not match requested principal mint ${requestedPrincipalMint}`,
+            );
+          }
 
-        strategyInfo = await fetchStrategyInfo(context, strategy);
-        if (!strategyInfo.principalMint.equals(requestedPrincipalMint)) {
-          fail(
-            `Selected strategy principal mint ${strategyInfo.principalMint} does not match requested principal mint ${requestedPrincipalMint}`,
-          );
-        }
-
-        expectedApy ??= parseIntegerLikeBN(quote.apy, "quote apy");
-        expectedLqt ??= [
-          parseIntegerLikeNumber(quote.lqt, "quote lqt", U32_MAX),
-          0,
-          0,
-          0,
-          0,
-        ];
-        console.log(
-          `Selected Loopscale strategy ${strategy} from quote API (apy=${expectedApy.toString()}, lqt=${expectedLqt[0]})`,
-        );
-      }
-
-      expectedApy ??= parseU64("1000", "expected-apy-bps");
-      expectedLqt ??= parseTuple5("980000,0,0,0,0", "expected-lqt");
-
-      if (!strategy || !strategyInfo) {
-        fail("Could not resolve a Loopscale strategy");
-      }
-
-      const borrowMarketConfig = await deriveBorrowMarketConfig({
-        context,
-        strategyInfo,
-        collateralAssetIdentifier: assetIdentifier,
-        duration,
-      });
-      borrowAssetIndexGuidance ??= borrowMarketConfig.assetIndexGuidance;
-
-      const loan = context.glamClient.loopscale.getLoanPda(nonce);
-      const expectedLoanValues = {
-        expectedApy,
-        expectedLqt,
-      };
-
-      const createLoanIx =
-        await context.glamClient.loopscale.txBuilder.createLoanIx(
-          { nonce },
-          { loan },
-        );
-      const depositCollateralIx =
-        await context.glamClient.loopscale.txBuilder.depositCollateralIx(
-          {
-            amount: collateralAmount,
-            assetType: 0,
-            assetIdentifier,
-            assetIndexGuidance: Buffer.alloc(0),
-          },
-          {
-            loan,
-            depositMint: collateralMint,
-          },
-        );
-      const updateWeightMatrixIx =
-        await context.glamClient.loopscale.txBuilder.updateWeightMatrixIx(
-          {
-            collateralIndex,
-            weightMatrix,
-            expectedLoanValues,
-            assetIndexGuidance: Buffer.alloc(0),
-          },
-          { loan },
-        );
-      const borrowPrincipalIx =
-        await context.glamClient.loopscale.txBuilder.borrowPrincipalIx(
-          {
-            amount: borrowAmount,
-            assetIndexGuidance: borrowAssetIndexGuidance,
-            duration,
-            expectedLoanValues,
-            skipSolUnwrap: options.skipSolUnwrap ?? false,
-          },
-          {
-            loan,
-            strategy,
-            marketInformation: strategyInfo.marketInformation,
-            principalMint: strategyInfo.principalMint,
-            remainingAccounts: borrowMarketConfig.remainingAccounts,
-          },
-        );
-      const tx = new Transaction().add(
-        createLoanIx,
-        depositCollateralIx,
-        updateWeightMatrixIx,
-        borrowPrincipalIx,
-      );
-
-      const collateralLabel = `${options.collateralAmount} ${collateralToken.symbol}`;
-      const principalLabel = `${options.borrowAmount} ${principalToken.symbol}`;
-      await executeTxWithErrorHandling(
-        async () => {
-          const versionedTx = await context.glamClient.intoVersionedTransaction(
-            tx,
-            context.txOptions,
-          );
+          expectedApy ??= parseIntegerLikeBN(quote.apy, "quote apy");
+          expectedLqt ??= [
+            parseIntegerLikeNumber(quote.lqt, "quote lqt", U32_MAX),
+            0,
+            0,
+            0,
+            0,
+          ];
           console.log(
-            "Versioned tx:",
-            Buffer.from(versionedTx.serialize()).toString("base64"),
+            `Selected Loopscale strategy ${strategy} from quote API (apy=${expectedApy.toString()}, lqt=${expectedLqt[0]})`,
           );
-          return await context.glamClient.sendAndConfirm(versionedTx);
-        },
-        {
-          skip: options.yes ?? false,
-          message: [
-            "Confirm Loopscale borrow",
-            `nonce: ${nonce.toString()}`,
-            `loan: ${loan}`,
-            `strategy: ${strategy}`,
-            `collateral: ${collateralLabel}`,
-            `borrow: ${principalLabel}`,
-          ].join("\n"),
-        },
-        (txSig) => `Loopscale loan ${loan} opened and funded: ${txSig}`,
-      );
-    });
+        }
+
+        expectedApy ??= parseU64("1000", "expected-apy-bps");
+        expectedLqt ??= parseTuple5("980000,0,0,0,0", "expected-lqt");
+
+        if (!strategy || !strategyInfo) {
+          fail("Could not resolve a Loopscale strategy");
+        }
+
+        const borrowMarketConfig = await deriveBorrowMarketConfig({
+          context,
+          strategyInfo,
+          collateralAssetIdentifier: assetIdentifier,
+          duration,
+        });
+        borrowAssetIndexGuidance ??= borrowMarketConfig.assetIndexGuidance;
+
+        const loan = context.glamClient.loopscale.getLoanPda(nonce);
+        const expectedLoanValues = {
+          expectedApy,
+          expectedLqt,
+        };
+
+        const createLoanIx =
+          await context.glamClient.loopscale.txBuilder.createLoanIx(
+            { nonce },
+            { loan },
+          );
+        const depositCollateralIx =
+          await context.glamClient.loopscale.txBuilder.depositCollateralIx(
+            {
+              amount: collateralAmount,
+              assetType: 0,
+              assetIdentifier,
+              assetIndexGuidance: Buffer.alloc(0),
+            },
+            {
+              loan,
+              depositMint: collateralMint,
+            },
+          );
+        const updateWeightMatrixIx =
+          await context.glamClient.loopscale.txBuilder.updateWeightMatrixIx(
+            {
+              collateralIndex,
+              weightMatrix,
+              expectedLoanValues,
+              assetIndexGuidance: Buffer.alloc(0),
+            },
+            { loan },
+          );
+        const borrowPrincipalIx =
+          await context.glamClient.loopscale.txBuilder.borrowPrincipalIx(
+            {
+              amount: borrowAmount,
+              assetIndexGuidance: borrowAssetIndexGuidance,
+              duration,
+              expectedLoanValues,
+              skipSolUnwrap: options.skipSolUnwrap ?? false,
+            },
+            {
+              loan,
+              strategy,
+              marketInformation: strategyInfo.marketInformation,
+              principalMint: strategyInfo.principalMint,
+              remainingAccounts: borrowMarketConfig.remainingAccounts,
+            },
+          );
+        const tx = new Transaction().add(
+          createLoanIx,
+          depositCollateralIx,
+          updateWeightMatrixIx,
+          borrowPrincipalIx,
+        );
+
+        const collateralLabel = `${collateralAmountInput} ${collateralToken.symbol}`;
+        const principalLabel = `${borrowAmountInput} ${principalToken.symbol}`;
+        await executeTxWithErrorHandling(
+          async () => {
+            const versionedTx =
+              await context.glamClient.intoVersionedTransaction(
+                tx,
+                context.txOptions,
+              );
+            console.log(
+              "Versioned tx:",
+              Buffer.from(versionedTx.serialize()).toString("base64"),
+            );
+            return await context.glamClient.sendAndConfirm(versionedTx);
+          },
+          {
+            skip: options.yes ?? false,
+            message: [
+              "Confirm Loopscale borrow",
+              `nonce: ${nonce.toString()}`,
+              `loan: ${loan}`,
+              `strategy: ${strategy}`,
+              `collateral: ${collateralLabel}`,
+              `borrow: ${principalLabel}`,
+            ].join("\n"),
+          },
+          (txSig) => `Loopscale loan ${loan} opened and funded: ${txSig}`,
+        );
+      },
+    );
 }

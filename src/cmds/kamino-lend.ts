@@ -4,13 +4,16 @@ import {
   KaminoLendingPolicy,
   PkMap,
   PkSet,
-  fromUiAmount,
 } from "@glamsystems/glam-sdk";
 import { type Command } from "commander";
 import {
   type CliContext,
   executeTxWithErrorHandling,
+  parseNonNegativeInteger,
+  parsePositiveUiAmount,
   printPubkeyList,
+  resolveTokenMint,
+  resolveTokenPublicKey,
   validatePublicKey,
 } from "../utils";
 import { PublicKey } from "@solana/web3.js";
@@ -35,7 +38,7 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
         policy.marketsAllowlist,
       );
       printPubkeyList(
-        "Kamino lending borrowable assets allowlist",
+        "Kamino lending borrowable tokens allowlist",
         policy.borrowAllowlist,
       );
     });
@@ -114,11 +117,13 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
     });
 
   klend
-    .command("allowlist-borrowable-asset")
-    .argument("<asset>", "Borrowable asset public key", validatePublicKey)
+    .command("allowlist-borrowable-token")
+    .alias("allowlist-borrowable-asset")
+    .argument("<token>", "Borrowable token mint address or symbol")
     .option("-y, --yes", "Skip confirmation prompt", false)
-    .description("Add a borrowable asset to the allowlist")
-    .action(async (asset, options) => {
+    .description("Add a borrowable token to the allowlist")
+    .action(async (tokenInput: string, options) => {
+      const token = await resolveTokenPublicKey(context.glamClient, tokenInput);
       const policy =
         (await context.glamClient.fetchProtocolPolicy(
           context.glamClient.extKaminoProgram.programId,
@@ -126,12 +131,12 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
           KaminoLendingPolicy,
         )) ?? new KaminoLendingPolicy([], []);
 
-      if (policy.borrowAllowlist.find((a) => a.equals(asset))) {
-        console.error(`Borrowable asset ${asset} is already in the allowlist`);
+      if (policy.borrowAllowlist.find((a) => a.equals(token))) {
+        console.error(`Borrowable token ${token} is already in the allowlist`);
         process.exit(1);
       }
 
-      policy.borrowAllowlist.push(asset);
+      policy.borrowAllowlist.push(token);
       await executeTxWithErrorHandling(
         () =>
           context.glamClient.access.setProtocolPolicy(
@@ -142,18 +147,20 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
           ),
         {
           skip: options?.yes,
-          message: `Confirm adding borrowable asset ${asset}`,
+          message: `Confirm adding borrowable token ${token}`,
         },
-        (txSig) => `Borrowable asset ${asset} added to allowlist: ${txSig}`,
+        (txSig) => `Borrowable token ${token} added to allowlist: ${txSig}`,
       );
     });
 
   klend
-    .command("remove-borrowable-asset")
-    .argument("<asset>", "Borrowable asset public key", validatePublicKey)
+    .command("remove-borrowable-token")
+    .alias("remove-borrowable-asset")
+    .argument("<token>", "Borrowable token mint address or symbol")
     .option("-y, --yes", "Skip confirmation prompt", false)
-    .description("Remove a borrowable asset from the allowlist")
-    .action(async (asset, options) => {
+    .description("Remove a borrowable token from the allowlist")
+    .action(async (tokenInput: string, options) => {
+      const token = await resolveTokenPublicKey(context.glamClient, tokenInput);
       const policy = await context.glamClient.fetchProtocolPolicy(
         context.glamClient.extKaminoProgram.programId,
         0b01,
@@ -163,13 +170,13 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
         console.error("No policy found");
         process.exit(1);
       }
-      if (!policy.borrowAllowlist.find((a) => a.equals(asset))) {
-        console.error("Borrowable asset not in allowlist. Removal not needed.");
+      if (!policy.borrowAllowlist.find((a) => a.equals(token))) {
+        console.error("Borrowable token not in allowlist. Removal not needed.");
         process.exit(1);
       }
 
       policy.borrowAllowlist = policy.borrowAllowlist.filter(
-        (a) => !a.equals(asset),
+        (a) => !a.equals(token),
       );
       await executeTxWithErrorHandling(
         () =>
@@ -181,9 +188,9 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
           ),
         {
           skip: options?.yes,
-          message: `Confirm removing borrowable asset ${asset}`,
+          message: `Confirm removing borrowable token ${token}`,
         },
-        (txSig) => `Borrowable asset ${asset} removed from allowlist: ${txSig}`,
+        (txSig) => `Borrowable token ${token} removed from allowlist: ${txSig}`,
       );
     });
 
@@ -274,118 +281,148 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
   klend
     .command("deposit")
     .argument("<market>", "Kamino lending market public key", validatePublicKey)
-    .argument("<asset>", "Asset public key", validatePublicKey)
-    .argument("<amount>", "Amount to deposit")
+    .argument("<token>", "Token mint or symbol")
+    .argument("<amount>", "UI amount of token to deposit")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Deposit to Kamino Lending market")
-    .action(async (market, asset, amount, options) => {
-      const { decimals } = await context.glamClient.getAssetMeta(asset);
-      const amountBN = fromUiAmount(amount, decimals);
+    .action(
+      async (market: PublicKey, token: string, amount: string, options) => {
+        const tokenInfo = await resolveTokenMint(context.glamClient, token);
+        const amountBN = parsePositiveUiAmount(
+          amount,
+          tokenInfo.decimals,
+          "amount",
+        );
+        const tokenMint = new PublicKey(tokenInfo.address);
 
-      await executeTxWithErrorHandling(
-        () =>
-          context.glamClient.kaminoLending.deposit(
-            market,
-            asset,
-            amountBN,
-            context.txOptions,
-          ),
-        {
-          skip: options?.yes,
-          message: `Confirm depositing ${amount} ${asset}?`,
-        },
-        (txSig) => `Deposited ${amount} ${asset}: ${txSig}`,
-      );
-    });
+        await executeTxWithErrorHandling(
+          () =>
+            context.glamClient.kaminoLending.deposit(
+              market,
+              tokenMint,
+              amountBN,
+              context.txOptions,
+            ),
+          {
+            skip: options?.yes,
+            message: `Confirm depositing ${amount} ${tokenInfo.symbol}?`,
+          },
+          (txSig) => `Deposited ${amount} ${tokenInfo.symbol}: ${txSig}`,
+        );
+      },
+    );
 
   klend
     .command("withdraw")
     .argument("<market>", "Kamino lending market public key", validatePublicKey)
-    .argument("<asset>", "Asset public key", validatePublicKey)
-    .argument("<amount>", "Amount to withdraw")
+    .argument("<token>", "Token mint or symbol")
+    .argument("<amount>", "UI amount of token to withdraw")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Withdraw asset from Kamino Lending market")
-    .action(async (market, asset, amount, options) => {
-      const { decimals } = await context.glamClient.getAssetMeta(asset);
-      const amountBN = fromUiAmount(amount, decimals);
+    .action(
+      async (market: PublicKey, token: string, amount: string, options) => {
+        const tokenInfo = await resolveTokenMint(context.glamClient, token);
+        const amountBN = parsePositiveUiAmount(
+          amount,
+          tokenInfo.decimals,
+          "amount",
+        );
+        const tokenMint = new PublicKey(tokenInfo.address);
 
-      await executeTxWithErrorHandling(
-        () =>
-          context.glamClient.kaminoLending.withdraw(
-            market,
-            asset,
-            amountBN,
-            context.txOptions,
-          ),
-        {
-          skip: options?.yes,
-          message: `Confirm withdrawing ${amount} ${asset}`,
-        },
-        (txSig) => `Withdraw ${amount} ${asset}: ${txSig}`,
-      );
-    });
+        await executeTxWithErrorHandling(
+          () =>
+            context.glamClient.kaminoLending.withdraw(
+              market,
+              tokenMint,
+              amountBN,
+              context.txOptions,
+            ),
+          {
+            skip: options?.yes,
+            message: `Confirm withdrawing ${amount} ${tokenInfo.symbol}`,
+          },
+          (txSig) => `Withdraw ${amount} ${tokenInfo.symbol}: ${txSig}`,
+        );
+      },
+    );
 
   klend
     .command("borrow")
     .argument("<market>", "Kamino lending market public key", validatePublicKey)
-    .argument("<asset>", "Asset public key", validatePublicKey)
-    .argument("<amount>", "Amount to repay")
+    .argument("<token>", "Token mint or symbol")
+    .argument("<amount>", "UI amount of token to borrow")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Borrow from Kamino Lending market")
-    .action(async (market, asset, amount, options) => {
-      const { decimals } = await context.glamClient.getAssetMeta(asset);
-      const amountBN = fromUiAmount(amount, decimals);
+    .action(
+      async (market: PublicKey, token: string, amount: string, options) => {
+        const tokenInfo = await resolveTokenMint(context.glamClient, token);
+        const amountBN = parsePositiveUiAmount(
+          amount,
+          tokenInfo.decimals,
+          "amount",
+        );
+        const tokenMint = new PublicKey(tokenInfo.address);
 
-      await executeTxWithErrorHandling(
-        () =>
-          context.glamClient.kaminoLending.borrow(
-            market,
-            asset,
-            amountBN,
-            context.txOptions,
-          ),
-        {
-          skip: options?.yes,
-          message: `Confirm borrowing ${amount} ${asset}`,
-        },
-        (txSig) => `Borrowed ${amount} ${asset}: ${txSig}`,
-      );
-    });
+        await executeTxWithErrorHandling(
+          () =>
+            context.glamClient.kaminoLending.borrow(
+              market,
+              tokenMint,
+              amountBN,
+              context.txOptions,
+            ),
+          {
+            skip: options?.yes,
+            message: `Confirm borrowing ${amount} ${tokenInfo.symbol}`,
+          },
+          (txSig) => `Borrowed ${amount} ${tokenInfo.symbol}: ${txSig}`,
+        );
+      },
+    );
 
   klend
     .command("repay")
     .argument("<market>", "Kamino lending market public key", validatePublicKey)
-    .argument("<asset>", "Asset public key", validatePublicKey)
-    .argument("<amount>", "Amount to repay")
+    .argument("<token>", "Token mint or symbol")
+    .argument("<amount>", "UI amount of token to repay")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Repay loan from Kamino Lending market")
-    .action(async (market, asset, amount, options) => {
-      const { decimals } = await context.glamClient.getAssetMeta(asset);
-      const amountBN = fromUiAmount(amount, decimals);
+    .action(
+      async (market: PublicKey, token: string, amount: string, options) => {
+        const tokenInfo = await resolveTokenMint(context.glamClient, token);
+        const amountBN = parsePositiveUiAmount(
+          amount,
+          tokenInfo.decimals,
+          "amount",
+        );
+        const tokenMint = new PublicKey(tokenInfo.address);
 
-      await executeTxWithErrorHandling(
-        () =>
-          context.glamClient.kaminoLending.repay(
-            market,
-            asset,
-            amountBN,
-            context.txOptions,
-          ),
-        {
-          skip: options?.yes,
-          message: `Confirm repaying ${amount} ${asset}`,
-        },
-        (txSig) => `Repaid ${amount} ${asset}: ${txSig}`,
-      );
-    });
+        await executeTxWithErrorHandling(
+          () =>
+            context.glamClient.kaminoLending.repay(
+              market,
+              tokenMint,
+              amountBN,
+              context.txOptions,
+            ),
+          {
+            skip: options?.yes,
+            message: `Confirm repaying ${amount} ${tokenInfo.symbol}`,
+          },
+          (txSig) => `Repaid ${amount} ${tokenInfo.symbol}: ${txSig}`,
+        );
+      },
+    );
 
   klend
     .command("request-elevation-group")
     .argument("<market>", "Kamino lending market public key", validatePublicKey)
-    .argument("<elevation-group>", "Elevation group number", parseInt)
+    .argument("<elevation-group>", "Elevation group number", (value: string) =>
+      parseNonNegativeInteger(value, "elevation-group"),
+    )
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Request elevation group for an obligation (staging only)")
-    .action(async (market, elevationGroup, options) => {
+    .action(async (market: PublicKey, elevationGroup: number, options) => {
       await executeTxWithErrorHandling(
         () =>
           context.glamClient.kaminoLending.requestElevationGroup(

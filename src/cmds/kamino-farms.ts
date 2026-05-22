@@ -1,8 +1,9 @@
-import { fromUiAmount } from "@glamsystems/glam-sdk";
 import { type Command } from "commander";
 import {
   type CliContext,
+  collectPublicKeys,
   executeTxWithErrorHandling,
+  parsePositiveUiAmount,
   validatePublicKey,
 } from "../utils";
 import { PublicKey } from "@solana/web3.js";
@@ -48,18 +49,16 @@ export function installKaminoFarmsCommands(
   kfarms
     .command("harvest")
     .argument(
-      "<farm_states...>",
+      "<farm-states...>",
       "Vault-owned farm states to harvest rewards from",
+      collectPublicKeys,
     )
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Harvest rewards from Kamino farms")
-    .action(async (farmStates: string[], options) => {
+    .action(async (farmStates: PublicKey[], options) => {
       await executeTxWithErrorHandling(
         () =>
-          context.glamClient.kaminoFarm.harvest(
-            farmStates.map((f) => new PublicKey(f)),
-            context.txOptions,
-          ),
+          context.glamClient.kaminoFarm.harvest(farmStates, context.txOptions),
         {
           skip: options?.yes,
           message: `Confirm harvesting farm rewards from ${farmStates.length} farms`,
@@ -70,8 +69,8 @@ export function installKaminoFarmsCommands(
 
   kfarms
     .command("stake")
-    .argument("<farm_state>", "Farm state to stake to", validatePublicKey)
-    .argument("<amount>", "Amount of farm token to stake")
+    .argument("<farm-state>", "Farm state to stake to", validatePublicKey)
+    .argument("<amount>", "UI amount of farm token to stake")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Stake token to a delegated farm")
     .action(async (farmState: PublicKey, amount: string, options) => {
@@ -83,7 +82,11 @@ export function installKaminoFarmsCommands(
         throw new Error("Farm state not found");
       }
       const { farmTokenDecimals } = parsedFarmState;
-      const amountBN = fromUiAmount(amount, farmTokenDecimals.toNumber());
+      const amountBN = parsePositiveUiAmount(
+        amount,
+        farmTokenDecimals.toNumber(),
+        "amount",
+      );
 
       await executeTxWithErrorHandling(
         () =>
@@ -102,8 +105,8 @@ export function installKaminoFarmsCommands(
 
   kfarms
     .command("unstake")
-    .argument("<farm_state>", "Farm state to unstake from", validatePublicKey)
-    .argument("<amount>", "Amount of farm token to unstake")
+    .argument("<farm-state>", "Farm state to unstake from", validatePublicKey)
+    .argument("<amount>", "UI amount of farm token to unstake")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Unstake token from a delegated farm")
     .action(async (farmState: PublicKey, amount: string, options) => {
@@ -115,9 +118,11 @@ export function installKaminoFarmsCommands(
         throw new Error("Farm state not found");
       }
       const { farmTokenDecimals } = parsedFarmState;
-      const amountBN = fromUiAmount(amount, farmTokenDecimals.toNumber()).mul(
-        new BN(10).pow(new BN(18)),
-      );
+      const amountBN = parsePositiveUiAmount(
+        amount,
+        farmTokenDecimals.toNumber(),
+        "amount",
+      ).mul(new BN(10).pow(new BN(18)));
 
       await executeTxWithErrorHandling(
         () =>

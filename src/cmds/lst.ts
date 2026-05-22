@@ -1,45 +1,47 @@
 import { type Command } from "commander";
-import { PublicKey } from "@solana/web3.js";
+import { type PublicKey } from "@solana/web3.js";
 import {
   type CliContext,
   executeTxWithErrorHandling,
+  parsePositiveUiAmount,
+  resolveTokenPublicKey,
   validatePublicKey,
 } from "../utils";
-import { fromUiAmount } from "@glamsystems/glam-sdk";
 
 export function installLstCommands(lst: Command, context: CliContext) {
   lst
     .command("stake")
-    .argument("<stakepool>", "Stake pool address", validatePublicKey)
-    .argument("<amount>", "Amount to stake")
+    .argument("<stake-pool>", "Stake pool address", validatePublicKey)
+    .argument("<amount>", "UI amount of SOL to stake")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Stake SOL into a LST pool")
-    .action(async (stakepool, amount, options) => {
-      const amountBN = fromUiAmount(amount, 9);
+    .action(async (stakePool: PublicKey, amount: string, options) => {
+      const amountBN = parsePositiveUiAmount(amount, 9, "amount");
 
       await executeTxWithErrorHandling(
         () =>
           context.glamClient.stakePool.depositSol(
-            new PublicKey(stakepool),
+            stakePool,
             amountBN,
             context.txOptions,
           ),
         {
           skip: options?.yes,
-          message: `Confirm staking ${amount} SOL into ${stakepool}`,
+          message: `Confirm staking ${amount} SOL into ${stakePool}`,
         },
         (txSig) => `Staked ${amount} SOL: ${txSig}`,
       );
     });
   lst
     .command("unstake")
-    .argument("<asset>", "LST mint address", validatePublicKey)
-    .argument("<amount>", "Amount to unstake")
+    .argument("<token>", "LST mint address or symbol")
+    .argument("<amount>", "UI amount of LST to unstake")
     .option("-d, --deactivate", "Deactivate the stake account", false)
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Unstake LST and receive SOL in a stake account")
-    .action(async (asset, amount, options) => {
-      const amountBN = fromUiAmount(amount, 9);
+    .action(async (token: string, amount: string, options) => {
+      const asset = await resolveTokenPublicKey(context.glamClient, token);
+      const amountBN = parsePositiveUiAmount(amount, 9, "amount");
 
       await executeTxWithErrorHandling(
         () =>

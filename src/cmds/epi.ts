@@ -1,13 +1,15 @@
 import { BN } from "@coral-xyz/anchor";
-import {
-  fetchMintAndTokenProgram,
-  type StateModel,
-} from "@glamsystems/glam-sdk";
+import { type StateModel } from "@glamsystems/glam-sdk";
 import { PublicKey } from "@solana/web3.js";
 import { Command } from "commander";
 import Decimal from "decimal.js";
 
-import { type CliContext, executeTxWithErrorHandling } from "../utils";
+import {
+  type CliContext,
+  collectPublicKeys,
+  executeTxWithErrorHandling,
+  resolveTokenMint,
+} from "../utils";
 
 type SubmitOptions = {
   denom: string;
@@ -21,9 +23,9 @@ type UpsertPositionOptions = {
   denom: string;
   mint?: string;
   freshnessSecs?: string;
-  submitAllow: string[];
-  validateAllow: string[];
-  configureAllow: string[];
+  submitAllow: PublicKey[];
+  validateAllow: PublicKey[];
+  configureAllow: PublicKey[];
   tokenized?: boolean;
   disabled?: boolean;
   yes: boolean;
@@ -117,11 +119,6 @@ function formatPositionId(positionId: number[]): string {
   return new PublicKey(Uint8Array.from(positionId)).toBase58();
 }
 
-function collectPublicKeys(value: string, previous: string[]): string[] {
-  previous.push(value);
-  return previous;
-}
-
 function parseSignedInteger(value: string, label: string): BN {
   const normalized = value.trim();
   if (!/^-?\d+$/.test(normalized)) {
@@ -205,15 +202,12 @@ async function resolveDenomination(
     throw new Error("--mint is required when --denom mint");
   }
 
-  const mint = new PublicKey(options.mint);
-  const { mint: mintAccount } = await fetchMintAndTokenProgram(
-    context.glamClient.connection,
-    mint,
-  );
+  const token = await resolveTokenMint(context.glamClient, options.mint);
+  const mint = new PublicKey(token.address);
 
   return {
-    decimals: mintAccount.decimals,
-    label: mint.toBase58(),
+    decimals: token.decimals,
+    label: token.symbol,
     denomination: {
       denom: { mint: {} },
       mint,
@@ -236,7 +230,7 @@ export function installEpiCommands(program: Command, context: CliContext) {
       "tracked external position pubkey, transfer record PDA, UTF-8 string id, or 32-byte encoded position id",
     )
     .option("--denom <denom>", "observation denomination: usd or mint", "usd")
-    .option("--mint <pubkey>", "mint address when --denom mint")
+    .option("--mint <token>", "mint address or symbol when --denom mint")
     .option(
       "--freshness-secs <u32>",
       "freshness override in seconds, defaults to 0",
@@ -274,15 +268,9 @@ export function installEpiCommands(program: Command, context: CliContext) {
         options.freshnessSecs || "0",
         "--freshness-secs",
       );
-      const submitAllowlist = (options.submitAllow || []).map(
-        (key) => new PublicKey(key),
-      );
-      const validateAllowlist = (options.validateAllow || []).map(
-        (key) => new PublicKey(key),
-      );
-      const configureAllowlist = (options.configureAllow || []).map(
-        (key) => new PublicKey(key),
-      );
+      const submitAllowlist = options.submitAllow || [];
+      const validateAllowlist = options.validateAllow || [];
+      const configureAllowlist = options.configureAllow || [];
 
       await executeTxWithErrorHandling(
         () =>
@@ -324,7 +312,7 @@ export function installEpiCommands(program: Command, context: CliContext) {
       "signed UI amount in the specified observation denomination",
     )
     .option("--denom <denom>", "observation denomination: usd or mint", "usd")
-    .option("--mint <pubkey>", "mint address when --denom mint")
+    .option("--mint <token>", "mint address or symbol when --denom mint")
     .option(
       "--timestamp <unix-seconds>",
       "observation unix timestamp, defaults to now",

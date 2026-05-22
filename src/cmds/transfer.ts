@@ -1,15 +1,12 @@
-import {
-  WSOL,
-  TransferPolicy,
-  fetchMintAndTokenProgram,
-  fromUiAmount,
-} from "@glamsystems/glam-sdk";
+import { WSOL, TransferPolicy } from "@glamsystems/glam-sdk";
 import { type Command } from "commander";
-import { type PublicKey } from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
 import {
   type CliContext,
   executeTxWithErrorHandling,
+  parsePositiveUiAmount,
   printPubkeyList,
+  resolveTokenMint,
   validatePublicKey,
 } from "../utils";
 
@@ -113,40 +110,42 @@ export function installTransferCommands(program: Command, context: CliContext) {
     });
 
   program
-    .argument("<amount>", "Amount to transfer")
+    .argument("<amount>", "UI amount to transfer")
+    .argument("<token>", "Token mint or symbol of SPL token to transfer")
     .argument("<to>", "Destination address (pubkey)", validatePublicKey)
-    .option(
-      "-t, --token <mint>",
-      "Mint address of SPL token to transfer (defaults to wSOL)",
-      validatePublicKey,
-      WSOL,
-    )
     .option("-y, --yes", "Skip confirmation prompt", false)
-    .description(
-      "Transfer SPL token (defaults to wSOL) to the destination address",
-    )
-    .action(async (amount, destination: PublicKey, { token, yes }) => {
-      const assetLabel = token.equals(WSOL) ? "wSOL" : token.toBase58();
-      const { mint } = await fetchMintAndTokenProgram(
-        context.glamClient.connection,
-        token,
-      );
-      const amountBN = fromUiAmount(amount, mint.decimals);
+    .description("Transfer SPL token to the destination address")
+    .action(
+      async (
+        amount: string,
+        token: string,
+        destination: PublicKey,
+        { yes },
+      ) => {
+        const tokenInfo = await resolveTokenMint(context.glamClient, token);
+        const tokenMint = new PublicKey(tokenInfo.address);
+        const assetLabel = tokenMint.equals(WSOL) ? "wSOL" : tokenInfo.symbol;
+        const amountBN = parsePositiveUiAmount(
+          amount,
+          tokenInfo.decimals,
+          "amount",
+        );
 
-      await executeTxWithErrorHandling(
-        () =>
-          context.glamClient.vault.tokenTransfer(
-            token,
-            amountBN,
-            destination,
-            context.txOptions,
-          ),
-        {
-          skip: yes,
-          message: `Confirm transfer of ${amount} ${assetLabel} to ${destination}?`,
-        },
-        (txSig) =>
-          `Transferred ${amount} ${assetLabel} to ${destination}: ${txSig}`,
-      );
-    });
+        await executeTxWithErrorHandling(
+          () =>
+            context.glamClient.vault.tokenTransfer(
+              tokenMint,
+              amountBN,
+              destination,
+              context.txOptions,
+            ),
+          {
+            skip: yes,
+            message: `Confirm transfer of ${amount} ${assetLabel} to ${destination}?`,
+          },
+          (txSig) =>
+            `Transferred ${amount} ${assetLabel} to ${destination}: ${txSig}`,
+        );
+      },
+    );
 }

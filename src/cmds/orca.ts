@@ -27,7 +27,9 @@ import {
   type CliContext,
   collectPublicKeys,
   executeTxWithErrorHandling,
+  fail,
   printTable,
+  resolveTokenPublicKey,
   validatePublicKey,
 } from "../utils";
 
@@ -129,11 +131,6 @@ function isKaminoReserveOracleSource(oracleSource: string): boolean {
   return oracleSource === "KaminoReserve";
 }
 
-function fail(message: string): never {
-  console.error(message);
-  process.exit(1);
-}
-
 function parseInteger(
   value: string,
   label: string,
@@ -179,29 +176,29 @@ function parseRangePct(value: string, label: string): number {
 }
 
 function parseLowerRangePct(value: string): number {
-  return parseRangePct(value, "lower_range_pct");
+  return parseRangePct(value, "lower-range-pct");
 }
 
 function parseUpperRangePct(value: string): number {
-  return parseRangePct(value, "upper_range_pct");
+  return parseRangePct(value, "upper-range-pct");
 }
 
 function parseReferencePrice(value: string): number {
   const trimmed = value.trim();
   if (!/^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(trimmed)) {
-    fail("ref_price must be a positive number");
+    fail("ref-price must be a positive number");
   }
 
   const price = Number(trimmed);
   if (!Number.isFinite(price) || price <= 0) {
-    fail("ref_price must be greater than zero");
+    fail("ref-price must be greater than zero");
   }
   return price;
 }
 
 function validateRangePctOrder(lowerRangePct: number, upperRangePct: number) {
   if (upperRangePct <= lowerRangePct) {
-    fail("upper_range_pct must be greater than lower_range_pct");
+    fail("upper-range-pct must be greater than lower-range-pct");
   }
 }
 
@@ -212,7 +209,7 @@ function parseU8(value: string): number {
 function parseMaxDeviationBps(value: string): number {
   return parseInteger(
     value,
-    "max_deviation_bps",
+    "max-deviation-bps",
     -BPS_DENOMINATOR,
     BPS_DENOMINATOR - 1,
   );
@@ -404,7 +401,7 @@ async function fetchRewardInfo(
   rewardIndex: number,
 ): Promise<{ rewardMint: PublicKey; rewardVault: PublicKey }> {
   if (rewardIndex < 0 || rewardIndex > 2) {
-    fail("reward_index must be in range [0, 2]");
+    fail("reward-index must be in range [0, 2]");
   }
 
   const data = await fetchOwnedAccountData(
@@ -670,7 +667,7 @@ async function derivePriceDeviationAccounts(
     isUnsupportedPriceDeviationOracleSource(tokenBMeta.oracleSource)
   ) {
     fail(
-      "Orca max_deviation_bps does not support ChainlinkX or ChainlinkRWA oracles",
+      "Orca max-deviation-bps does not support ChainlinkX or ChainlinkRWA oracles",
     );
   }
 
@@ -1196,10 +1193,12 @@ export function installOrcaCommands(orca: Command, context: CliContext) {
 
   orca
     .command("allowlist-token")
-    .argument("<mint>", "Token mint", validatePublicKey)
+    .alias("allowlist-mint")
+    .argument("<token>", "Token mint address or symbol")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Add a token mint to the policy allowlist")
-    .action(async (mint: PublicKey, options: TxOptions) => {
+    .action(async (tokenInput: string, options: TxOptions) => {
+      const mint = await resolveTokenPublicKey(context.glamClient, tokenInput);
       await updatePolicy(
         context,
         (policy) => policy.tokenMintsAllowlist.push(mint),
@@ -1211,10 +1210,12 @@ export function installOrcaCommands(orca: Command, context: CliContext) {
 
   orca
     .command("remove-token")
-    .argument("<mint>", "Token mint", validatePublicKey)
+    .alias("remove-mint")
+    .argument("<token>", "Token mint address or symbol")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Remove a token mint from the policy allowlist")
-    .action(async (mint: PublicKey, options: TxOptions) => {
+    .action(async (tokenInput: string, options: TxOptions) => {
+      const mint = await resolveTokenPublicKey(context.glamClient, tokenInput);
       await updatePolicy(
         context,
         (policy) => {
@@ -1267,7 +1268,7 @@ export function installOrcaCommands(orca: Command, context: CliContext) {
 
   orca
     .command("position-pda")
-    .argument("<position_mint>", "Position mint", validatePublicKey)
+    .argument("<position-mint>", "Position mint", validatePublicKey)
     .description("Derive an Orca position PDA")
     .action((positionMint: PublicKey) => {
       const [position, bump] =
@@ -1278,7 +1279,7 @@ export function installOrcaCommands(orca: Command, context: CliContext) {
   orca
     .command("tick-array-pda")
     .argument("<whirlpool>", "Whirlpool account", validatePublicKey)
-    .argument("<start_tick_index>", "Tick array start tick index", parseI32)
+    .argument("<start-tick-index>", "Tick array start tick index", parseI32)
     .description("Derive an Orca tick-array PDA")
     .action((whirlpool: PublicKey, startTickIndex: number) => {
       const [tickArray, bump] = context.glamClient.orca.getTickArrayPda(
@@ -1292,17 +1293,17 @@ export function installOrcaCommands(orca: Command, context: CliContext) {
     .command("open-position")
     .argument("<whirlpool>", "Whirlpool account", validatePublicKey)
     .argument(
-      "<lower_range_pct>",
-      "Lower price range percentage; must be less than upper_range_pct",
+      "<lower-range-pct>",
+      "Lower price range percentage; must be less than upper-range-pct",
       parseLowerRangePct,
     )
     .argument(
-      "<upper_range_pct>",
-      "Upper price range percentage; must be greater than lower_range_pct",
+      "<upper-range-pct>",
+      "Upper price range percentage; must be greater than lower-range-pct",
       parseUpperRangePct,
     )
     .argument(
-      "[ref_price]",
+      "[ref-price]",
       "Optional reference UI price anchor, token B per token A; defaults to current pool price",
       parseReferencePrice,
     )
@@ -1356,7 +1357,7 @@ export function installOrcaCommands(orca: Command, context: CliContext) {
       ) => {
         validateRangePctOrder(lowerRangePct, upperRangePct);
         if (refPriceArg !== undefined && options.refPrice !== undefined) {
-          fail("Use either positional ref_price or --ref-price, not both");
+          fail("Use either positional ref-price or --ref-price, not both");
         }
         const refPrice = options.refPrice ?? refPriceArg;
 
@@ -1440,7 +1441,7 @@ export function installOrcaCommands(orca: Command, context: CliContext) {
   orca
     .command("initialize-tick-array")
     .argument("<whirlpool>", "Whirlpool account", validatePublicKey)
-    .argument("<start_tick_index>", "Tick array start tick index", parseI32)
+    .argument("<start-tick-index>", "Tick array start tick index", parseI32)
     .option(
       "--tick-array <pubkey>",
       "Tick array PDA override",
@@ -1474,9 +1475,9 @@ export function installOrcaCommands(orca: Command, context: CliContext) {
     orca
       .command("increase-liquidity-v2")
       .argument("<position>", "Orca position account", validatePublicKey)
-      .argument("<liquidity_amount>", "Liquidity amount")
-      .argument("<token_max_a>", "Max token A amount")
-      .argument("<token_max_b>", "Max token B amount")
+      .argument("<liquidity-amount>", "Liquidity amount")
+      .argument("<token-max-a>", "Max token A amount")
+      .argument("<token-max-b>", "Max token B amount")
       .option("-y, --yes", "Skip confirmation prompt", false)
       .description("Increase liquidity in an Orca position"),
   ).action(
@@ -1488,9 +1489,9 @@ export function installOrcaCommands(orca: Command, context: CliContext) {
       options: TxOptions & DerivedPositionOptions,
     ) => {
       const params: IncreaseOrcaLiquidityV2Params = {
-        liquidityAmount: parseU128(liquidityAmount, "liquidity_amount"),
-        tokenMaxA: parseU64(tokenMaxA, "token_max_a"),
-        tokenMaxB: parseU64(tokenMaxB, "token_max_b"),
+        liquidityAmount: parseU128(liquidityAmount, "liquidity-amount"),
+        tokenMaxA: parseU64(tokenMaxA, "token-max-a"),
+        tokenMaxB: parseU64(tokenMaxB, "token-max-b"),
         ...parseRemainingOptions(options),
       };
       await executeTxWithErrorHandling(
@@ -1513,8 +1514,8 @@ export function installOrcaCommands(orca: Command, context: CliContext) {
     orca
       .command("increase-liquidity-by-token-amounts-v2")
       .argument("<position>", "Orca position account", validatePublicKey)
-      .argument("<token_max_a>", "Max token A amount")
-      .argument("<token_max_b>", "Max token B amount")
+      .argument("<token-max-a>", "Max token A amount")
+      .argument("<token-max-b>", "Max token B amount")
       .option("-y, --yes", "Skip confirmation prompt", false)
       .description("Increase Orca liquidity by token amounts"),
   ).action(
@@ -1534,8 +1535,8 @@ export function installOrcaCommands(orca: Command, context: CliContext) {
       const params: IncreaseOrcaLiquidityByTokenAmountsV2Params = {
         method: {
           byTokenAmounts: {
-            tokenMaxA: parseU64(tokenMaxA, "token_max_a"),
-            tokenMaxB: parseU64(tokenMaxB, "token_max_b"),
+            tokenMaxA: parseU64(tokenMaxA, "token-max-a"),
+            tokenMaxB: parseU64(tokenMaxB, "token-max-b"),
             minSqrtPrice: new BN(minSqrtPrice.toString()),
             maxSqrtPrice: new BN(maxSqrtPrice.toString()),
           },
@@ -1562,9 +1563,9 @@ export function installOrcaCommands(orca: Command, context: CliContext) {
     orca
       .command("decrease-liquidity-v2")
       .argument("<position>", "Orca position account", validatePublicKey)
-      .argument("<liquidity_amount>", "Liquidity amount")
-      .argument("<token_min_a>", "Minimum token A amount")
-      .argument("<token_min_b>", "Minimum token B amount")
+      .argument("<liquidity-amount>", "Liquidity amount")
+      .argument("<token-min-a>", "Minimum token A amount")
+      .argument("<token-min-b>", "Minimum token B amount")
       .option("-y, --yes", "Skip confirmation prompt", false)
       .description("Decrease liquidity in an Orca position"),
   ).action(
@@ -1576,9 +1577,9 @@ export function installOrcaCommands(orca: Command, context: CliContext) {
       options: TxOptions & DerivedPositionOptions,
     ) => {
       const params: DecreaseOrcaLiquidityV2Params = {
-        liquidityAmount: parseU128(liquidityAmount, "liquidity_amount"),
-        tokenMinA: parseU64(tokenMinA, "token_min_a"),
-        tokenMinB: parseU64(tokenMinB, "token_min_b"),
+        liquidityAmount: parseU128(liquidityAmount, "liquidity-amount"),
+        tokenMinA: parseU64(tokenMinA, "token-min-a"),
+        tokenMinB: parseU64(tokenMinB, "token-min-b"),
         ...parseRemainingOptions(options),
       };
       await executeTxWithErrorHandling(
@@ -1602,13 +1603,13 @@ export function installOrcaCommands(orca: Command, context: CliContext) {
       orca
         .command("reposition-liquidity-v2")
         .argument("<position>", "Orca position account", validatePublicKey)
-        .argument("<new_tick_lower_index>", "New lower tick index", parseI32)
-        .argument("<new_tick_upper_index>", "New upper tick index", parseI32)
-        .argument("<new_liquidity_amount>", "New liquidity amount")
-        .argument("<existing_range_token_min_a>", "Existing range min token A")
-        .argument("<existing_range_token_min_b>", "Existing range min token B")
-        .argument("<new_range_token_max_a>", "New range max token A")
-        .argument("<new_range_token_max_b>", "New range max token B")
+        .argument("<new-tick-lower-index>", "New lower tick index", parseI32)
+        .argument("<new-tick-upper-index>", "New upper tick index", parseI32)
+        .argument("<new-liquidity-amount>", "New liquidity amount")
+        .argument("<existing-range-token-min-a>", "Existing range min token A")
+        .argument("<existing-range-token-min-b>", "Existing range min token B")
+        .argument("<new-range-token-max-a>", "New range max token A")
+        .argument("<new-range-token-max-b>", "New range max token B")
         .option(
           "--position-token-account <pubkey>",
           "Vault-owned position token account",
@@ -1686,23 +1687,23 @@ export function installOrcaCommands(orca: Command, context: CliContext) {
           byLiquidity: {
             newLiquidityAmount: parseU128(
               newLiquidityAmount,
-              "new_liquidity_amount",
+              "new-liquidity-amount",
             ),
             existingRangeTokenMinA: parseU64(
               existingRangeTokenMinA,
-              "existing_range_token_min_a",
+              "existing-range-token-min-a",
             ),
             existingRangeTokenMinB: parseU64(
               existingRangeTokenMinB,
-              "existing_range_token_min_b",
+              "existing-range-token-min-b",
             ),
             newRangeTokenMaxA: parseU64(
               newRangeTokenMaxA,
-              "new_range_token_max_a",
+              "new-range-token-max-a",
             ),
             newRangeTokenMaxB: parseU64(
               newRangeTokenMaxB,
-              "new_range_token_max_b",
+              "new-range-token-max-b",
             ),
           },
         },
@@ -1867,7 +1868,7 @@ export function installOrcaCommands(orca: Command, context: CliContext) {
     orca
       .command("collect-reward-v2")
       .argument("<position>", "Orca position account", validatePublicKey)
-      .argument("<reward_index>", "Reward index", parseU8)
+      .argument("<reward-index>", "Reward index", parseU8)
       .option(
         "--position-token-account <pubkey>",
         "Vault-owned position token account",

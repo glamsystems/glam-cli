@@ -1,13 +1,10 @@
 import { BN } from "@coral-xyz/anchor";
-import {
-  GlamClient,
-  fetchMintAndTokenProgram,
-  fromUiAmount,
-} from "@glamsystems/glam-sdk";
+import { GlamClient, fetchMintAndTokenProgram } from "@glamsystems/glam-sdk";
 import { type Command } from "commander";
 import {
   type CliContext,
   executeTxWithErrorHandling,
+  parsePositiveUiAmount,
   validatePublicKey,
 } from "../utils";
 import tokens from "../tokens-verified.json";
@@ -15,7 +12,7 @@ import tokens from "../tokens-verified.json";
 export function installInvestCommands(invest: Command, context: CliContext) {
   invest
     .command("subscribe")
-    .argument("<amount>", "Amount to subscribe")
+    .argument("<amount>", "UI amount to subscribe")
     .argument(
       "[state]",
       "State pubkey of the vault to subscribe to. Leave empty to use the active GLAM in CLI config.",
@@ -50,7 +47,11 @@ export function installInvestCommands(invest: Command, context: CliContext) {
       const name = metadata?.name || baseAssetMint.toBase58();
       const symbol = metadata?.symbol || "Unknown token";
 
-      const amountBN = fromUiAmount(amount, baseAssetDecimals);
+      const amountBN = parsePositiveUiAmount(
+        amount,
+        baseAssetDecimals,
+        "amount",
+      );
       if (amountBN.lt(minSubscription)) {
         console.error(
           `Amount must be at least ${minSubscription.toNumber() / 10 ** baseAssetDecimals} ${symbol}`,
@@ -100,7 +101,7 @@ export function installInvestCommands(invest: Command, context: CliContext) {
 
   invest
     .command("redeem")
-    .argument("<amount>", "Amount to redeem")
+    .argument("<amount>", "UI amount of shares to redeem")
     .description("Request to redeem share tokens")
     .option("-y, --yes", "Skip confirmation prompt", false)
     .action(async (amount, options) => {
@@ -109,7 +110,7 @@ export function installInvestCommands(invest: Command, context: CliContext) {
         context.glamClient.mintPda,
       );
       const decimals = mint.decimals;
-      const amountBN = fromUiAmount(amount, decimals);
+      const amountBN = parsePositiveUiAmount(amount, decimals, "amount");
 
       const stateModel = await context.glamClient.fetchStateModel();
       const minRedemption = new BN(stateModel?.mintModel?.minRedemption || 0);

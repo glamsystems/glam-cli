@@ -1,6 +1,7 @@
 import { type Command } from "commander";
 import {
   type CliContext,
+  collectPublicKeys,
   executeTxWithErrorHandling,
   validatePublicKey,
 } from "../utils";
@@ -16,7 +17,6 @@ import {
   TokenAclWalletEntry,
   TOKEN_ACL_GATE_PROGRAM,
 } from "@glamsystems/glam-sdk";
-import { PublicKey } from "@solana/web3.js";
 
 function parseSeed(seedStr: string): Buffer {
   const seed = Buffer.alloc(32);
@@ -353,6 +353,8 @@ export function installTokenAclCommands(
     .option(
       "--additional-lists <lists...>",
       "Additional lists to include in the gate",
+      collectPublicKeys,
+      [],
     )
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Setup gate extra metas for permissionless thaw")
@@ -366,9 +368,7 @@ export function installTokenAclCommands(
       );
 
       // Additional lists provided by user
-      const additionalListConfigs = (options.additionalLists || []).map(
-        (listStr: string) => new PublicKey(listStr),
-      );
+      const additionalListConfigs = options.additionalLists || [];
       const allListConfigs = [...listConfigs, ...additionalListConfigs];
 
       // Skip list configs that are invalid (onchain account doesn't exist)

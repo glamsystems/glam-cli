@@ -1,9 +1,10 @@
 import { type Command } from "commander";
 import {
   type CliContext,
+  collectPublicKeys,
   executeTxWithErrorHandling,
-  validatePublicKey,
 } from "../utils";
+import { type PublicKey } from "@solana/web3.js";
 import { getStakeAccountsWithStates } from "@glamsystems/glam-sdk";
 
 export function installStakeCommands(stake: Command, context: CliContext) {
@@ -43,11 +44,11 @@ export function installStakeCommands(stake: Command, context: CliContext) {
     .argument(
       "<accounts...>",
       "Stake accounts to deactivate (space-separated pubkeys)",
+      collectPublicKeys,
     )
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Deactivate stake accounts")
-    .action(async (accounts: string[], options) => {
-      const accountsArray = accounts.map(validatePublicKey);
+    .action(async (accountsArray: PublicKey[], options) => {
       const accountList = accountsArray.map((a) => a.toBase58()).join(", ");
 
       await executeTxWithErrorHandling(
@@ -67,12 +68,11 @@ export function installStakeCommands(stake: Command, context: CliContext) {
     .argument(
       "<accounts...>",
       "Stake accounts to withdraw from (space-separated pubkeys)",
+      collectPublicKeys,
     )
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Withdraw from stake accounts")
-    .action(async (accounts: string[], options) => {
-      // Parse all account strings to PublicKeys
-      const accountsArray = accounts.map(validatePublicKey);
+    .action(async (accountsArray: PublicKey[], options) => {
       const accountList = accountsArray.map((a) => a.toBase58()).join(", ");
 
       await executeTxWithErrorHandling(
