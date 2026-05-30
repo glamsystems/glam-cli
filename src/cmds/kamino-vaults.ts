@@ -16,14 +16,10 @@ export function installKaminoVaultsCommands(
     .command("view-policy")
     .description("View Kamino vaults policy")
     .action(async () => {
-      const policy = await context.glamClient.fetchProtocolPolicy(
-        context.glamClient.extKaminoProgram.programId,
-        0b10,
-        KaminoVaultsPolicy,
-      );
+      const policy = await context.glamClient.kaminoVaults.fetchPolicy();
       if (!policy) {
         console.log("No policy found");
-        return;
+        process.exit(1);
       }
       printPubkeyList("Kamino vaults allowlist", policy.vaultsAllowlist);
     });
@@ -35,11 +31,8 @@ export function installKaminoVaultsCommands(
     .description("Add a vault to the allowlist")
     .action(async (vault, options) => {
       const policy =
-        (await context.glamClient.fetchProtocolPolicy(
-          context.glamClient.extKaminoProgram.programId,
-          0b10,
-          KaminoVaultsPolicy,
-        )) ?? new KaminoVaultsPolicy([]);
+        (await context.glamClient.kaminoVaults.fetchPolicy()) ??
+        new KaminoVaultsPolicy([]);
       if (policy.vaultsAllowlist.find((v) => v.equals(vault))) {
         console.error(`Kamino vault ${vault} is already in the allowlist`);
         process.exit(1);
@@ -48,12 +41,7 @@ export function installKaminoVaultsCommands(
       policy.vaultsAllowlist.push(vault);
       await executeTxWithErrorHandling(
         () =>
-          context.glamClient.access.setProtocolPolicy(
-            context.glamClient.extKaminoProgram.programId,
-            0b10,
-            policy.encode(),
-            context.txOptions,
-          ),
+          context.glamClient.kaminoVaults.setPolicy(policy, context.txOptions),
         {
           skip: options?.yes,
           message: `Confirm adding Kamino vault ${vault} to allowlist`,
@@ -68,11 +56,7 @@ export function installKaminoVaultsCommands(
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Remove a vault from the allowlist")
     .action(async (vault, options) => {
-      const policy = await context.glamClient.fetchProtocolPolicy(
-        context.glamClient.extKaminoProgram.programId,
-        0b10,
-        KaminoVaultsPolicy,
-      );
+      const policy = await context.glamClient.kaminoVaults.fetchPolicy();
       if (!policy) {
         console.error("No policy found");
         process.exit(1);
@@ -87,12 +71,7 @@ export function installKaminoVaultsCommands(
       );
       await executeTxWithErrorHandling(
         () =>
-          context.glamClient.access.setProtocolPolicy(
-            context.glamClient.extKaminoProgram.programId,
-            0b10,
-            policy.encode(),
-            context.txOptions,
-          ),
+          context.glamClient.kaminoVaults.setPolicy(policy, context.txOptions),
         {
           skip: options?.yes,
           message: `Confirm removing Kamino vault ${vault} from allowlist`,

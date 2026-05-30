@@ -16,11 +16,7 @@ export function installCctpCommands(program: Command, context: CliContext) {
     .command("view-policy")
     .description("View CCTP policy")
     .action(async () => {
-      const cctpPolicy = await context.glamClient.fetchProtocolPolicy(
-        context.glamClient.extCctpProgram.programId,
-        0b01,
-        CctpPolicy,
-      );
+      const cctpPolicy = await context.glamClient.cctp.fetchPolicy();
       if (!cctpPolicy) {
         console.error("CCTP policy not found");
         process.exit(1);
@@ -48,11 +44,7 @@ export function installCctpCommands(program: Command, context: CliContext) {
         : evmAddressToPublicKey(destinationAddress);
 
       const cctpPolicy =
-        (await context.glamClient.fetchProtocolPolicy(
-          context.glamClient.extCctpProgram.programId,
-          0b01,
-          CctpPolicy,
-        )) ?? new CctpPolicy([]);
+        (await context.glamClient.cctp.fetchPolicy()) ?? new CctpPolicy([]);
       if (
         cctpPolicy.allowedDestinations.find(
           (d) => d.domain === domain && d.address.equals(destinationPubkey),
@@ -69,13 +61,7 @@ export function installCctpCommands(program: Command, context: CliContext) {
         address: destinationPubkey,
       });
       await executeTxWithErrorHandling(
-        () =>
-          context.glamClient.access.setProtocolPolicy(
-            context.glamClient.extCctpProgram.programId,
-            0b01,
-            cctpPolicy.encode(),
-            context.txOptions,
-          ),
+        () => context.glamClient.cctp.setPolicy(cctpPolicy, context.txOptions),
         {
           skip: yes,
           message: `Confirm adding destination ${destinationAddress} (domain ${domain}) to allowlist`,
@@ -99,11 +85,7 @@ export function installCctpCommands(program: Command, context: CliContext) {
         ? new PublicKey(destinationAddress)
         : evmAddressToPublicKey(destinationAddress);
 
-      const cctpPolicy = await context.glamClient.fetchProtocolPolicy(
-        context.glamClient.extCctpProgram.programId,
-        0b01,
-        CctpPolicy,
-      );
+      const cctpPolicy = await context.glamClient.cctp.fetchPolicy();
       if (!cctpPolicy) {
         console.error(`CCTP policy not found`);
         process.exit(1);
@@ -112,13 +94,7 @@ export function installCctpCommands(program: Command, context: CliContext) {
         (d) => !(d.domain === domain && d.address.equals(destinationPubkey)),
       );
       await executeTxWithErrorHandling(
-        () =>
-          context.glamClient.access.setProtocolPolicy(
-            context.glamClient.extCctpProgram.programId,
-            0b01,
-            cctpPolicy.encode(),
-            context.txOptions,
-          ),
+        () => context.glamClient.cctp.setPolicy(cctpPolicy, context.txOptions),
         {
           skip: yes,
           message: `Confirm removing destination ${destinationAddress} (domain ${domain}) from allowlist`,
@@ -169,11 +145,7 @@ export function installCctpCommands(program: Command, context: CliContext) {
             : evmAddressToPublicKey(destinationCaller)
           : undefined;
 
-        const cctpPolicy = await context.glamClient.fetchProtocolPolicy(
-          context.glamClient.extCctpProgram.programId,
-          0b01,
-          CctpPolicy,
-        );
+        const cctpPolicy = await context.glamClient.cctp.fetchPolicy();
         if (
           cctpPolicy &&
           !cctpPolicy.allowedDestinations.find(

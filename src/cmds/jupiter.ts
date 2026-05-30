@@ -75,14 +75,10 @@ export function installJupiterSwapCommands(
     .command("view-policy")
     .description("View Jupiter swap policy")
     .action(async () => {
-      const policy = await context.glamClient.fetchProtocolPolicy(
-        context.glamClient.protocolProgram.programId,
-        0b0000100,
-        JupiterSwapPolicy,
-      );
+      const policy = await context.glamClient.jupiterSwap.fetchPolicy();
       if (!policy) {
         console.log("No policy found");
-        return;
+        process.exit(1);
       }
       console.log(`Max slippage BPS: ${policy.maxSlippageBps}`);
       console.log(`Max deviation BPS: ${policy.maxDeviationBps}`);
@@ -99,11 +95,7 @@ export function installJupiterSwapCommands(
     .option("-y, --yes", "Skip confirmation", false)
     .description("Set the maximum allowed slippage for swaps")
     .action(async (slippageBps, options) => {
-      const policy = await context.glamClient.fetchProtocolPolicy(
-        context.glamClient.protocolProgram.programId,
-        0b0000100,
-        JupiterSwapPolicy,
-      );
+      const policy = await context.glamClient.jupiterSwap.fetchPolicy();
       const currentAllowlist = policy?.swapAllowlist || [];
       const currentMaxDeviation = policy?.maxDeviationBps || 0;
 
@@ -114,12 +106,7 @@ export function installJupiterSwapCommands(
       );
       await executeTxWithErrorHandling(
         () =>
-          context.glamClient.access.setProtocolPolicy(
-            context.glamClient.protocolProgram.programId,
-            0b0000100,
-            newPolicy.encode(),
-            context.txOptions,
-          ),
+          context.glamClient.jupiterSwap.setPolicy(newPolicy, context.txOptions),
         {
           skip: options?.yes,
           message: `Confirm setting max slippage to ${slippageBps} BPS`,
@@ -149,11 +136,7 @@ export function installJupiterSwapCommands(
     .option("-y, --yes", "Skip confirmation", false)
     .description("Set the maximum allowed quote price deviation for swaps")
     .action(async (deviationBps, options) => {
-      const policy = await context.glamClient.fetchProtocolPolicy(
-        context.glamClient.protocolProgram.programId,
-        0b0000100,
-        JupiterSwapPolicy,
-      );
+      const policy = await context.glamClient.jupiterSwap.fetchPolicy();
       const currentAllowlist = policy?.swapAllowlist || [];
       const currentMaxSlippage = policy?.maxSlippageBps || 0;
 
@@ -164,12 +147,7 @@ export function installJupiterSwapCommands(
       );
       await executeTxWithErrorHandling(
         () =>
-          context.glamClient.access.setProtocolPolicy(
-            context.glamClient.protocolProgram.programId,
-            0b0000100,
-            newPolicy.encode(),
-            context.txOptions,
-          ),
+          context.glamClient.jupiterSwap.setPolicy(newPolicy, context.txOptions),
         {
           skip: options?.yes,
           message: `Confirm setting max deviation to ${deviationBps} BPS`,
@@ -186,11 +164,7 @@ export function installJupiterSwapCommands(
     .description("Add a token to the swap allowlist")
     .action(async (tokenInput: string, options) => {
       const token = await resolveTokenPublicKey(context.glamClient, tokenInput);
-      const policy = await context.glamClient.fetchProtocolPolicy(
-        context.glamClient.protocolProgram.programId,
-        0b0000100,
-        JupiterSwapPolicy,
-      );
+      const policy = await context.glamClient.jupiterSwap.fetchPolicy();
       const currentSlippage = policy?.maxSlippageBps || 50;
       const currentAllowlist = policy?.swapAllowlist || [];
 
@@ -207,12 +181,7 @@ export function installJupiterSwapCommands(
       );
       await executeTxWithErrorHandling(
         () =>
-          context.glamClient.access.setProtocolPolicy(
-            context.glamClient.protocolProgram.programId,
-            0b0000100,
-            newPolicy.encode(),
-            context.txOptions,
-          ),
+          context.glamClient.jupiterSwap.setPolicy(newPolicy, context.txOptions),
         {
           skip: options?.yes,
           message: `Confirm adding token ${token} to swap allowlist`,
@@ -229,11 +198,7 @@ export function installJupiterSwapCommands(
     .description("Remove a token from the swap allowlist")
     .action(async (tokenInput: string, options) => {
       const token = await resolveTokenPublicKey(context.glamClient, tokenInput);
-      const policy = await context.glamClient.fetchProtocolPolicy(
-        context.glamClient.protocolProgram.programId,
-        0b0000100,
-        JupiterSwapPolicy,
-      );
+      const policy = await context.glamClient.jupiterSwap.fetchPolicy();
       if (!policy || !policy.swapAllowlist) {
         console.error("No swap allowlist found");
         process.exit(1);
@@ -252,12 +217,7 @@ export function installJupiterSwapCommands(
       );
       await executeTxWithErrorHandling(
         () =>
-          context.glamClient.access.setProtocolPolicy(
-            context.glamClient.protocolProgram.programId,
-            0b0000100,
-            newPolicy.encode(),
-            context.txOptions,
-          ),
+          context.glamClient.jupiterSwap.setPolicy(newPolicy, context.txOptions),
         {
           skip: options?.yes,
           message: `Confirm removing token ${token} from swap allowlist`,
@@ -271,11 +231,7 @@ export function installJupiterSwapCommands(
     .option("-y, --yes", "Skip confirmation", false)
     .description("Clear the swap allowlist")
     .action(async (options) => {
-      const policy = await context.glamClient.fetchProtocolPolicy(
-        context.glamClient.protocolProgram.programId,
-        0b0000100,
-        JupiterSwapPolicy,
-      );
+      const policy = await context.glamClient.jupiterSwap.fetchPolicy();
       if (!policy) {
         console.error("No policy found");
         process.exit(1);
@@ -287,12 +243,7 @@ export function installJupiterSwapCommands(
       );
       await executeTxWithErrorHandling(
         () =>
-          context.glamClient.access.setProtocolPolicy(
-            context.glamClient.protocolProgram.programId,
-            0b0000100,
-            newPolicy.encode(),
-            context.txOptions,
-          ),
+          context.glamClient.jupiterSwap.setPolicy(newPolicy, context.txOptions),
         {
           skip: options?.yes,
           message: "Confirm clearing swap allowlist",

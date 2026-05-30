@@ -33,7 +33,6 @@ import {
   validatePublicKey,
 } from "../utils";
 
-const ORCA_WHIRLPOOLS_PROTOCOL = 0b1;
 const BPS_DENOMINATOR = 10_000;
 const I32_MIN = -2_147_483_648;
 const I32_MAX = 2_147_483_647;
@@ -927,11 +926,7 @@ function printPolicy(policy: WhirlpoolsPolicy) {
 async function fetchPolicy(
   context: CliContext,
 ): Promise<WhirlpoolsPolicy | null> {
-  return await context.glamClient.fetchProtocolPolicy(
-    context.glamClient.extOrcaProgram.programId,
-    ORCA_WHIRLPOOLS_PROTOCOL,
-    WhirlpoolsPolicy,
-  );
+  return await context.glamClient.orca.fetchPolicy();
 }
 
 function defaultWhirlpoolsPolicy(): WhirlpoolsPolicy {
@@ -946,8 +941,7 @@ async function setWhirlpoolsPolicy(
   success: (txSig: string) => string,
 ) {
   await executeTxWithErrorHandling(
-    () =>
-      context.glamClient.orca.setWhirlpoolsPolicy(policy, context.txOptions),
+    () => context.glamClient.orca.setPolicy(policy, context.txOptions),
     {
       skip: !!options.yes,
       message,
@@ -992,7 +986,7 @@ export function installOrcaCommands(orca: Command, context: CliContext) {
       const policy = await fetchPolicy(context);
       if (!policy) {
         console.log("No Orca Whirlpools policy found");
-        return;
+        process.exit(1);
       }
       printPolicy(policy);
     });
@@ -1041,11 +1035,7 @@ export function installOrcaCommands(orca: Command, context: CliContext) {
           options.maxDeviationBps ?? 0,
         );
         await executeTxWithErrorHandling(
-          () =>
-            context.glamClient.orca.setWhirlpoolsPolicy(
-              policy,
-              context.txOptions,
-            ),
+          () => context.glamClient.orca.setPolicy(policy, context.txOptions),
           {
             skip: !!options.yes,
             message: "Replace Orca Whirlpools policy?",

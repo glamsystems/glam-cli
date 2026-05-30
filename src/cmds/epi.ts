@@ -1,5 +1,4 @@
 import { BN } from "@coral-xyz/anchor";
-import { type StateModel } from "@glamsystems/glam-sdk";
 import { PublicKey } from "@solana/web3.js";
 import { Command } from "commander";
 import Decimal from "decimal.js";
@@ -32,7 +31,6 @@ type UpsertPositionOptions = {
 };
 
 type ValidateOptions = {
-  normalizedBaseAssetAmount?: string;
   yes: boolean;
 };
 
@@ -215,10 +213,6 @@ async function resolveDenomination(
   };
 }
 
-async function fetchStateModel(context: CliContext): Promise<StateModel> {
-  return await context.glamClient.fetchStateModel();
-}
-
 export function installEpiCommands(program: Command, context: CliContext) {
   program
     .command("upsert-position")
@@ -370,37 +364,19 @@ export function installEpiCommands(program: Command, context: CliContext) {
       "<position>",
       "tracked external position pubkey, transfer record PDA, UTF-8 string id, or 32-byte encoded position id",
     )
-    .option(
-      "--normalized-base-asset-amount <amount>",
-      "signed UI amount in the vault base asset; omit to submit None",
-    )
     .option("-y, --yes", "Skip confirmation", false)
     .action(async (position: string, options: ValidateOptions) => {
       const { positionId, positionLabel } = parsePosition(position);
-      const stateModel = await fetchStateModel(context);
-      const normalizedBaseAssetAmount =
-        options.normalizedBaseAssetAmount === undefined
-          ? null
-          : parseSignedUiAmount(
-              options.normalizedBaseAssetAmount,
-              stateModel.baseAssetDecimals,
-              "--normalized-base-asset-amount",
-            );
-      const normalizedAmountLabel =
-        options.normalizedBaseAssetAmount === undefined
-          ? "None"
-          : `${options.normalizedBaseAssetAmount} ${stateModel.baseAssetMint.toBase58()}`;
 
       await executeTxWithErrorHandling(
         () =>
           context.glamClient.epi.validateExternalObservation(
             positionId,
-            normalizedBaseAssetAmount,
             context.txOptions,
           ),
         {
           skip: options.yes,
-          message: `Confirm validating observation for ${positionLabel} with normalized base asset amount ${normalizedAmountLabel}?`,
+          message: `Confirm validating observation for ${positionLabel}?`,
         },
         (txSig) => `Observation validated: ${txSig}`,
       );

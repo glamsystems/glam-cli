@@ -26,10 +26,8 @@ import { installKaminoFarmsCommands } from "./cmds/kamino-farms";
 import { installIntegrationCommands } from "./cmds/integration";
 import { installDelegateCommands } from "./cmds/delegate";
 import { installJupiterSwapCommands } from "./cmds/jupiter";
-import {
-  installJupiterBorrowCommands,
-  installJupiterEarnCommands,
-} from "./cmds/jupiter-lend";
+import { installJupiterEarnCommands } from "./cmds/jupiter-earn";
+import { installJupiterBorrowCommands } from "./cmds/jupiter-borrow";
 import { installInvestCommands } from "./cmds/invest";
 import { installAltCommands } from "./cmds/alt";
 import { installStakeCommands } from "./cmds/stake";

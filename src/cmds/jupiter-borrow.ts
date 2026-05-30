@@ -1,12 +1,4 @@
-import { BN } from "@coral-xyz/anchor";
-import {
-  fetchMintAndTokenProgram,
-  getFTokenMintPda,
-  JUPITER_BORROW_PROTOCOL,
-  JUPITER_EARN_PROTOCOL,
-  JupiterBorrowPolicy,
-  JupiterEarnPolicy,
-} from "@glamsystems/glam-sdk";
+import { JupiterBorrowPolicy } from "@glamsystems/glam-sdk";
 import { PublicKey } from "@solana/web3.js";
 import { type Command } from "commander";
 
@@ -22,229 +14,6 @@ import {
   validatePublicKey,
 } from "../utils";
 
-async function fetchEarnPolicy(
-  context: CliContext,
-): Promise<JupiterEarnPolicy | null> {
-  return context.glamClient.fetchProtocolPolicy(
-    context.glamClient.extJupiterProgram.programId,
-    JUPITER_EARN_PROTOCOL,
-    JupiterEarnPolicy,
-  );
-}
-
-async function fetchBorrowPolicy(
-  context: CliContext,
-): Promise<JupiterBorrowPolicy | null> {
-  return context.glamClient.fetchProtocolPolicy(
-    context.glamClient.extJupiterProgram.programId,
-    JUPITER_BORROW_PROTOCOL,
-    JupiterBorrowPolicy,
-  );
-}
-
-async function setEarnPolicy(context: CliContext, policy: JupiterEarnPolicy) {
-  return context.glamClient.access.setProtocolPolicy(
-    context.glamClient.extJupiterProgram.programId,
-    JUPITER_EARN_PROTOCOL,
-    policy.encode(),
-    context.txOptions,
-  );
-}
-
-async function setBorrowPolicy(
-  context: CliContext,
-  policy: JupiterBorrowPolicy,
-) {
-  return context.glamClient.access.setProtocolPolicy(
-    context.glamClient.extJupiterProgram.programId,
-    JUPITER_BORROW_PROTOCOL,
-    policy.encode(),
-    context.txOptions,
-  );
-}
-
-export function installJupiterEarnCommands(
-  earnProgram: Command,
-  context: CliContext,
-) {
-  earnProgram
-    .command("view-policy")
-    .description("View Jupiter Lend earn policy")
-    .action(async () => {
-      const policy = await fetchEarnPolicy(context);
-      if (!policy) {
-        console.log("No policy found");
-        return;
-      }
-      printPubkeyList("Earn tokens allowlist", policy.mintsAllowlist);
-    });
-
-  earnProgram
-    .command("allowlist-token")
-    .alias("allowlist-mint")
-    .argument("<token>", "Token mint address or symbol")
-    .option("-y, --yes", "Skip confirmation prompt", false)
-    .description("Add a token to the earn allowlist")
-    .action(async (tokenInput: string, options: { yes?: boolean }) => {
-      const token = await resolveTokenPublicKey(context.glamClient, tokenInput);
-      const policy =
-        (await fetchEarnPolicy(context)) ?? new JupiterEarnPolicy([]);
-      if (policy.mintsAllowlist.find((m) => m.equals(token))) {
-        console.error(`Token ${token} is already in the earn allowlist`);
-        process.exit(1);
-      }
-      policy.mintsAllowlist.push(token);
-      await executeTxWithErrorHandling(
-        () => setEarnPolicy(context, policy),
-        {
-          skip: options?.yes ?? false,
-          message: `Confirm adding token ${token} to Jupiter Earn allowlist`,
-        },
-        (txSig) => `Token ${token} added to earn allowlist: ${txSig}`,
-      );
-    });
-
-  earnProgram
-    .command("remove-token")
-    .alias("remove-mint")
-    .argument("<token>", "Token mint address or symbol")
-    .option("-y, --yes", "Skip confirmation prompt", false)
-    .description("Remove a token from the earn allowlist")
-    .action(async (tokenInput: string, options: { yes?: boolean }) => {
-      const token = await resolveTokenPublicKey(context.glamClient, tokenInput);
-      const policy = await fetchEarnPolicy(context);
-      if (!policy) {
-        console.error("No policy found");
-        process.exit(1);
-      }
-      if (!policy.mintsAllowlist.find((m) => m.equals(token))) {
-        console.error("Token not in earn allowlist. Removal not needed.");
-        process.exit(1);
-      }
-      policy.mintsAllowlist = policy.mintsAllowlist.filter(
-        (m) => !m.equals(token),
-      );
-      await executeTxWithErrorHandling(
-        () => setEarnPolicy(context, policy),
-        {
-          skip: options?.yes ?? false,
-          message: `Confirm removing token ${token} from Jupiter Earn allowlist`,
-        },
-        (txSig) => `Token ${token} removed from earn allowlist: ${txSig}`,
-      );
-    });
-
-  earnProgram
-    .command("deposit")
-    .argument("<amount>", "UI amount of underlying to deposit")
-    .argument("<token>", "Token mint or symbol")
-    .option(
-      "--min-out <amount>",
-      "Minimum fToken amount to receive (defaults to 0)",
-    )
-    .option("-y, --yes", "Skip confirmation prompt", false)
-    .description("Deposit to Jupiter Earn")
-    .action(
-      async (
-        amount: string,
-        token: string,
-        options: {
-          minOut?: string;
-          yes?: boolean;
-        },
-      ) => {
-        const tokenInfo = await resolveTokenMint(context.glamClient, token);
-        const mint = new PublicKey(tokenInfo.address);
-        const amountBN = parsePositiveUiAmount(
-          amount,
-          tokenInfo.decimals,
-          "amount",
-        );
-
-        const { mint: fTokenMint } = await fetchMintAndTokenProgram(
-          context.glamClient.connection,
-          getFTokenMintPda(mint),
-        );
-        const minAmountOut = options.minOut
-          ? parsePositiveUiAmount(
-              options.minOut,
-              fTokenMint.decimals,
-              "min-out",
-            )
-          : new BN(0);
-        await executeTxWithErrorHandling(
-          () =>
-            context.glamClient.jupiterEarn.deposit(
-              mint,
-              amountBN,
-              minAmountOut,
-              context.txOptions,
-            ),
-          {
-            skip: options.yes ?? false,
-            message: `Confirm Jupiter Earn deposit ${amount} ${token}`,
-          },
-          (txSig) => `Jupiter Earn deposit of ${amount} ${token}: ${txSig}`,
-        );
-      },
-    );
-
-  earnProgram
-    .command("withdraw")
-    .argument("<amount>", "UI amount of underlying token to withdraw")
-    .argument("<token>", "Token mint or symbol of token to withdraw")
-    .option(
-      "--max-shares <amount>",
-      "Max fTokens to burn (UI units; defaults to u64::MAX)",
-    )
-    .option("-y, --yes", "Skip confirmation prompt", false)
-    .description("Withdraw from Jupiter Earn")
-    .action(
-      async (
-        amount: string,
-        token: string,
-        options: {
-          maxShares?: string;
-          yes?: boolean;
-        },
-      ) => {
-        const tokenInfo = await resolveTokenMint(context.glamClient, token);
-        const mint = new PublicKey(tokenInfo.address);
-        const amountBN = parsePositiveUiAmount(
-          amount,
-          tokenInfo.decimals,
-          "amount",
-        );
-
-        const { mint: fTokenMint } = await fetchMintAndTokenProgram(
-          context.glamClient.connection,
-          getFTokenMintPda(mint),
-        );
-        const maxSharesBurn = options.maxShares
-          ? parsePositiveUiAmount(
-              options.maxShares,
-              fTokenMint.decimals,
-              "max-shares",
-            )
-          : undefined;
-        await executeTxWithErrorHandling(
-          () =>
-            context.glamClient.jupiterEarn.withdraw(
-              mint,
-              amountBN,
-              maxSharesBurn,
-              context.txOptions,
-            ),
-          {
-            skip: options.yes ?? false,
-            message: `Confirm Jupiter Earn withdraw ${amount} ${token}`,
-          },
-          (txSig) => `Jupiter Earn withdraw of ${amount} ${token}: ${txSig}`,
-        );
-      },
-    );
-}
-
 export function installJupiterBorrowCommands(
   borrowProgram: Command,
   context: CliContext,
@@ -253,10 +22,10 @@ export function installJupiterBorrowCommands(
     .command("view-policy")
     .description("View Jupiter Lend borrow policy")
     .action(async () => {
-      const policy = await fetchBorrowPolicy(context);
+      const policy = await context.glamClient.jupiterBorrow.fetchPolicy();
       if (!policy) {
         console.log("No policy found");
-        return;
+        process.exit(1);
       }
       printPubkeyList("Borrow vaults allowlist", policy.vaultsAllowlist);
       printPubkeyList(
@@ -327,7 +96,7 @@ export function installJupiterBorrowCommands(
     .description("Add a borrow vault to the allowlist")
     .action(async (vault: PublicKey, options: { yes?: boolean }) => {
       const policy =
-        (await fetchBorrowPolicy(context)) ??
+        (await context.glamClient.jupiterBorrow.fetchPolicy()) ??
         new JupiterBorrowPolicy([], [], []);
       if (policy.vaultsAllowlist.find((v) => v.equals(vault))) {
         console.error(`Vault ${vault} is already in the borrow allowlist`);
@@ -335,7 +104,8 @@ export function installJupiterBorrowCommands(
       }
       policy.vaultsAllowlist.push(vault);
       await executeTxWithErrorHandling(
-        () => setBorrowPolicy(context, policy),
+        () =>
+          context.glamClient.jupiterBorrow.setPolicy(policy, context.txOptions),
         {
           skip: options?.yes ?? false,
           message: `Confirm adding vault ${vault} to Jupiter Lend borrow allowlist`,
@@ -354,7 +124,7 @@ export function installJupiterBorrowCommands(
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Remove a borrow vault from the allowlist")
     .action(async (vault: PublicKey, options: { yes?: boolean }) => {
-      const policy = await fetchBorrowPolicy(context);
+      const policy = await context.glamClient.jupiterBorrow.fetchPolicy();
       if (!policy) {
         console.error("No policy found");
         process.exit(1);
@@ -367,7 +137,8 @@ export function installJupiterBorrowCommands(
         (v) => !v.equals(vault),
       );
       await executeTxWithErrorHandling(
-        () => setBorrowPolicy(context, policy),
+        () =>
+          context.glamClient.jupiterBorrow.setPolicy(policy, context.txOptions),
         {
           skip: options?.yes ?? false,
           message: `Confirm removing vault ${vault} from Jupiter Lend borrow allowlist`,
@@ -384,7 +155,7 @@ export function installJupiterBorrowCommands(
     .action(async (tokenInput: string, options: { yes?: boolean }) => {
       const token = await resolveTokenPublicKey(context.glamClient, tokenInput);
       const policy =
-        (await fetchBorrowPolicy(context)) ??
+        (await context.glamClient.jupiterBorrow.fetchPolicy()) ??
         new JupiterBorrowPolicy([], [], []);
       if (policy.collateralMintsAllowlist.find((m) => m.equals(token))) {
         console.error(
@@ -394,7 +165,8 @@ export function installJupiterBorrowCommands(
       }
       policy.collateralMintsAllowlist.push(token);
       await executeTxWithErrorHandling(
-        () => setBorrowPolicy(context, policy),
+        () =>
+          context.glamClient.jupiterBorrow.setPolicy(policy, context.txOptions),
         {
           skip: options?.yes ?? false,
           message: `Confirm adding collateral token ${token} to Jupiter Lend borrow allowlist`,
@@ -411,7 +183,7 @@ export function installJupiterBorrowCommands(
     .description("Remove a collateral token from the borrow allowlist")
     .action(async (tokenInput: string, options: { yes?: boolean }) => {
       const token = await resolveTokenPublicKey(context.glamClient, tokenInput);
-      const policy = await fetchBorrowPolicy(context);
+      const policy = await context.glamClient.jupiterBorrow.fetchPolicy();
       if (!policy) {
         console.error("No policy found");
         process.exit(1);
@@ -426,7 +198,8 @@ export function installJupiterBorrowCommands(
         (m) => !m.equals(token),
       );
       await executeTxWithErrorHandling(
-        () => setBorrowPolicy(context, policy),
+        () =>
+          context.glamClient.jupiterBorrow.setPolicy(policy, context.txOptions),
         {
           skip: options?.yes ?? false,
           message: `Confirm removing collateral token ${token} from Jupiter Lend borrow allowlist`,
@@ -445,7 +218,7 @@ export function installJupiterBorrowCommands(
     .action(async (tokenInput: string, options: { yes?: boolean }) => {
       const token = await resolveTokenPublicKey(context.glamClient, tokenInput);
       const policy =
-        (await fetchBorrowPolicy(context)) ??
+        (await context.glamClient.jupiterBorrow.fetchPolicy()) ??
         new JupiterBorrowPolicy([], [], []);
       if (policy.borrowMintsAllowlist.find((m) => m.equals(token))) {
         console.error(
@@ -455,7 +228,8 @@ export function installJupiterBorrowCommands(
       }
       policy.borrowMintsAllowlist.push(token);
       await executeTxWithErrorHandling(
-        () => setBorrowPolicy(context, policy),
+        () =>
+          context.glamClient.jupiterBorrow.setPolicy(policy, context.txOptions),
         {
           skip: options?.yes ?? false,
           message: `Confirm adding borrow token ${token} to Jupiter Lend borrow allowlist`,
@@ -472,7 +246,7 @@ export function installJupiterBorrowCommands(
     .description("Remove a borrowable debt token from the allowlist")
     .action(async (tokenInput: string, options: { yes?: boolean }) => {
       const token = await resolveTokenPublicKey(context.glamClient, tokenInput);
-      const policy = await fetchBorrowPolicy(context);
+      const policy = await context.glamClient.jupiterBorrow.fetchPolicy();
       if (!policy) {
         console.error("No policy found");
         process.exit(1);
@@ -487,7 +261,8 @@ export function installJupiterBorrowCommands(
         (m) => !m.equals(token),
       );
       await executeTxWithErrorHandling(
-        () => setBorrowPolicy(context, policy),
+        () =>
+          context.glamClient.jupiterBorrow.setPolicy(policy, context.txOptions),
         {
           skip: options?.yes ?? false,
           message: `Confirm removing borrow token ${token} from Jupiter Lend borrow allowlist`,

@@ -1044,6 +1044,10 @@ export function installPhoenixCommands(phoenix: Command, context: CliContext) {
     .description("View Phoenix integration policy")
     .action(async () => {
       const phoenixPolicy = await context.glamClient.phoenix.fetchPolicy();
+      if (!phoenixPolicy) {
+        console.log("No Phoenix policy found");
+        process.exit(1);
+      }
       console.log("Phoenix policy:");
       printPhoenixPolicy(phoenixPolicy);
     });

@@ -246,9 +246,12 @@ function installLayerzeroOftCommands(program: Command, context: CliContext) {
     .command("view-policy")
     .description("View the LayerZero OFT route policy")
     .action(async () => {
-      printLayerzeroOftPolicy(
-        await context.glamClient.bridge.fetchLayerzeroOftPolicy(),
-      );
+      const policy = await context.glamClient.bridge.fetchPolicy();
+      if (!policy) {
+        console.log("No LayerZero OFT policy found.");
+        process.exit(1);
+      }
+      printLayerzeroOftPolicy(policy);
     });
 
   program

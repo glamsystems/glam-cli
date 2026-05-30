@@ -15,11 +15,7 @@ export function installTransferCommands(program: Command, context: CliContext) {
     .command("view-policy")
     .description("View token transfer policy")
     .action(async () => {
-      const tokenTransferPolicy = await context.glamClient.fetchProtocolPolicy(
-        context.glamClient.extSplProgram.programId,
-        0b01,
-        TransferPolicy,
-      );
+      const tokenTransferPolicy = await context.glamClient.vault.fetchPolicy();
       if (!tokenTransferPolicy) {
         console.error("Token transfer policy not found.");
         process.exit(1);
@@ -41,11 +37,8 @@ export function installTransferCommands(program: Command, context: CliContext) {
     .description("Add a destination address to the token transfer allowlist")
     .action(async (pubkey: PublicKey, options) => {
       const policy =
-        (await context.glamClient.fetchProtocolPolicy(
-          context.glamClient.extSplProgram.programId,
-          0b01,
-          TransferPolicy,
-        )) ?? new TransferPolicy([]);
+        (await context.glamClient.vault.fetchPolicy()) ??
+        new TransferPolicy([]);
       if (policy.allowlist.find((p) => p.equals(pubkey))) {
         console.error(
           `Destination address ${pubkey} is already in the allowlist.`,
@@ -55,13 +48,7 @@ export function installTransferCommands(program: Command, context: CliContext) {
 
       policy.allowlist.push(pubkey);
       await executeTxWithErrorHandling(
-        () =>
-          context.glamClient.access.setProtocolPolicy(
-            context.glamClient.extSplProgram.programId,
-            0b01,
-            policy.encode(),
-            context.txOptions,
-          ),
+        () => context.glamClient.vault.setPolicy(policy, context.txOptions),
         {
           skip: options?.yes,
           message: `Confirm adding destination ${pubkey} to allowlist?`,
@@ -82,11 +69,7 @@ export function installTransferCommands(program: Command, context: CliContext) {
       "Remove a destination address from the token transfer allowlist",
     )
     .action(async (pubkey: PublicKey, options) => {
-      const policy = await context.glamClient.fetchProtocolPolicy(
-        context.glamClient.extSplProgram.programId,
-        0b01,
-        TransferPolicy,
-      );
+      const policy = await context.glamClient.vault.fetchPolicy();
       if (!policy) {
         console.error("Token transfer policy not found.");
         process.exit(1);
@@ -94,13 +77,7 @@ export function installTransferCommands(program: Command, context: CliContext) {
 
       policy.allowlist = policy.allowlist.filter((p) => !p.equals(pubkey));
       await executeTxWithErrorHandling(
-        () =>
-          context.glamClient.access.setProtocolPolicy(
-            context.glamClient.extSplProgram.programId,
-            0b01,
-            policy.encode(),
-            context.txOptions,
-          ),
+        () => context.glamClient.vault.setPolicy(policy, context.txOptions),
         {
           skip: options?.yes,
           message: `Confirm removing destination ${pubkey} from allowlist?`,

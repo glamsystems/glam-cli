@@ -24,14 +24,10 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
     .command("view-policy")
     .description("View Kamino lending policy")
     .action(async () => {
-      const policy = await context.glamClient.fetchProtocolPolicy(
-        context.glamClient.extKaminoProgram.programId,
-        0b01,
-        KaminoLendingPolicy,
-      );
+      const policy = await context.glamClient.kaminoLending.fetchPolicy();
       if (!policy) {
         console.log("No policy found");
-        return;
+        process.exit(1);
       }
       printPubkeyList(
         "Kamino lending markets allowlist",
@@ -50,11 +46,8 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
     .description("Add a market to the allowlist")
     .action(async (market, options) => {
       const policy =
-        (await context.glamClient.fetchProtocolPolicy(
-          context.glamClient.extKaminoProgram.programId,
-          0b01,
-          KaminoLendingPolicy,
-        )) ?? new KaminoLendingPolicy([], []);
+        (await context.glamClient.kaminoLending.fetchPolicy()) ??
+        new KaminoLendingPolicy([], []);
       if (policy.marketsAllowlist.find((m) => m.equals(market))) {
         console.error(`Kamino market ${market} is already in the allowlist`);
         process.exit(1);
@@ -63,12 +56,7 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
       policy.marketsAllowlist.push(market);
       await executeTxWithErrorHandling(
         () =>
-          context.glamClient.access.setProtocolPolicy(
-            context.glamClient.extKaminoProgram.programId,
-            0b01,
-            policy.encode(),
-            context.txOptions,
-          ),
+          context.glamClient.kaminoLending.setPolicy(policy, context.txOptions),
         {
           skip: options?.yes,
           message: `Confirm adding market ${market}`,
@@ -83,11 +71,7 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Remove a market from the allowlist")
     .action(async (market, options) => {
-      const policy = await context.glamClient.fetchProtocolPolicy(
-        context.glamClient.extKaminoProgram.programId,
-        0b01,
-        KaminoLendingPolicy,
-      );
+      const policy = await context.glamClient.kaminoLending.fetchPolicy();
       if (!policy) {
         console.error("No policy found");
         process.exit(1);
@@ -102,12 +86,7 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
       );
       await executeTxWithErrorHandling(
         () =>
-          context.glamClient.access.setProtocolPolicy(
-            context.glamClient.extKaminoProgram.programId,
-            0b01,
-            policy.encode(),
-            context.txOptions,
-          ),
+          context.glamClient.kaminoLending.setPolicy(policy, context.txOptions),
         {
           skip: options?.yes,
           message: `Confirm removing market ${market}`,
@@ -125,11 +104,8 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
     .action(async (tokenInput: string, options) => {
       const token = await resolveTokenPublicKey(context.glamClient, tokenInput);
       const policy =
-        (await context.glamClient.fetchProtocolPolicy(
-          context.glamClient.extKaminoProgram.programId,
-          0b01,
-          KaminoLendingPolicy,
-        )) ?? new KaminoLendingPolicy([], []);
+        (await context.glamClient.kaminoLending.fetchPolicy()) ??
+        new KaminoLendingPolicy([], []);
 
       if (policy.borrowAllowlist.find((a) => a.equals(token))) {
         console.error(`Borrowable token ${token} is already in the allowlist`);
@@ -139,12 +115,7 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
       policy.borrowAllowlist.push(token);
       await executeTxWithErrorHandling(
         () =>
-          context.glamClient.access.setProtocolPolicy(
-            context.glamClient.extKaminoProgram.programId,
-            0b01,
-            policy.encode(),
-            context.txOptions,
-          ),
+          context.glamClient.kaminoLending.setPolicy(policy, context.txOptions),
         {
           skip: options?.yes,
           message: `Confirm adding borrowable token ${token}`,
@@ -161,11 +132,7 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
     .description("Remove a borrowable token from the allowlist")
     .action(async (tokenInput: string, options) => {
       const token = await resolveTokenPublicKey(context.glamClient, tokenInput);
-      const policy = await context.glamClient.fetchProtocolPolicy(
-        context.glamClient.extKaminoProgram.programId,
-        0b01,
-        KaminoLendingPolicy,
-      );
+      const policy = await context.glamClient.kaminoLending.fetchPolicy();
       if (!policy) {
         console.error("No policy found");
         process.exit(1);
@@ -180,12 +147,7 @@ export function installKaminoLendCommands(klend: Command, context: CliContext) {
       );
       await executeTxWithErrorHandling(
         () =>
-          context.glamClient.access.setProtocolPolicy(
-            context.glamClient.extKaminoProgram.programId,
-            0b01,
-            policy.encode(),
-            context.txOptions,
-          ),
+          context.glamClient.kaminoLending.setPolicy(policy, context.txOptions),
         {
           skip: options?.yes,
           message: `Confirm removing borrowable token ${token}`,
