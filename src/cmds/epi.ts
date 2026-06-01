@@ -1,4 +1,9 @@
 import { BN } from "@coral-xyz/anchor";
+import {
+  HYPEREVM_NAV_ADAPTER_V2_EMITTER,
+  evmAddressToBytes20,
+  parseWormholeSignedVaa,
+} from "@glamsystems/glam-sdk";
 import { PublicKey } from "@solana/web3.js";
 import { Command } from "commander";
 import Decimal from "decimal.js";
@@ -30,6 +35,45 @@ type UpsertPositionOptions = {
   yes: boolean;
 };
 
+type UpsertWormholePositionOptions = {
+  freshnessSecs?: string;
+  submitAllow: PublicKey[];
+  validateAllow: PublicKey[];
+  configureAllow: PublicKey[];
+  disabled?: boolean;
+  yes: boolean;
+};
+
+type UpsertWormholeConfigOptions = {
+  emitterChain: string;
+  emitterAddress: string;
+  payloadVersion: string;
+  payloadType: string;
+  maxAgeSeconds: string;
+  yes: boolean;
+};
+
+type UpsertHyperliquidConfigOptions = {
+  hyperliquidAccount: string;
+  accountMarginSummaryPrecompile: string;
+  spotBalancePrecompile: string;
+  perpDexIndex: string;
+  usdcSpotToken: string;
+  yes: boolean;
+};
+
+type SubmitWormholeOptions = {
+  maxSignaturesPerPost: string;
+  guardianSet?: string;
+  wormholeCoreBridgeProgram?: string;
+  wormholeVerifyVaaShimProgram?: string;
+  yes: boolean;
+};
+
+type RemovePositionOptions = {
+  yes: boolean;
+};
+
 type ValidateOptions = {
   yes: boolean;
 };
@@ -38,6 +82,18 @@ type ParsedPosition = {
   positionId: number[];
   positionLabel: string;
 };
+
+const HYPEREVM_WORMHOLE_CHAIN_ID = 47;
+const HYPERLIQUID_NAV_PAYLOAD_VERSION = 2;
+const HYPERLIQUID_NAV_PAYLOAD_TYPE = 2;
+const ACCOUNT_MARGIN_SUMMARY_PRECOMPILE =
+  "0x000000000000000000000000000000000000080F";
+const SPOT_BALANCE_PRECOMPILE =
+  "0x0000000000000000000000000000000000000801";
+const usdDenomination = {
+  denom: { usd: {} },
+  mint: PublicKey.default,
+} as const;
 
 function parseHexOrBase64Bytes(value: string, label: string): Buffer {
   const normalized = value.trim();
@@ -52,6 +108,69 @@ function parseHexOrBase64Bytes(value: string, label: string): Buffer {
   }
 
   return bytes;
+}
+
+function parseFixedBytes(value: string, length: number, label: string): number[] {
+  const bytes = parseHexOrBase64Bytes(value, label);
+  if (bytes.length !== length) {
+    throw new Error(`${label} must be exactly ${length} bytes`);
+  }
+  return Array.from(bytes);
+}
+
+function parseBytes20(value: string, label: string): number[] {
+  try {
+    return evmAddressToBytes20(value);
+  } catch {
+    return parseFixedBytes(value, 20, label);
+  }
+}
+
+function parseWormholeEmitterAddress(value: string): number[] {
+  const bytes = parseHexOrBase64Bytes(value, "--emitter-address");
+  if (bytes.length === 32) {
+    return Array.from(bytes);
+  }
+  if (bytes.length === 20) {
+    return [...new Array(12).fill(0), ...Array.from(bytes)];
+  }
+
+  throw new Error("--emitter-address must be either 20 or 32 bytes");
+}
+
+function validateHyperliquidSignedVaa(
+  signedVaa: Buffer,
+  positionId: number[],
+) {
+  const parsed = parseWormholeSignedVaa(signedVaa);
+  if (parsed.vaaBody.length < 51 + 38) {
+    throw new Error("signed VAA body is too short for a GLAM Wormhole payload");
+  }
+
+  const payload = parsed.vaaBody.subarray(51);
+  const magic = payload.subarray(0, 4).toString("ascii");
+  if (magic !== "GLAM") {
+    throw new Error(`Unexpected Wormhole payload magic: ${magic}`);
+  }
+
+  const version = payload.readUInt8(4);
+  const payloadType = payload.readUInt8(5);
+  if (
+    version !== HYPERLIQUID_NAV_PAYLOAD_VERSION ||
+    payloadType !== HYPERLIQUID_NAV_PAYLOAD_TYPE
+  ) {
+    throw new Error(
+      `Unsupported GLAM Wormhole payload version/type: ${version}/${payloadType}`,
+    );
+  }
+
+  const payloadPositionId = payload.subarray(6, 38);
+  const expectedPositionId = Buffer.from(positionId);
+  if (!payloadPositionId.equals(expectedPositionId)) {
+    throw new Error(
+      `VAA position id ${payloadPositionId.toString("hex")} does not match CLI position ${expectedPositionId.toString("hex")}`,
+    );
+  }
 }
 
 function encodePositionIdString(value: string): number[] {
@@ -139,6 +258,18 @@ function parseUnsignedNumber(value: string, label: string): number {
     throw new Error(`${label} must be a non-negative integer`);
   }
   return Number(normalized);
+}
+
+function parseBoundedUnsignedNumber(
+  value: string,
+  label: string,
+  max: number,
+): number {
+  const parsed = parseUnsignedNumber(value, label);
+  if (parsed > max) {
+    throw new Error(`${label} must be at most ${max}`);
+  }
+  return parsed;
 }
 
 function parseSignedUiAmount(
@@ -293,6 +424,241 @@ export function installEpiCommands(program: Command, context: CliContext) {
     });
 
   program
+    .command("upsert-wormhole-position")
+    .description(
+      "Create or update a Wormhole-sourced USD valued external position",
+    )
+    .argument(
+      "<position>",
+      "tracked external position pubkey, UTF-8 string id, or 32-byte encoded position id",
+    )
+    .option(
+      "--freshness-secs <u32>",
+      "freshness override in seconds, defaults to 0",
+      "0",
+    )
+    .option(
+      "--submit-allow <pubkey>",
+      "repeatable submit allowlist entry",
+      collectPublicKeys,
+      [],
+    )
+    .option(
+      "--validate-allow <pubkey>",
+      "repeatable validate allowlist entry",
+      collectPublicKeys,
+      [],
+    )
+    .option(
+      "--configure-allow <pubkey>",
+      "repeatable configure allowlist entry",
+      collectPublicKeys,
+      [],
+    )
+    .option("--disabled", "upsert with enabled=false", false)
+    .option("-y, --yes", "Skip confirmation", false)
+    .action(
+      async (position: string, options: UpsertWormholePositionOptions) => {
+        const { positionId, positionLabel } = parsePosition(position);
+        const freshnessOverrideSecs = parseUnsignedNumber(
+          options.freshnessSecs || "0",
+          "--freshness-secs",
+        );
+
+        await executeTxWithErrorHandling(
+          () =>
+            context.glamClient.epi.upsertExternalPosition(
+              {
+                positionId,
+                positionType: { valued: {} },
+                sourceType: { wormhole: {} },
+                denomination: usdDenomination,
+                enabled: !options.disabled,
+                freshnessOverrideSecs,
+                submitAllowlist: options.submitAllow || [],
+                validateAllowlist: options.validateAllow || [],
+                configureAllowlist: options.configureAllow || [],
+              },
+              context.txOptions,
+            ),
+          {
+            skip: options.yes,
+            message: `Confirm upserting Wormhole EPI position ${positionLabel} with denomination USD?`,
+          },
+          (txSig) => `Wormhole EPI position upserted: ${txSig}`,
+        );
+      },
+    );
+
+  program
+    .command("upsert-wormhole-config")
+    .description("Create or update the generic Wormhole observation config")
+    .argument(
+      "<position>",
+      "tracked external position pubkey, UTF-8 string id, or 32-byte encoded position id",
+    )
+    .option(
+      "--emitter-chain <u16>",
+      "Wormhole emitter chain id",
+      String(HYPEREVM_WORMHOLE_CHAIN_ID),
+    )
+    .option(
+      "--emitter-address <bytes>",
+      "Wormhole emitter address as 32 bytes, or EVM adapter address as 20 bytes",
+      HYPEREVM_NAV_ADAPTER_V2_EMITTER,
+    )
+    .option(
+      "--payload-version <u8>",
+      "Wormhole payload version",
+      String(HYPERLIQUID_NAV_PAYLOAD_VERSION),
+    )
+    .option(
+      "--payload-type <u8>",
+      "Wormhole payload type",
+      String(HYPERLIQUID_NAV_PAYLOAD_TYPE),
+    )
+    .option("--max-age-seconds <u32>", "observation freshness window", "90")
+    .option("-y, --yes", "Skip confirmation", false)
+    .action(async (position: string, options: UpsertWormholeConfigOptions) => {
+      const { positionId, positionLabel } = parsePosition(position);
+      const emitterChain = parseBoundedUnsignedNumber(
+        options.emitterChain,
+        "--emitter-chain",
+        0xffff,
+      );
+      const payloadVersion = parseBoundedUnsignedNumber(
+        options.payloadVersion,
+        "--payload-version",
+        0xff,
+      );
+      const payloadType = parseBoundedUnsignedNumber(
+        options.payloadType,
+        "--payload-type",
+        0xff,
+      );
+      const maxAgeSeconds = parseBoundedUnsignedNumber(
+        options.maxAgeSeconds,
+        "--max-age-seconds",
+        0xffffffff,
+      );
+
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.epi.upsertExternalPositionWormholeConfig(
+            {
+              positionId,
+              emitterChain,
+              emitterAddress: parseWormholeEmitterAddress(
+                options.emitterAddress,
+              ),
+              payloadVersion,
+              payloadType,
+              maxAgeSeconds,
+            },
+            context.txOptions,
+          ),
+        {
+          skip: options.yes,
+          message: `Confirm upserting Wormhole config for ${positionLabel}?`,
+        },
+        (txSig) => `Wormhole config upserted: ${txSig}`,
+      );
+    });
+
+  program
+    .command("remove-position")
+    .description("Remove a tracked external position from EPI")
+    .argument(
+      "<position>",
+      "tracked external position pubkey, UTF-8 string id, or 32-byte encoded position id",
+    )
+    .option("-y, --yes", "Skip confirmation", false)
+    .action(async (position: string, options: RemovePositionOptions) => {
+      const { positionId, positionLabel } = parsePosition(position);
+
+      await executeTxWithErrorHandling(
+        () =>
+          context.glamClient.epi.removeExternalPosition(
+            positionId,
+            context.txOptions,
+          ),
+        {
+          skip: options.yes,
+          message: `Confirm removing EPI position ${positionLabel}?`,
+        },
+        (txSig) => `EPI position removed: ${txSig}`,
+      );
+    });
+
+  program
+    .command("upsert-hyperliquid-config")
+    .description("Create or update the Hyperliquid Wormhole payload config")
+    .argument(
+      "<position>",
+      "tracked external position pubkey, UTF-8 string id, or 32-byte encoded position id",
+    )
+    .requiredOption(
+      "--hyperliquid-account <address>",
+      "Hyperliquid account as a 20-byte EVM address",
+    )
+    .option(
+      "--account-margin-summary-precompile <address>",
+      "HyperEVM account margin summary precompile",
+      ACCOUNT_MARGIN_SUMMARY_PRECOMPILE,
+    )
+    .option(
+      "--spot-balance-precompile <address>",
+      "HyperEVM spot balance precompile",
+      SPOT_BALANCE_PRECOMPILE,
+    )
+    .option("--perp-dex-index <u32>", "Hyperliquid perp DEX index", "0")
+    .option("--usdc-spot-token <u64>", "Hyperliquid USDC spot token", "0")
+    .option("-y, --yes", "Skip confirmation", false)
+    .action(
+      async (position: string, options: UpsertHyperliquidConfigOptions) => {
+        const { positionId, positionLabel } = parsePosition(position);
+        const perpDexIndex = parseBoundedUnsignedNumber(
+          options.perpDexIndex,
+          "--perp-dex-index",
+          0xffffffff,
+        );
+        const usdcSpotToken = parseUnsignedInteger(
+          options.usdcSpotToken,
+          "--usdc-spot-token",
+        );
+
+        await executeTxWithErrorHandling(
+          () =>
+            context.glamClient.epi.upsertExternalPositionWormholeHyperliquidConfig(
+              {
+                positionId,
+                hyperliquidAccount: parseBytes20(
+                  options.hyperliquidAccount,
+                  "--hyperliquid-account",
+                ),
+                accountMarginSummaryPrecompile: parseBytes20(
+                  options.accountMarginSummaryPrecompile,
+                  "--account-margin-summary-precompile",
+                ),
+                spotBalancePrecompile: parseBytes20(
+                  options.spotBalancePrecompile,
+                  "--spot-balance-precompile",
+                ),
+                perpDexIndex,
+                usdcSpotToken,
+              },
+              context.txOptions,
+            ),
+          {
+            skip: options.yes,
+            message: `Confirm upserting Hyperliquid Wormhole config for ${positionLabel}?`,
+          },
+          (txSig) => `Hyperliquid Wormhole config upserted: ${txSig}`,
+        );
+      },
+    );
+
+  program
     .command("submit")
     .description(
       "Submit an observation for a tracked external position or transfer record PDA",
@@ -351,6 +717,85 @@ export function installEpiCommands(program: Command, context: CliContext) {
             message: `Confirm submitting observation for ${positionLabel}: ${amount} ${label}?`,
           },
           (txSig) => `Observation submitted: ${txSig}`,
+        );
+      },
+    );
+
+  program
+    .command("submit-wormhole")
+    .description("Submit a Wormhole Guardian-verified external observation")
+    .argument(
+      "<position>",
+      "tracked external position pubkey, UTF-8 string id, or 32-byte encoded position id",
+    )
+    .argument("<signed-vaa>", "signed VAA as hex or base64")
+    .option(
+      "--max-signatures-per-post <count>",
+      "maximum Guardian signatures per post-signatures transaction",
+      "13",
+    )
+    .option(
+      "--guardian-set <pubkey>",
+      "override GuardianSet account; normally derived from the VAA",
+    )
+    .option(
+      "--wormhole-core-bridge-program <pubkey>",
+      "override Wormhole Core Bridge program for GuardianSet PDA derivation",
+    )
+    .option(
+      "--wormhole-verify-vaa-shim-program <pubkey>",
+      "override Wormhole Verification Shim program",
+    )
+    .option("-y, --yes", "Skip confirmation", false)
+    .action(
+      async (
+        position: string,
+        signedVaa: string,
+        options: SubmitWormholeOptions,
+      ) => {
+        const { positionId, positionLabel } = parsePosition(position);
+        const maxSignaturesPerPost = parseUnsignedNumber(
+          options.maxSignaturesPerPost || "13",
+          "--max-signatures-per-post",
+        );
+        const signedVaaBytes = parseHexOrBase64Bytes(signedVaa, "signed-vaa");
+        validateHyperliquidSignedVaa(signedVaaBytes, positionId);
+
+        await executeTxWithErrorHandling(
+          async () => {
+            const result =
+              await context.glamClient.epi.submitExternalObservationWormhole(
+                {
+                  positionId,
+                  signedVaa: signedVaaBytes,
+                  guardianSet: options.guardianSet
+                    ? new PublicKey(options.guardianSet)
+                    : undefined,
+                  wormholeCoreBridgeProgram: options.wormholeCoreBridgeProgram
+                    ? new PublicKey(options.wormholeCoreBridgeProgram)
+                    : undefined,
+                  wormholeVerifyVaaShimProgram:
+                    options.wormholeVerifyVaaShimProgram
+                      ? new PublicKey(options.wormholeVerifyVaaShimProgram)
+                      : undefined,
+                  maxSignaturesPerPost,
+                },
+                context.txOptions,
+              );
+
+            return [
+              `Guardian signatures account: ${result.guardianSignatures.toBase58()} (closed in submit tx)`,
+              ...result.postSignatureTxs.map(
+                (txSig, index) => `Post signatures tx ${index + 1}: ${txSig}`,
+              ),
+              `Wormhole observation submitted: ${result.submitTx}`,
+            ].join("\n");
+          },
+          {
+            skip: options.yes,
+            message: `Confirm submitting Wormhole observation for ${positionLabel}?`,
+          },
+          (message) => message,
         );
       },
     );
