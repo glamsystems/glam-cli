@@ -363,6 +363,23 @@ export function fail(message: string): never {
   process.exit(1);
 }
 
+export function parseUnsignedNumber(
+  value: string,
+  label?: string,
+  max: number = Number.MAX_SAFE_INTEGER,
+): number {
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) {
+    fail(`${label} must be a non-negative integer`);
+  }
+
+  const parsed = Number(trimmed);
+  if (!Number.isSafeInteger(parsed) || parsed > max) {
+    fail(`${label ?? value} exceeds ${max}`);
+  }
+  return parsed;
+}
+
 type StagingOnlyContext = Pick<CliContext, "cliConfig" | "glamClient">;
 
 export function assertStagingOnlyVault(context?: StagingOnlyContext) {

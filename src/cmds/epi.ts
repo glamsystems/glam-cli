@@ -1,6 +1,9 @@
 import { BN } from "@coral-xyz/anchor";
 import {
   HYPEREVM_NAV_ADAPTER_V2_EMITTER,
+  U8_MAX,
+  U16_MAX,
+  U32_MAX,
   evmAddressToBytes20,
   parseWormholeSignedVaa,
 } from "@glamsystems/glam-sdk";
@@ -524,22 +527,22 @@ export function installEpiCommands(program: Command, context: CliContext) {
       const emitterChain = parseBoundedUnsignedNumber(
         options.emitterChain,
         "--emitter-chain",
-        0xffff,
+        U16_MAX,
       );
       const payloadVersion = parseBoundedUnsignedNumber(
         options.payloadVersion,
         "--payload-version",
-        0xff,
+        U8_MAX,
       );
       const payloadType = parseBoundedUnsignedNumber(
         options.payloadType,
         "--payload-type",
-        0xff,
+        U8_MAX,
       );
       const maxAgeSeconds = parseBoundedUnsignedNumber(
         options.maxAgeSeconds,
         "--max-age-seconds",
-        0xffffffff,
+        U32_MAX,
       );
 
       await executeTxWithErrorHandling(
@@ -620,7 +623,7 @@ export function installEpiCommands(program: Command, context: CliContext) {
         const perpDexIndex = parseBoundedUnsignedNumber(
           options.perpDexIndex,
           "--perp-dex-index",
-          0xffffffff,
+          U32_MAX,
         );
         const usdcSpotToken = parseUnsignedInteger(
           options.usdcSpotToken,

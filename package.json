@@ -34,7 +34,6 @@
   ],
   "dependencies": {
     "@glamsystems/glam-sdk": "1.0.13",
-    "@switchboard-xyz/common": "^3.0.0",
     "commander": "^11.1.0",
     "decimal.js": "^10.6.0",
     "inquirer": "^8.2.6"

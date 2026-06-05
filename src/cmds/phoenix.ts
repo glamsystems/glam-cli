@@ -12,6 +12,10 @@ import {
   type PhoenixSide,
   type PhoenixTicks,
   PhoenixPolicy,
+  U8_MAX,
+  U32_MAX,
+  U64_MAX_BIGINT,
+  U128_MAX_BIGINT,
   fetchMintAndTokenProgram,
 } from "@glamsystems/glam-sdk";
 import {
@@ -74,10 +78,6 @@ type VaultTokenBalance = {
   decimals: number;
 };
 
-const U8_MAX = 0xff;
-const U32_MAX = 0xffffffff;
-const U64_MAX_BIGINT = (1n << 64n) - 1n;
-const U128_MAX_BIGINT = (1n << 128n) - 1n;
 const MICRO_USD = 1_000_000n;
 
 const ORDER_SIDE_BID = 0;

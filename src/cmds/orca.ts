@@ -1,6 +1,9 @@
 import { BN } from "@coral-xyz/anchor";
 import {
   ORCA_WHIRLPOOLS_PROGRAM_ID,
+  U8_MAX,
+  U64_MAX_BN as U64_MAX,
+  U128_MAX_BN as U128_MAX,
   WSOL,
   WhirlpoolsPolicy,
   fetchMintAndTokenProgram,
@@ -38,9 +41,6 @@ const I32_MIN = -2_147_483_648;
 const I32_MAX = 2_147_483_647;
 const ORCA_MIN_TICK_INDEX = -443_636;
 const ORCA_MAX_TICK_INDEX = 443_636;
-const U8_MAX = 0xff;
-const U64_MAX = new BN("18446744073709551615");
-const U128_MAX = new BN("340282366920938463463374607431768211455");
 const TICK_ARRAY_SIZE = 88;
 const Q64 = 2n ** 64n;
 const Q96 = 2n ** 96n;
