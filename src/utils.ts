@@ -736,14 +736,21 @@ export function resolvePermissionNames(
   return resolved;
 }
 
+/**
+ * Resolves a token mint/symbol into a TokenListItem with metadata.
+ *
+ * @param glamClient
+ * @param mintOrSymbol
+ * @returns
+ */
 export async function resolveTokenMint(
   glamClient: GlamClient,
-  value: string, // mint address or symbol
+  mintOrSymbol: string, // mint address or symbol
 ): Promise<TokenListItem> {
   try {
     const tokenList = await glamClient.jupiterSwap.jupApi.fetchTokensList();
     const tokenInfo =
-      tokenList.getByMint(value) || tokenList.getBySymbol(value);
+      tokenList.getByMint(mintOrSymbol) || tokenList.getBySymbol(mintOrSymbol);
     if (tokenInfo) {
       return tokenInfo;
     }
@@ -752,7 +759,7 @@ export async function resolveTokenMint(
   // Not in the verified token list — if `value` is a valid mint address,
   // fall back to fetching decimals on-chain.
   try {
-    const mintPubkey = new PublicKey(value);
+    const mintPubkey = new PublicKey(mintOrSymbol);
     const { mint } = await fetchMintAndTokenProgram(
       glamClient.connection,
       mintPubkey,
@@ -768,7 +775,7 @@ export async function resolveTokenMint(
       slot: 0,
     };
   } catch {
-    console.error(`Cannot resolve token: ${value}`);
+    console.error(`Cannot resolve token: ${mintOrSymbol}`);
     process.exit(1);
   }
 }

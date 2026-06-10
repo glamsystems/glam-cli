@@ -40,7 +40,8 @@ import { installEpiCommands } from "./cmds/epi";
 import { installTransferCommands } from "./cmds/transfer";
 import { installTimelockCommands } from "./cmds/timelock";
 import { installTokenAclCommands } from "./cmds/token-acl";
-import { installLoopscaleCommands } from "./cmds/loopscale";
+import { installLoopscaleBorrowCommands } from "./cmds/loopscale-borrow";
+import { installLoopscaleLendCommands } from "./cmds/loopscale-lend";
 import { installPhoenixCommands } from "./cmds/phoenix";
 import { installOrcaCommands } from "./cmds/orca";
 
@@ -285,7 +286,8 @@ const stagingOnly = [
   ["token-acl", "Token ACL (sRFC-37)", installTokenAclCommands],
   ["jupiter-earn", "Jupiter Earn", installJupiterEarnCommands],
   ["jupiter-borrow", "Jupiter Borrow", installJupiterBorrowCommands],
-  ["loopscale", "Loopscale loans", installLoopscaleCommands],
+  ["loopscale-borrow", "Loopscale borrow", installLoopscaleBorrowCommands],
+  ["loopscale-lend", "Loopscale lend", installLoopscaleLendCommands],
   ["phoenix", "Phoenix perps", installPhoenixCommands],
   ["orca", "Orca whirlpools", installOrcaCommands],
   ["marinade", "Marinade liquid staking", installMarinadeCommands],
