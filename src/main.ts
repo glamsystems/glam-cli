@@ -42,6 +42,7 @@ import { installTimelockCommands } from "./cmds/timelock";
 import { installTokenAclCommands } from "./cmds/token-acl";
 import { installLoopscaleBorrowCommands } from "./cmds/loopscale-borrow";
 import { installLoopscaleLendCommands } from "./cmds/loopscale-lend";
+import { installLoopscaleVaultCommands } from "./cmds/loopscale-vault";
 import { installPhoenixCommands } from "./cmds/phoenix";
 import { installOrcaCommands } from "./cmds/orca";
 
@@ -288,6 +289,7 @@ const stagingOnly = [
   ["jupiter-borrow", "Jupiter Borrow", installJupiterBorrowCommands],
   ["loopscale-borrow", "Loopscale borrow", installLoopscaleBorrowCommands],
   ["loopscale-lend", "Loopscale lend", installLoopscaleLendCommands],
+  ["loopscale-vault", "Loopscale vault", installLoopscaleVaultCommands],
   ["phoenix", "Phoenix perps", installPhoenixCommands],
   ["orca", "Orca whirlpools", installOrcaCommands],
   ["marinade", "Marinade liquid staking", installMarinadeCommands],

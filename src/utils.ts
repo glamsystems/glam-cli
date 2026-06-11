@@ -787,3 +787,27 @@ export async function resolveTokenPublicKey(
   const token = await resolveTokenMint(glamClient, value);
   return new PublicKey(token.address);
 }
+
+export async function resolveTokenList(
+  glamClient: GlamClient,
+  raw: string,
+): Promise<PublicKey[]> {
+  const parts = raw
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+  if (parts.length === 0) {
+    fail("Must contain at least one token mint or symbol");
+  }
+
+  const seen = new Set<string>();
+  const result: PublicKey[] = [];
+  for (const part of parts) {
+    const mint = await resolveTokenPublicKey(glamClient, part);
+    if (!seen.has(mint.toBase58())) {
+      seen.add(mint.toBase58());
+      result.push(mint);
+    }
+  }
+  return result;
+}
