@@ -3,7 +3,11 @@ import { build } from "esbuild";
 
 const packageJson = JSON.parse(await readFile("package.json", "utf8"));
 const optionalPackages = Object.keys(packageJson.optionalDependencies ?? {});
-const external = optionalPackages.flatMap((name) => [name, `${name}/*`]);
+const nativePackages = ["bigint-buffer"];
+const external = [...optionalPackages, ...nativePackages].flatMap((name) => [
+  name,
+  `${name}/*`,
+]);
 
 await rm("main.js", { force: true });
 
