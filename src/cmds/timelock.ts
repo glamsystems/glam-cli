@@ -1,6 +1,7 @@
 import { type Command } from "commander";
 import { type CliContext, executeTxWithErrorHandling } from "../utils";
 import { type PublicKey } from "@solana/web3.js";
+import { parseNonNegativeInteger } from "../parsing";
 import {
   type IntegrationAcl,
   type DelegateAcl,
@@ -248,7 +249,9 @@ export function installTimelockCommands(program: Command, context: CliContext) {
 
   program
     .command("set")
-    .argument("<duration>", "Timelock duration in seconds", parseInt)
+    .argument("<duration>", "Timelock duration in seconds", (value) =>
+      parseNonNegativeInteger(value, "duration"),
+    )
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Set timelock duration")
     .action(async (duration, { yes }) => {

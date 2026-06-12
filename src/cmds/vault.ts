@@ -13,16 +13,19 @@ import fs from "fs";
 import {
   type CliContext,
   executeTxWithErrorHandling,
-  parsePositiveInteger,
-  parsePositiveUiAmount,
   parseMintJson,
   parseStateJson,
   printTable,
   resolveTokenPublicKey,
+} from "../utils";
+import {
+  parseArrayInput,
+  parsePositiveInteger,
+  parsePositiveUiAmount,
   validateBooleanInput,
   validateFileExists,
   validatePublicKey,
-} from "../utils";
+} from "../parsing";
 
 export function installVaultCommands(program: Command, context: CliContext) {
   program
@@ -356,7 +359,10 @@ export function installVaultCommands(program: Command, context: CliContext) {
 
   program
     .command("close-token-accounts")
-    .argument("[tokens...]", "Token mint address(es) or symbols to close")
+    .argument(
+      "[tokens...]",
+      "Token mint address(es) or symbols to close, comma- or space-separated",
+    )
     .option("--empty", "Close all empty (zero-balance) token accounts", false)
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Close vault token accounts")
@@ -383,9 +389,10 @@ export function installVaultCommands(program: Command, context: CliContext) {
           ({ mint: { address }, tokenProgram }) =>
             context.glamClient.getVaultAta(address, tokenProgram),
         );
-      } else if (tokens.length > 0) {
+      } else if (parseArrayInput(tokens).length > 0) {
+        const tokenInputs = parseArrayInput(tokens);
         const mintPubkeys = await Promise.all(
-          tokens.map((token) =>
+          tokenInputs.map((token) =>
             resolveTokenPublicKey(context.glamClient, token),
           ),
         );

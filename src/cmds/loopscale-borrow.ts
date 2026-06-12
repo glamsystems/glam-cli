@@ -12,7 +12,6 @@ import {
   type LoopscaleMultiCollateralTermsUpdateParams,
   STRATEGY_DURATION_COUNT,
   U8_MAX,
-  U16_MAX,
   U32_MAX,
   U64_MAX_BN,
   PkSet,
@@ -24,31 +23,22 @@ import { type Command } from "commander";
 import {
   type CliContext,
   executeTxWithErrorHandling,
-  fail,
   printTable,
-  parsePositiveUiAmount,
-  parseUnsignedNumber,
   printPubkeyList,
   resolveTokenMint,
   resolveTokenPublicKey,
-  validatePublicKey,
 } from "../utils";
-
-export function parseNonNegativeU64(value: string, label: string): BN {
-  const trimmed = value.trim();
-  if (!/^\d+$/.test(trimmed)) {
-    fail(`${label} must be a non-negative integer`);
-  }
-  return new BN(trimmed);
-}
-
-export function parseCbps(value: string, label?: string): BN {
-  return new BN(parseUnsignedNumber(value, label, U32_MAX));
-}
-
-export function parseBps(value: string, label: string): number {
-  return parseUnsignedNumber(value, label, U16_MAX);
-}
+import { fail } from "../errors";
+import {
+  parseBps,
+  parseArrayInput,
+  parseDurationIndexes,
+  parseNonNegativeU64,
+  parsePositiveUiAmount,
+  parseU8,
+  parseUnsignedNumber,
+  validatePublicKey,
+} from "../parsing";
 
 function formatPolicyDecodeError(error: unknown): string {
   if (error instanceof Error) {
@@ -261,36 +251,12 @@ export async function fetchPolicyForView<T>(
   }
 }
 
-/** Parse a comma-separated list of duration indexes (e.g. "0,1,2") into a deduped u8[]. */
-export function parseDurationIndexes(raw: string, label: string): number[] {
-  const parts = raw
-    .split(",")
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0);
-  if (parts.length === 0) {
-    fail(`${label} must contain at least one duration index`);
-  }
-  const seen = new Set<number>();
-  const result: number[] = [];
-  for (const part of parts) {
-    const index = parseUnsignedNumber(part, label, U8_MAX);
-    if (!seen.has(index)) {
-      seen.add(index);
-      result.push(index);
-    }
-  }
-  return result;
-}
-
-/** Resolve an optional comma-separated list of token mints/symbols into deduped pubkeys. */
+/** Resolve an optional comma- or space-separated list of token mints/symbols into deduped pubkeys. */
 export async function resolveOptionalTokenList(
   context: CliContext,
   raw: string | undefined,
 ): Promise<PublicKey[]> {
-  const parts = (raw ?? "")
-    .split(",")
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0);
+  const parts = parseArrayInput(raw);
   const seen = new Set<string>();
   const result: PublicKey[] = [];
   for (const part of parts) {
@@ -303,15 +269,12 @@ export async function resolveOptionalTokenList(
   return result;
 }
 
-/** Resolve a comma-separated list of token mints/symbols into deduped pubkeys. */
+/** Resolve a comma- or space-separated list of token mints/symbols into deduped pubkeys. */
 export async function resolveCollateralAssetList(
   context: CliContext,
   raw: string,
 ): Promise<PublicKey[]> {
-  const parts = raw
-    .split(",")
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0);
+  const parts = parseArrayInput(raw);
   if (parts.length === 0) {
     fail("collateral-assets must contain at least one mint or symbol");
   }
@@ -576,12 +539,12 @@ export function installLoopscaleBorrowCommands(
     .command("set-policy")
     .option(
       "--collateral-allowlist <list>",
-      "Comma-separated collateral token mint addresses or symbols",
+      "Comma- or space-separated collateral token mint addresses or symbols",
       "",
     )
     .option(
       "--principal-allowlist <list>",
-      "Comma-separated principal token mint addresses or symbols",
+      "Comma- or space-separated principal token mint addresses or symbols",
       "",
     )
     .option("-y, --yes", "Skip confirmation prompt", false)
@@ -781,7 +744,7 @@ export function installLoopscaleBorrowCommands(
     )
     .requiredOption(
       "--durations <list>",
-      "Allowed duration indexes, comma-separated (0=1d,1=1w,2=1m,3=3m,4=1y)",
+      "Allowed duration indexes, comma- or space-separated (0=1d,1=1w,2=1m,3=3m,4=1y)",
     )
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description(
@@ -1052,7 +1015,7 @@ export function installLoopscaleBorrowCommands(
             context.glamClient.loopscaleBorrow.depositCollateral(
               {
                 amount: collateralAmount,
-                assetType: parseInt(assetType),
+                assetType: parseU8(assetType, "asset-type"),
                 assetIdentifier: collateralMint,
                 assetIndexGuidance: [],
               },

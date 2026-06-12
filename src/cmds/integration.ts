@@ -8,8 +8,8 @@ import {
   type CliContext,
   executeTxWithErrorHandling,
   resolveProtocolName,
-  validatePublicKey,
 } from "../utils";
+import { parseArrayInput, validatePublicKey } from "../parsing";
 import { PublicKey } from "@solana/web3.js";
 
 function validateIntegrationProgram(input: string) {
@@ -23,7 +23,7 @@ function resolveProtocolNames(
   const lookup = getProgramAndBitflagByProtocolName(staging);
   const groups: Record<string, number> = {};
 
-  for (const name of names) {
+  for (const name of parseArrayInput(names)) {
     const resolved = resolveProtocolName(name, staging);
     const [programIdStr, bitflagStr] = lookup[resolved];
     const bitflag = parseInt(bitflagStr, 2);
@@ -71,7 +71,7 @@ export function installIntegrationCommands(
     .description("Enable protocols by name (grouped per integration program)")
     .argument(
       "<protocols...>",
-      "Protocol names (e.g., SplToken, JupiterSwap, KaminoLend)",
+      "Protocol names, comma- or space-separated (e.g., SplToken, JupiterSwap, KaminoLend)",
     )
     .option("-y, --yes", "Skip confirmation")
     .action(async (protocols: string[], { yes }) => {
@@ -121,7 +121,7 @@ export function installIntegrationCommands(
     .description("Disable protocols by name (grouped per integration program)")
     .argument(
       "<protocols...>",
-      "Protocol names (e.g., SplToken, JupiterSwap, KaminoLend)",
+      "Protocol names, comma- or space-separated (e.g., SplToken, JupiterSwap, KaminoLend)",
     )
     .option("-y, --yes", "Skip confirmation")
     .action(async (protocols: string[], { yes }) => {

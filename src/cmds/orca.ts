@@ -1,9 +1,6 @@
 import { BN } from "@coral-xyz/anchor";
 import {
   ORCA_WHIRLPOOLS_PROGRAM_ID,
-  U8_MAX,
-  U64_MAX_BN as U64_MAX,
-  U128_MAX_BN as U128_MAX,
   WSOL,
   WhirlpoolsPolicy,
   fetchMintAndTokenProgram,
@@ -28,13 +25,19 @@ import fs from "fs";
 
 import {
   type CliContext,
-  collectPublicKeys,
   executeTxWithErrorHandling,
-  fail,
   printTable,
   resolveTokenPublicKey,
-  validatePublicKey,
 } from "../utils";
+import { fail } from "../errors";
+import {
+  collectPublicKeys,
+  parseInteger,
+  parseU8,
+  parseU64,
+  parseU128,
+  validatePublicKey,
+} from "../parsing";
 
 const BPS_DENOMINATOR = 10_000;
 const I32_MIN = -2_147_483_648;
@@ -130,24 +133,6 @@ function isKaminoReserveOracleSource(oracleSource: string): boolean {
   return oracleSource === "KaminoReserve";
 }
 
-function parseInteger(
-  value: string,
-  label: string,
-  min: number,
-  max: number,
-): number {
-  const trimmed = value.trim();
-  if (!/^-?\d+$/.test(trimmed)) {
-    fail(`${label} must be an integer`);
-  }
-
-  const parsed = Number(trimmed);
-  if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
-    fail(`${label} must be in range [${min}, ${max}]`);
-  }
-  return parsed;
-}
-
 function parseI32(value: string): number {
   return parseInteger(value, "value", I32_MIN, I32_MAX);
 }
@@ -201,10 +186,6 @@ function validateRangePctOrder(lowerRangePct: number, upperRangePct: number) {
   }
 }
 
-function parseU8(value: string): number {
-  return parseInteger(value, "value", 0, U8_MAX);
-}
-
 function parseMaxDeviationBps(value: string): number {
   return parseInteger(
     value,
@@ -212,27 +193,6 @@ function parseMaxDeviationBps(value: string): number {
     -BPS_DENOMINATOR,
     BPS_DENOMINATOR - 1,
   );
-}
-
-function parseBn(value: string, label: string, max: BN): BN {
-  const trimmed = value.trim();
-  if (!/^\d+$/.test(trimmed)) {
-    fail(`${label} must be a non-negative integer`);
-  }
-
-  const parsed = new BN(trimmed);
-  if (parsed.gt(max)) {
-    fail(`${label} exceeds max value ${max.toString()}`);
-  }
-  return parsed;
-}
-
-function parseU64(value: string, label: string): BN {
-  return parseBn(value, label, U64_MAX);
-}
-
-function parseU128(value: string, label: string): BN {
-  return parseBn(value, label, U128_MAX);
 }
 
 function readKeypair(path: string): Keypair {
@@ -995,12 +955,12 @@ export function installOrcaCommands(orca: Command, context: CliContext) {
     .command("set-policy")
     .option(
       "--whirlpools <pubkeys>",
-      "Comma-separated Whirlpool allowlist",
+      "Comma- or space-separated Whirlpool allowlist",
       collectPublicKeys,
     )
     .option(
       "--token-mints <pubkeys>",
-      "Comma-separated token mint allowlist",
+      "Comma- or space-separated token mint allowlist",
       collectPublicKeys,
     )
     .option(

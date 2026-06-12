@@ -7,12 +7,14 @@ import {
   executeTxWithErrorHandling,
   printPubkeyList,
   printTable,
-  parseNonNegativeInteger,
-  parsePositiveUiAmount,
   resolveTokenMint,
   resolveTokenPublicKey,
-  validatePublicKey,
 } from "../utils";
+import {
+  parseNonNegativeInteger,
+  parsePositiveUiAmount,
+  validatePublicKey,
+} from "../parsing";
 
 export function installJupiterBorrowCommands(
   borrowProgram: Command,

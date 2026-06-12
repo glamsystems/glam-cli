@@ -6,7 +6,6 @@ import {
   type PriorityLevel,
   StateAccountType,
   type TxOptions,
-  fromUiAmount,
   getProgramAndBitflagByProtocolName,
   getProtocolsAndPermissions,
   getGlamProtocolProgramId,
@@ -22,6 +21,9 @@ import fs from "fs";
 import inquirer from "inquirer";
 import os from "os";
 import path from "path";
+
+import { fail } from "./errors";
+import { parseArrayInput } from "./parsing";
 
 export interface CliContext {
   cliConfig: CliConfig;
@@ -358,28 +360,6 @@ export function parseMintJson(
   };
 }
 
-export function fail(message: string): never {
-  console.error(message);
-  process.exit(1);
-}
-
-export function parseUnsignedNumber(
-  value: string,
-  label?: string,
-  max: number = Number.MAX_SAFE_INTEGER,
-): number {
-  const trimmed = value.trim();
-  if (!/^\d+$/.test(trimmed)) {
-    fail(`${label} must be a non-negative integer`);
-  }
-
-  const parsed = Number(trimmed);
-  if (!Number.isSafeInteger(parsed) || parsed > max) {
-    fail(`${label ?? value} exceeds ${max}`);
-  }
-  return parsed;
-}
-
 type StagingOnlyContext = Pick<CliContext, "cliConfig" | "glamClient">;
 
 export function assertStagingOnlyVault(context?: StagingOnlyContext) {
@@ -405,127 +385,6 @@ export function markStagingOnlyCommand(
     .hook("preSubcommand", async () => {
       assertStagingOnlyVault(context);
     });
-}
-
-export function parsePositiveUiAmount(
-  value: string,
-  decimals: number,
-  label?: string,
-): BN {
-  const trimmed = value.trim();
-  if (!/^\d+(\.\d+)?$/.test(trimmed)) {
-    fail(`${label ?? value} must be a positive decimal amount`);
-  }
-
-  const fractional = trimmed.split(".")[1] ?? "";
-  if (fractional.length > decimals) {
-    fail(`${label ?? value} has more than ${decimals} decimal places`);
-  }
-
-  const parsed = fromUiAmount(trimmed, decimals);
-  if (parsed.isZero()) {
-    fail(`${label ?? value} must be greater than zero`);
-  }
-  return parsed;
-}
-
-export function parseNonNegativeUiAmount(
-  value: string,
-  decimals: number,
-  label?: string,
-): BN {
-  const trimmed = value.trim();
-  if (!/^\d+(\.\d+)?$/.test(trimmed)) {
-    fail(`${label ?? value} must be a non-negative decimal amount`);
-  }
-
-  const fractional = trimmed.split(".")[1] ?? "";
-  if (fractional.length > decimals) {
-    fail(`${label ?? value} has more than ${decimals} decimal places`);
-  }
-
-  return fromUiAmount(trimmed, decimals);
-}
-
-export function parsePositiveInteger(value: string, label?: string): number {
-  const trimmed = value.trim();
-  if (!/^\d+$/.test(trimmed)) {
-    fail(`${label ?? value} must be a positive integer`);
-  }
-
-  const parsed = Number(trimmed);
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
-    fail(`${label ?? value} must be a positive integer`);
-  }
-  return parsed;
-}
-
-export function parseNonNegativeInteger(value: string, label?: string): number {
-  const trimmed = value.trim();
-  if (!/^\d+$/.test(trimmed)) {
-    fail(`${label ?? value} must be a non-negative integer`);
-  }
-
-  const parsed = Number(trimmed);
-  if (!Number.isSafeInteger(parsed)) {
-    fail(`${label ?? value} must be a safe non-negative integer`);
-  }
-  return parsed;
-}
-
-export function parsePositiveBn(value: string, label?: string): BN {
-  const trimmed = value.trim();
-  if (!/^\d+$/.test(trimmed)) {
-    fail(`${label ?? value} must be a positive big integer`);
-  }
-
-  const parsed = new BN(trimmed);
-  if (parsed.isNeg() || parsed.isZero()) {
-    fail(`${label ?? value} must be a positive big integer`);
-  }
-  return parsed;
-}
-
-export function validatePublicKey(value: string) {
-  try {
-    return new PublicKey(value);
-  } catch {
-    console.error("Not a valid pubkey:", value);
-    process.exit(1);
-  }
-}
-
-export function collectPublicKeys(value: string, previous: PublicKey[] = []) {
-  return [...previous, validatePublicKey(value)];
-}
-
-export function validateFileExists(path: string) {
-  if (!fs.existsSync(path)) {
-    console.error(`File ${path} does not exist`);
-    process.exit(1);
-  }
-  return path;
-}
-
-export function validateInvestorAction(action: string) {
-  if (action !== "subscription" && action !== "redemption") {
-    console.error(`Invalid action. Allowed values: subscription, redemption`);
-    process.exit(1);
-  }
-  return action;
-}
-
-export function validateBooleanInput(input: string) {
-  const normalized = input.toLowerCase().trim();
-  const truthyValues = ["true", "1", "yes", "y", "on", "enable"];
-  const falsyValues = ["false", "0", "no", "n", "off", "disable"];
-
-  if (truthyValues.includes(normalized)) return true;
-  if (falsyValues.includes(normalized)) return false;
-
-  throw new Error(
-    `Invalid boolean value: "${input}". Use: true/false, yes/no, 1/0, enable/disable`,
-  );
 }
 
 /**
@@ -661,6 +520,7 @@ export function resolvePermissionNames(
   inputNames: string[],
   staging: boolean,
 ): string[] {
+  const normalizedInputNames = parseArrayInput(inputNames);
   const protocolConfig =
     getProgramAndBitflagByProtocolName(staging)[protocolName];
   if (!protocolConfig) {
@@ -688,7 +548,7 @@ export function resolvePermissionNames(
   const unknown: string[] = [];
   const suggestions: string[] = [];
 
-  for (const name of inputNames) {
+  for (const name of normalizedInputNames) {
     // 1. Exact match
     if (validNames.includes(name)) {
       resolved.push(name);
@@ -792,10 +652,7 @@ export async function resolveTokenList(
   glamClient: GlamClient,
   raw: string,
 ): Promise<PublicKey[]> {
-  const parts = raw
-    .split(",")
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0);
+  const parts = parseArrayInput(raw);
   if (parts.length === 0) {
     fail("Must contain at least one token mint or symbol");
   }

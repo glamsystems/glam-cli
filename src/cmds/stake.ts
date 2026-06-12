@@ -1,9 +1,6 @@
 import { type Command } from "commander";
-import {
-  type CliContext,
-  collectPublicKeys,
-  executeTxWithErrorHandling,
-} from "../utils";
+import { type CliContext, executeTxWithErrorHandling } from "../utils";
+import { collectPublicKeys } from "../parsing";
 import { type PublicKey } from "@solana/web3.js";
 import { getStakeAccountsWithStates } from "@glamsystems/glam-sdk";
 
@@ -43,7 +40,7 @@ export function installStakeCommands(stake: Command, context: CliContext) {
     .command("deactivate")
     .argument(
       "<accounts...>",
-      "Stake accounts to deactivate (space-separated pubkeys)",
+      "Stake accounts to deactivate, comma- or space-separated pubkeys",
       collectPublicKeys,
     )
     .option("-y, --yes", "Skip confirmation prompt", false)
@@ -67,7 +64,7 @@ export function installStakeCommands(stake: Command, context: CliContext) {
     .command("withdraw")
     .argument(
       "<accounts...>",
-      "Stake accounts to withdraw from (space-separated pubkeys)",
+      "Stake accounts to withdraw from, comma- or space-separated pubkeys",
       collectPublicKeys,
     )
     .option("-y, --yes", "Skip confirmation prompt", false)

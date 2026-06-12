@@ -7,13 +7,16 @@ import { type Command } from "commander";
 import {
   type CliContext,
   executeTxWithErrorHandling,
-  parsePositiveInteger,
-  parsePositiveUiAmount,
   printPubkeyList,
   resolveTokenMint,
   resolveTokenPublicKey,
-  validatePublicKey,
 } from "../utils";
+import {
+  parseInteger,
+  parsePositiveInteger,
+  parsePositiveUiAmount,
+  validatePublicKey,
+} from "../parsing";
 
 function buildQuoteParams(
   tokenFrom: TokenListItem,
@@ -106,7 +109,10 @@ export function installJupiterSwapCommands(
       );
       await executeTxWithErrorHandling(
         () =>
-          context.glamClient.jupiterSwap.setPolicy(newPolicy, context.txOptions),
+          context.glamClient.jupiterSwap.setPolicy(
+            newPolicy,
+            context.txOptions,
+          ),
         {
           skip: options?.yes,
           message: `Confirm setting max slippage to ${slippageBps} BPS`,
@@ -121,16 +127,7 @@ export function installJupiterSwapCommands(
       "<deviation-bps>",
       "Maximum quote price deviation in basis points (range: -32768 to 32767; 0 requires quote to match or beat oracle, negative requires the quote to beat oracle by at least that many bps)",
       (raw) => {
-        const parsed = parseInt(raw, 10);
-        if (!Number.isFinite(parsed) || `${parsed}` !== raw.trim()) {
-          throw new Error(`Invalid deviation-bps: "${raw}" is not an integer`);
-        }
-        if (parsed < -32768 || parsed > 32767) {
-          throw new Error(
-            `Invalid deviation-bps: ${parsed} is outside the i16 range [-32768, 32767]`,
-          );
-        }
-        return parsed;
+        return parseInteger(raw, "deviation-bps", -32768, 32767);
       },
     )
     .option("-y, --yes", "Skip confirmation", false)
@@ -147,7 +144,10 @@ export function installJupiterSwapCommands(
       );
       await executeTxWithErrorHandling(
         () =>
-          context.glamClient.jupiterSwap.setPolicy(newPolicy, context.txOptions),
+          context.glamClient.jupiterSwap.setPolicy(
+            newPolicy,
+            context.txOptions,
+          ),
         {
           skip: options?.yes,
           message: `Confirm setting max deviation to ${deviationBps} BPS`,
@@ -181,7 +181,10 @@ export function installJupiterSwapCommands(
       );
       await executeTxWithErrorHandling(
         () =>
-          context.glamClient.jupiterSwap.setPolicy(newPolicy, context.txOptions),
+          context.glamClient.jupiterSwap.setPolicy(
+            newPolicy,
+            context.txOptions,
+          ),
         {
           skip: options?.yes,
           message: `Confirm adding token ${token} to swap allowlist`,
@@ -217,7 +220,10 @@ export function installJupiterSwapCommands(
       );
       await executeTxWithErrorHandling(
         () =>
-          context.glamClient.jupiterSwap.setPolicy(newPolicy, context.txOptions),
+          context.glamClient.jupiterSwap.setPolicy(
+            newPolicy,
+            context.txOptions,
+          ),
         {
           skip: options?.yes,
           message: `Confirm removing token ${token} from swap allowlist`,
@@ -243,7 +249,10 @@ export function installJupiterSwapCommands(
       );
       await executeTxWithErrorHandling(
         () =>
-          context.glamClient.jupiterSwap.setPolicy(newPolicy, context.txOptions),
+          context.glamClient.jupiterSwap.setPolicy(
+            newPolicy,
+            context.txOptions,
+          ),
         {
           skip: options?.yes,
           message: "Confirm clearing swap allowlist",

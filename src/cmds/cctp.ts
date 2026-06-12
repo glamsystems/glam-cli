@@ -1,11 +1,10 @@
 import { type Command } from "commander";
+import { type CliContext, executeTxWithErrorHandling } from "../utils";
 import {
-  type CliContext,
-  executeTxWithErrorHandling,
   parseNonNegativeInteger,
   parsePositiveInteger,
   parsePositiveUiAmount,
-} from "../utils";
+} from "../parsing";
 import { BN } from "@coral-xyz/anchor";
 import { CctpPolicy, publicKeyToEvmAddress } from "@glamsystems/glam-sdk";
 import { evmAddressToPublicKey } from "@glamsystems/glam-sdk";

@@ -12,10 +12,7 @@ import {
   type PhoenixSide,
   type PhoenixTicks,
   PhoenixPolicy,
-  U8_MAX,
-  U32_MAX,
   U64_MAX_BIGINT,
-  U128_MAX_BIGINT,
   fetchMintAndTokenProgram,
 } from "@glamsystems/glam-sdk";
 import {
@@ -30,10 +27,19 @@ import { type Command } from "commander";
 import {
   type CliContext,
   executeTxWithErrorHandling,
-  fail,
-  parseNonNegativeUiAmount,
   printTable,
 } from "../utils";
+import { fail } from "../errors";
+import {
+  collectArrayValues,
+  parseArrayInput,
+  parseNonNegativeUiAmount,
+  parseOptionalU64,
+  parseU8,
+  parseU32,
+  parseU64,
+  parseU128,
+} from "../parsing";
 import {
   LimitOrder,
   PhoenixMarket,
@@ -119,65 +125,11 @@ function addOrderOptions(command: Command): Command {
     .option("-y, --yes", "Skip confirmation prompt", false);
 }
 
-function parseUnsignedNumber(
-  value: string | undefined,
-  label: string,
-  max: number,
-  defaultValue?: number,
-): number {
-  const trimmed = value === undefined ? `${defaultValue}` : value.trim();
-  if (!/^\d+$/.test(trimmed)) {
-    fail(`${label} must be a non-negative integer`);
-  }
-
-  const parsed = Number(trimmed);
-  if (!Number.isSafeInteger(parsed) || parsed > max) {
-    fail(`${label} exceeds ${max}`);
-  }
-  return parsed;
-}
-
-function parseU8(value: string | undefined, label: string, defaultValue = 0) {
-  return parseUnsignedNumber(value, label, U8_MAX, defaultValue);
-}
-
-function parseU32(value: string | undefined, label: string, defaultValue = 0) {
-  return parseUnsignedNumber(value, label, U32_MAX, defaultValue);
-}
-
-function parseUnsignedBigInt(value: string, label: string): bigint {
-  const trimmed = value.trim();
-  if (!/^\d+$/.test(trimmed)) {
-    fail(`${label} must be a non-negative integer`);
-  }
-  return BigInt(trimmed);
-}
-
 function bigintToBN(value: bigint, label: string, max = U64_MAX_BIGINT): BN {
   if (value > max) {
     fail(`${label} exceeds ${max.toString()}`);
   }
   return new BN(value.toString());
-}
-
-function parseU64(value: string, label: string): BN {
-  return bigintToBN(parseUnsignedBigInt(value, label), label, U64_MAX_BIGINT);
-}
-
-function parseOptionalU64(value: string | undefined, label: string): BN | null {
-  return value === undefined ? null : parseU64(value, label);
-}
-
-function parseU128(
-  value: string | undefined,
-  label: string,
-  defaultValue = "0",
-): BN {
-  return bigintToBN(
-    parseUnsignedBigInt(value ?? defaultValue, label),
-    label,
-    U128_MAX_BIGINT,
-  );
 }
 
 function formatUiAmount(amount: BN, decimals: number): string {
@@ -231,8 +183,13 @@ function priceUsdToTicks(
 }
 
 function parseAllowedOrderTypes(value: string): number[] {
-  const normalized = value.trim().toLowerCase();
-  if (["none", "empty", "disable", "disabled", "-"].includes(normalized)) {
+  const parts = parseArrayInput(value).map((part) =>
+    part.toLowerCase().replace(/_/g, "-"),
+  );
+  if (
+    parts.length === 1 &&
+    ["none", "empty", "disable", "disabled", "-"].includes(parts[0])
+  ) {
     return [];
   }
 
@@ -250,17 +207,13 @@ function parseAllowedOrderTypes(value: string): number[] {
     ["2", PHOENIX_ORDER_PACKET_KIND_IMMEDIATE_OR_CANCEL],
   ]);
 
-  const parsed = normalized
-    .split(",")
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0)
-    .map((part) => {
-      const orderType = aliases.get(part);
-      if (orderType === undefined) {
-        fail(`Invalid Phoenix order type: ${part}`);
-      }
-      return orderType;
-    });
+  const parsed = parts.map((part) => {
+    const orderType = aliases.get(part);
+    if (orderType === undefined) {
+      fail(`Invalid Phoenix order type: ${part}`);
+    }
+    return orderType;
+  });
   return [...new Set(parsed)];
 }
 
@@ -543,15 +496,6 @@ function formatCancelOrderId(order: LimitOrder, priceTicks: string): string {
     return "-";
   }
   return `${nodePointer}:${resolvedPriceTicks}:${sequenceNumber}`;
-}
-
-function collectCsv(value: string, previous: string[] = []): string[] {
-  return previous.concat(
-    value
-      .split(",")
-      .map((part) => part.trim())
-      .filter(Boolean),
-  );
 }
 
 function uniquePublicKeys(publicKeys: PublicKey[]): PublicKey[] {
@@ -1095,7 +1039,7 @@ export function installPhoenixCommands(phoenix: Command, context: CliContext) {
     .command("set-order-types")
     .argument(
       "<types>",
-      "Comma-separated order types: post-only, limit, ioc, or none",
+      "Comma- or space-separated order types: post-only, limit, ioc, or none",
     )
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description(
@@ -1470,8 +1414,8 @@ export function installPhoenixCommands(phoenix: Command, context: CliContext) {
       .argument("<market>", "Phoenix market symbol or public key")
       .requiredOption(
         "--order <node:price-ticks:sequence>",
-        "Cancel id; repeat for multiple orders",
-        collectCsv,
+        "Cancel id; repeat or pass comma-/space-separated values for multiple orders",
+        collectArrayValues,
         [],
       )
       .option("-y, --yes", "Skip confirmation prompt", false),

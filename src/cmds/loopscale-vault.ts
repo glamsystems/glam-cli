@@ -6,13 +6,15 @@ import { type Command } from "commander";
 import {
   type CliContext,
   executeTxWithErrorHandling,
-  fail,
-  parseNonNegativeUiAmount,
-  parsePositiveUiAmount,
   printPubkeyList,
-  validatePublicKey,
   resolveTokenList,
 } from "../utils";
+import { fail } from "../errors";
+import {
+  parseNonNegativeUiAmount,
+  parsePositiveUiAmount,
+  validatePublicKey,
+} from "../parsing";
 
 type DepositWithdrawOptions = {
   minAmountOut: string;
@@ -288,7 +290,7 @@ export function installLoopscaleVaultCommands(
     )
     .requiredOption(
       "--mints <list>",
-      "Comma-separated reward token mint addresses or symbols",
+      "Comma- or space-separated reward token mint addresses or symbols",
     )
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description("Claim rewards for a Loopscale VaultStake account")

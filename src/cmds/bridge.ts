@@ -12,58 +12,21 @@ import { Command } from "commander";
 
 import {
   type CliContext,
-  collectPublicKeys,
   executeTxWithErrorHandling,
+  resolveTokenPublicKey,
+} from "../utils";
+import {
+  collectPublicKeys,
+  parseFixedBytes,
+  parseHexOrBase64Bytes,
   parseNonNegativeInteger,
   parseNonNegativeUiAmount,
+  parseOptionalHexOrBase64Bytes,
   parsePositiveBn,
   parsePositiveInteger,
   parsePositiveUiAmount,
-  resolveTokenPublicKey,
   validatePublicKey,
-} from "../utils";
-
-function parseHexOrBase64Bytes(value: string, label: string): Buffer {
-  const normalized = value.trim();
-  const bytes = normalized.startsWith("0x")
-    ? Buffer.from(normalized.slice(2), "hex")
-    : /^[0-9a-fA-F]+$/.test(normalized) && normalized.length % 2 === 0
-      ? Buffer.from(normalized, "hex")
-      : Buffer.from(normalized, "base64");
-
-  if (bytes.length === 0) {
-    throw new Error(`${label} could not be parsed as hex or base64`);
-  }
-
-  return bytes;
-}
-
-function parseOptionalHexOrBase64Bytes(
-  value: string | undefined,
-  label: string,
-): Buffer | null | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  if (value.toLowerCase() === "none") {
-    return null;
-  }
-
-  return parseHexOrBase64Bytes(value, label);
-}
-
-function parseFixedBytes(
-  value: string,
-  label: string,
-  expectedLength: number,
-): Buffer {
-  const bytes = parseHexOrBase64Bytes(value, label);
-  if (bytes.length !== expectedLength) {
-    throw new Error(`${label} must decode to exactly ${expectedLength} bytes`);
-  }
-  return bytes;
-}
+} from "../parsing";
 
 function parseTransferId(value: string): PublicKey {
   try {
@@ -565,7 +528,7 @@ function installLayerzeroOftCommands(program: Command, context: CliContext) {
     )
     .option(
       "--lookup-table <pubkey>",
-      "Optional extra address lookup table",
+      "Optional extra address lookup table; repeat or pass comma-/space-separated values",
       collectPublicKeys,
       [],
     )

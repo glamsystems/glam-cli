@@ -1,11 +1,10 @@
 import { type Command } from "commander";
+import { type CliContext, executeTxWithErrorHandling } from "../utils";
 import {
-  type CliContext,
   collectPublicKeys,
-  executeTxWithErrorHandling,
   parsePositiveUiAmount,
   validatePublicKey,
-} from "../utils";
+} from "../parsing";
 import { PublicKey } from "@solana/web3.js";
 import { BN } from "@coral-xyz/anchor";
 
@@ -50,7 +49,7 @@ export function installKaminoFarmsCommands(
     .command("harvest")
     .argument(
       "<farm-states...>",
-      "Vault-owned farm states to harvest rewards from",
+      "Vault-owned farm states to harvest rewards from, comma- or space-separated",
       collectPublicKeys,
     )
     .option("-y, --yes", "Skip confirmation prompt", false)

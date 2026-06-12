@@ -10,8 +10,8 @@ import {
   executeTxWithErrorHandling,
   resolvePermissionNames,
   resolveProtocolName,
-  validatePublicKey,
 } from "../utils";
+import { parseArrayInput, validatePublicKey } from "../parsing";
 import { type PublicKey } from "@solana/web3.js";
 
 async function handleDelegatePermissions(
@@ -101,7 +101,10 @@ export function installDelegateCommands(
       "--protocol <name>",
       "Protocol name (e.g., KaminoLend, SplToken, JupiterSwap)",
     )
-    .argument("<permissions...>", "Permission names for the given protocol")
+    .argument(
+      "<permissions...>",
+      "Permission names for the given protocol, comma- or space-separated",
+    )
     .option("-y, --yes", "Skip confirmation prompt")
     .description("Grant delegate permissions for a single protocol")
     .action(
@@ -112,7 +115,7 @@ export function installDelegateCommands(
         );
         const resolvedPermissions = resolvePermissionNames(
           resolvedProtocol,
-          permissions,
+          parseArrayInput(permissions),
           context.glamClient.staging,
         );
         const { integrationProgram, protocolBitflag, permissionsBitmask } =
@@ -142,7 +145,10 @@ export function installDelegateCommands(
       "--protocol <name>",
       "Protocol name (e.g., KaminoLend, SplToken, JupiterSwap)",
     )
-    .argument("<permissions...>", "Permission names for the given protocol")
+    .argument(
+      "<permissions...>",
+      "Permission names for the given protocol, comma- or space-separated",
+    )
     .option("-y, --yes", "Skip confirmation prompt")
     .description("Revoke delegate permissions for a single protocol by name")
     .action(
@@ -153,7 +159,7 @@ export function installDelegateCommands(
         );
         const resolvedPermissions = resolvePermissionNames(
           resolvedProtocol,
-          permissions,
+          parseArrayInput(permissions),
           context.glamClient.staging,
         );
         const { integrationProgram, protocolBitflag, permissionsBitmask } =

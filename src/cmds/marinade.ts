@@ -1,9 +1,6 @@
 import { type Command } from "commander";
-import {
-  type CliContext,
-  executeTxWithErrorHandling,
-  parsePositiveUiAmount,
-} from "../utils";
+import { type CliContext, executeTxWithErrorHandling } from "../utils";
+import { parsePositiveUiAmount } from "../parsing";
 
 export function installMarinadeCommands(
   marinade: Command,

@@ -4,11 +4,10 @@ import { PublicKey } from "@solana/web3.js";
 import {
   type CliContext,
   executeTxWithErrorHandling,
-  parsePositiveUiAmount,
   printPubkeyList,
   resolveTokenMint,
-  validatePublicKey,
 } from "../utils";
+import { parsePositiveUiAmount, validatePublicKey } from "../parsing";
 
 export function installTransferCommands(program: Command, context: CliContext) {
   program

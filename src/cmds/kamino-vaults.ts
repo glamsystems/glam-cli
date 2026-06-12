@@ -2,10 +2,9 @@ import { type Command } from "commander";
 import {
   type CliContext,
   executeTxWithErrorHandling,
-  parsePositiveUiAmount,
   printPubkeyList,
-  validatePublicKey,
 } from "../utils";
+import { parsePositiveUiAmount, validatePublicKey } from "../parsing";
 import { KaminoVaultsPolicy } from "@glamsystems/glam-sdk";
 
 export function installKaminoVaultsCommands(

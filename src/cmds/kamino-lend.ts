@@ -9,13 +9,15 @@ import { type Command } from "commander";
 import {
   type CliContext,
   executeTxWithErrorHandling,
-  parseNonNegativeInteger,
-  parsePositiveUiAmount,
   printPubkeyList,
   resolveTokenMint,
   resolveTokenPublicKey,
-  validatePublicKey,
 } from "../utils";
+import {
+  parseNonNegativeInteger,
+  parsePositiveUiAmount,
+  validatePublicKey,
+} from "../parsing";
 import { PublicKey } from "@solana/web3.js";
 import { Decimal } from "decimal.js";
 

@@ -1,10 +1,6 @@
 import { type Command } from "commander";
-import {
-  type CliContext,
-  collectPublicKeys,
-  executeTxWithErrorHandling,
-  validatePublicKey,
-} from "../utils";
+import { type CliContext, executeTxWithErrorHandling } from "../utils";
+import { collectPublicKeys, validatePublicKey } from "../parsing";
 import {
   isTokenAclEnabled,
   fetchMintAndTokenProgram,
@@ -352,7 +348,7 @@ export function installTokenAclCommands(
     .command("setup-gate")
     .option(
       "--additional-lists <lists...>",
-      "Additional lists to include in the gate",
+      "Additional lists to include in the gate, comma- or space-separated",
       collectPublicKeys,
       [],
     )

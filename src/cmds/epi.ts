@@ -13,10 +13,16 @@ import Decimal from "decimal.js";
 
 import {
   type CliContext,
-  collectPublicKeys,
   executeTxWithErrorHandling,
   resolveTokenMint,
 } from "../utils";
+import {
+  collectPublicKeys,
+  parseFixedBytes as parseFixedBytesBuffer,
+  parseHexOrBase64Bytes,
+  parseUnsignedBn,
+  parseUnsignedNumber,
+} from "../parsing";
 
 type SubmitOptions = {
   denom: string;
@@ -91,34 +97,18 @@ const HYPERLIQUID_NAV_PAYLOAD_VERSION = 2;
 const HYPERLIQUID_NAV_PAYLOAD_TYPE = 2;
 const ACCOUNT_MARGIN_SUMMARY_PRECOMPILE =
   "0x000000000000000000000000000000000000080F";
-const SPOT_BALANCE_PRECOMPILE =
-  "0x0000000000000000000000000000000000000801";
+const SPOT_BALANCE_PRECOMPILE = "0x0000000000000000000000000000000000000801";
 const usdDenomination = {
   denom: { usd: {} },
   mint: PublicKey.default,
 } as const;
 
-function parseHexOrBase64Bytes(value: string, label: string): Buffer {
-  const normalized = value.trim();
-  const bytes = normalized.startsWith("0x")
-    ? Buffer.from(normalized.slice(2), "hex")
-    : /^[0-9a-fA-F]+$/.test(normalized) && normalized.length % 2 === 0
-      ? Buffer.from(normalized, "hex")
-      : Buffer.from(normalized, "base64");
-
-  if (bytes.length === 0) {
-    throw new Error(`${label} could not be parsed as hex or base64`);
-  }
-
-  return bytes;
-}
-
-function parseFixedBytes(value: string, length: number, label: string): number[] {
-  const bytes = parseHexOrBase64Bytes(value, label);
-  if (bytes.length !== length) {
-    throw new Error(`${label} must be exactly ${length} bytes`);
-  }
-  return Array.from(bytes);
+function parseFixedBytes(
+  value: string,
+  length: number,
+  label: string,
+): number[] {
+  return Array.from(parseFixedBytesBuffer(value, label, length));
 }
 
 function parseBytes20(value: string, label: string): number[] {
@@ -141,10 +131,7 @@ function parseWormholeEmitterAddress(value: string): number[] {
   throw new Error("--emitter-address must be either 20 or 32 bytes");
 }
 
-function validateHyperliquidSignedVaa(
-  signedVaa: Buffer,
-  positionId: number[],
-) {
+function validateHyperliquidSignedVaa(signedVaa: Buffer, positionId: number[]) {
   const parsed = parseWormholeSignedVaa(signedVaa);
   if (parsed.vaaBody.length < 51 + 38) {
     throw new Error("signed VAA body is too short for a GLAM Wormhole payload");
@@ -247,34 +234,6 @@ function parseSignedInteger(value: string, label: string): BN {
   return new BN(normalized, 10);
 }
 
-function parseUnsignedInteger(value: string, label: string): BN {
-  const normalized = value.trim();
-  if (!/^\d+$/.test(normalized)) {
-    throw new Error(`${label} must be a non-negative integer`);
-  }
-  return new BN(normalized, 10);
-}
-
-function parseUnsignedNumber(value: string, label: string): number {
-  const normalized = value.trim();
-  if (!/^\d+$/.test(normalized)) {
-    throw new Error(`${label} must be a non-negative integer`);
-  }
-  return Number(normalized);
-}
-
-function parseBoundedUnsignedNumber(
-  value: string,
-  label: string,
-  max: number,
-): number {
-  const parsed = parseUnsignedNumber(value, label);
-  if (parsed > max) {
-    throw new Error(`${label} must be at most ${max}`);
-  }
-  return parsed;
-}
-
 function parseSignedUiAmount(
   value: string,
   decimals: number,
@@ -366,19 +325,19 @@ export function installEpiCommands(program: Command, context: CliContext) {
     )
     .option(
       "--submit-allow <pubkey>",
-      "repeatable submit allowlist entry",
+      "submit allowlist entry; repeat or pass comma-/space-separated values",
       collectPublicKeys,
       [],
     )
     .option(
       "--validate-allow <pubkey>",
-      "repeatable validate allowlist entry",
+      "validate allowlist entry; repeat or pass comma-/space-separated values",
       collectPublicKeys,
       [],
     )
     .option(
       "--configure-allow <pubkey>",
-      "repeatable configure allowlist entry",
+      "configure allowlist entry; repeat or pass comma-/space-separated values",
       collectPublicKeys,
       [],
     )
@@ -442,19 +401,19 @@ export function installEpiCommands(program: Command, context: CliContext) {
     )
     .option(
       "--submit-allow <pubkey>",
-      "repeatable submit allowlist entry",
+      "submit allowlist entry; repeat or pass comma-/space-separated values",
       collectPublicKeys,
       [],
     )
     .option(
       "--validate-allow <pubkey>",
-      "repeatable validate allowlist entry",
+      "validate allowlist entry; repeat or pass comma-/space-separated values",
       collectPublicKeys,
       [],
     )
     .option(
       "--configure-allow <pubkey>",
-      "repeatable configure allowlist entry",
+      "configure allowlist entry; repeat or pass comma-/space-separated values",
       collectPublicKeys,
       [],
     )
@@ -524,22 +483,22 @@ export function installEpiCommands(program: Command, context: CliContext) {
     .option("-y, --yes", "Skip confirmation", false)
     .action(async (position: string, options: UpsertWormholeConfigOptions) => {
       const { positionId, positionLabel } = parsePosition(position);
-      const emitterChain = parseBoundedUnsignedNumber(
+      const emitterChain = parseUnsignedNumber(
         options.emitterChain,
         "--emitter-chain",
         U16_MAX,
       );
-      const payloadVersion = parseBoundedUnsignedNumber(
+      const payloadVersion = parseUnsignedNumber(
         options.payloadVersion,
         "--payload-version",
         U8_MAX,
       );
-      const payloadType = parseBoundedUnsignedNumber(
+      const payloadType = parseUnsignedNumber(
         options.payloadType,
         "--payload-type",
         U8_MAX,
       );
-      const maxAgeSeconds = parseBoundedUnsignedNumber(
+      const maxAgeSeconds = parseUnsignedNumber(
         options.maxAgeSeconds,
         "--max-age-seconds",
         U32_MAX,
@@ -620,12 +579,12 @@ export function installEpiCommands(program: Command, context: CliContext) {
     .action(
       async (position: string, options: UpsertHyperliquidConfigOptions) => {
         const { positionId, positionLabel } = parsePosition(position);
-        const perpDexIndex = parseBoundedUnsignedNumber(
+        const perpDexIndex = parseUnsignedNumber(
           options.perpDexIndex,
           "--perp-dex-index",
           U32_MAX,
         );
-        const usdcSpotToken = parseUnsignedInteger(
+        const usdcSpotToken = parseUnsignedBn(
           options.usdcSpotToken,
           "--usdc-spot-token",
         );
@@ -697,7 +656,7 @@ export function installEpiCommands(program: Command, context: CliContext) {
           options.timestamp !== undefined
             ? parseSignedInteger(options.timestamp, "--timestamp")
             : new BN(Math.floor(Date.now() / 1000));
-        const externalShares = parseUnsignedInteger(
+        const externalShares = parseUnsignedBn(
           options.externalShares || "0",
           "--external-shares",
         );

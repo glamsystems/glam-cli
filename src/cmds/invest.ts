@@ -1,12 +1,8 @@
 import { BN } from "@coral-xyz/anchor";
 import { GlamClient, fetchMintAndTokenProgram } from "@glamsystems/glam-sdk";
 import { type Command } from "commander";
-import {
-  type CliContext,
-  executeTxWithErrorHandling,
-  parsePositiveUiAmount,
-  validatePublicKey,
-} from "../utils";
+import { type CliContext, executeTxWithErrorHandling } from "../utils";
+import { parsePositiveUiAmount, validatePublicKey } from "../parsing";
 import tokens from "../tokens-verified.json";
 
 export function installInvestCommands(invest: Command, context: CliContext) {

@@ -12,10 +12,10 @@ import {
   type CliContext,
   executeTxWithErrorHandling,
   printPubkeyList,
-  parsePositiveUiAmount,
   resolveTokenMint,
   resolveTokenPublicKey,
 } from "../utils";
+import { parsePositiveUiAmount } from "../parsing";
 
 export function installJupiterEarnCommands(
   earnProgram: Command,

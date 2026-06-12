@@ -3,11 +3,13 @@ import { type Command } from "commander";
 import {
   type CliContext,
   executeTxWithErrorHandling,
-  parseNonNegativeUiAmount,
   printTable,
+} from "../utils";
+import {
+  parseNonNegativeUiAmount,
   validateInvestorAction,
   validatePublicKey,
-} from "../utils";
+} from "../parsing";
 import { Transaction } from "@solana/web3.js";
 import {
   toUiAmount,

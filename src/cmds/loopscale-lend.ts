@@ -17,26 +17,28 @@ import { type Command } from "commander";
 import {
   type CliContext,
   executeTxWithErrorHandling,
-  fail,
-  parseNonNegativeUiAmount,
-  parsePositiveUiAmount,
-  parseUnsignedNumber,
   printPubkeyList,
   printTable,
   resolveTokenMint,
   resolveTokenPublicKey,
-  validatePublicKey,
 } from "../utils";
+import { fail } from "../errors";
+import {
+  parseBps,
+  parseCbps,
+  parseDurationIndexes,
+  parseNonNegativeU64,
+  parseNonNegativeUiAmount,
+  parsePositiveUiAmount,
+  parseUnsignedNumber,
+  validatePublicKey,
+} from "../parsing";
 import {
   decodeLendingPolicyForView,
   fetchPolicyForView,
   fetchRawLoopscalePolicyData,
   listStrategyCollateralTerms,
-  parseBps,
-  parseCbps,
   parseCollateralTermUpdates,
-  parseDurationIndexes,
-  parseNonNegativeU64,
   resolveCollateralAssetList,
   resolveOptionalTokenList,
   strategyTermRows,
@@ -228,12 +230,12 @@ export function installLoopscaleLendCommands(
     .command("set-policy")
     .option(
       "--principal-allowlist <list>",
-      "Comma-separated principal token mint addresses or symbols",
+      "Comma- or space-separated principal token mint addresses or symbols",
       "",
     )
     .option(
       "--collateral-allowlist <list>",
-      "Comma-separated collateral asset identifiers, mint addresses, or symbols",
+      "Comma- or space-separated collateral asset identifiers, mint addresses, or symbols",
       "",
     )
     .option("--max-discount-bps <bps>", "Max sell-ledger discount in bps", "0")
@@ -437,11 +439,11 @@ export function installLoopscaleLendCommands(
     )
     .requiredOption(
       "--durations <list>",
-      "Allowed duration indexes, comma-separated (0=1d,1=1w,2=1m,3=3m,4=1y)",
+      "Allowed duration indexes, comma- or space-separated (0=1d,1=1w,2=1m,3=3m,4=1y)",
     )
     .requiredOption(
       "--collateral-assets <list>",
-      "Allowed collateral asset mints/symbols, comma-separated",
+      "Allowed collateral asset mints/symbols, comma- or space-separated",
     )
     .option("-y, --yes", "Skip confirmation prompt", false)
     .description(
