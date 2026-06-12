@@ -189,7 +189,7 @@ program
     );
     await idlCheck(context.glamClient);
   })
-  .version("1.0.13");
+  .version("1.1.0");
 
 program
   .command("env")
