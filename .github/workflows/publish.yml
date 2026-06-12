@@ -98,16 +98,31 @@ jobs:
           cd "${TMP_DIR}"
           npm init -y
 
-          for attempt in {1..10}; do
+          # Registry read replicas can lag npm publish by several minutes;
+          # poll cheaply with npm view before attempting the install.
+          for attempt in {1..20}; do
+            if npm view "${PACKAGE_NAME}@${VERSION}" version >/dev/null 2>&1; then
+              break
+            fi
+
+            if [[ "${attempt}" == "20" ]]; then
+              echo "${PACKAGE_NAME}@${VERSION} not visible on registry after 10 minutes" >&2
+              exit 1
+            fi
+
+            sleep 30
+          done
+
+          for attempt in {1..5}; do
             if npm install "${PACKAGE_NAME}@${VERSION}"; then
               break
             fi
 
-            if [[ "${attempt}" == "10" ]]; then
+            if [[ "${attempt}" == "5" ]]; then
               exit 1
             fi
 
-            sleep 15
+            sleep 30
           done
 
           npm audit signatures
