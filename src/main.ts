@@ -206,7 +206,7 @@ program
     console.log("Priority fee:", cliConfig.priority_fee);
     console.log(
       "Jupiter API key:",
-      cliConfig.jupiter_api_key ? "configured" : "not configured",
+      cliConfig.jupiter_api_key || "not configured",
     );
 
     if (cliConfig.glam_state) {
