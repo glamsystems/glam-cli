@@ -43,9 +43,9 @@
     "@ledgerhq/hw-transport-node-hid": "^6.33.1"
   },
   "devDependencies": {
-    "@types/node": "^20.17.30",
     "@types/inquirer": "^8.2.10",
-    "esbuild": "^0.25.2",
+    "@types/node": "^20.17.30",
+    "esbuild": "^0.28.1",
     "typescript": "^5.8.3"
   },
   "publishConfig": {
