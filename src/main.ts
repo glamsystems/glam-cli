@@ -45,6 +45,7 @@ import { installLoopscaleLendCommands } from "./cmds/loopscale-lend";
 import { installLoopscaleVaultCommands } from "./cmds/loopscale-vault";
 import { installPhoenixCommands } from "./cmds/phoenix";
 import { installOrcaCommands } from "./cmds/orca";
+import { installNeutralCommands } from "./cmds/neutral";
 
 const context = {} as CliContext;
 
@@ -275,6 +276,9 @@ installTimelockCommands(timelock, context);
 
 const cctp = program.command("cctp").description("CCTP operations");
 installCctpCommands(cctp, context);
+
+const neutral = program.command("neutral").description("Neutral bundles");
+installNeutralCommands(neutral, context);
 
 type StagingOnlyCommandInstaller = (
   command: Command,
