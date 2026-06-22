@@ -46,6 +46,7 @@ import { installLoopscaleVaultCommands } from "./cmds/loopscale-vault";
 import { installPhoenixCommands } from "./cmds/phoenix";
 import { installOrcaCommands } from "./cmds/orca";
 import { installNeutralCommands } from "./cmds/neutral";
+import { installMarginfiCommands } from "./cmds/marginfi";
 
 const context = {} as CliContext;
 
@@ -299,6 +300,7 @@ const stagingOnly = [
   ["marinade", "Marinade liquid staking", installMarinadeCommands],
   ["lst", "Liquid staking (SPL and Sanctum)", installLstCommands],
   ["stake", "Solana native staking", installStakeCommands],
+  ["marginfi", "Marginfi lending", installMarginfiCommands],
 ] satisfies [string, string, StagingOnlyCommandInstaller][];
 
 stagingOnly.forEach(([key, description, installFn]) => {
