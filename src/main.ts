@@ -36,7 +36,7 @@ import { idlCheck } from "./idl";
 import { installManageCommands } from "./cmds/manage";
 import { installCctpCommands } from "./cmds/cctp";
 import { installBridgeCommands } from "./cmds/bridge";
-import { installEpiCommands } from "./cmds/epi";
+import { installRpiCommands } from "./cmds/rpi";
 import { installTransferCommands } from "./cmds/transfer";
 import { installTimelockCommands } from "./cmds/timelock";
 import { installTokenAclCommands } from "./cmds/token-acl";
@@ -287,7 +287,7 @@ type StagingOnlyCommandInstaller = (
 
 const stagingOnly = [
   ["bridge", "Bridge operations", installBridgeCommands],
-  ["epi", "Manage external positions", installEpiCommands],
+  ["rpi", "Manage registered positions", installRpiCommands],
   ["token-acl", "Token ACL (sRFC-37)", installTokenAclCommands],
   ["jupiter-earn", "Jupiter Earn", installJupiterEarnCommands],
   ["jupiter-borrow", "Jupiter Borrow", installJupiterBorrowCommands],

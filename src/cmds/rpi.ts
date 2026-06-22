@@ -306,15 +306,15 @@ async function resolveDenomination(
   };
 }
 
-export function installEpiCommands(program: Command, context: CliContext) {
+export function installRpiCommands(program: Command, context: CliContext) {
   program
     .command("upsert-position")
     .description(
-      "Create or update a tracked external position, including bridge transfer record PDAs",
+      "Create or update a registered position and initialize vault observation state",
     )
     .argument(
       "<position>",
-      "tracked external position pubkey, transfer record PDA, UTF-8 string id, or 32-byte encoded position id",
+      "registered position pubkey, UTF-8 string id, or 32-byte encoded position id",
     )
     .option("--denom <denom>", "observation denomination: usd or mint", "usd")
     .option("--mint <token>", "mint address or symbol when --denom mint")
@@ -361,7 +361,7 @@ export function installEpiCommands(program: Command, context: CliContext) {
 
       await executeTxWithErrorHandling(
         () =>
-          context.glamClient.epi.upsertExternalPosition(
+          context.glamClient.rpi.upsertRegisteredPosition(
             {
               positionId,
               positionType: options.tokenized
@@ -379,20 +379,20 @@ export function installEpiCommands(program: Command, context: CliContext) {
           ),
         {
           skip: options.yes,
-          message: `Confirm upserting EPI position ${positionLabel} with denomination ${label}?`,
+          message: `Confirm upserting RPI position ${positionLabel} with denomination ${label}?`,
         },
-        (txSig) => `EPI position upserted: ${txSig}`,
+        (txSig) => `RPI position upserted: ${txSig}`,
       );
     });
 
   program
     .command("upsert-wormhole-position")
     .description(
-      "Create or update a Wormhole-sourced USD valued external position",
+      "Create or update a Wormhole-sourced USD valued registered position",
     )
     .argument(
       "<position>",
-      "tracked external position pubkey, UTF-8 string id, or 32-byte encoded position id",
+      "registered position pubkey, UTF-8 string id, or 32-byte encoded position id",
     )
     .option(
       "--freshness-secs <u32>",
@@ -429,7 +429,7 @@ export function installEpiCommands(program: Command, context: CliContext) {
 
         await executeTxWithErrorHandling(
           () =>
-            context.glamClient.epi.upsertExternalPosition(
+            context.glamClient.rpi.upsertRegisteredPosition(
               {
                 positionId,
                 positionType: { valued: {} },
@@ -445,9 +445,9 @@ export function installEpiCommands(program: Command, context: CliContext) {
             ),
           {
             skip: options.yes,
-            message: `Confirm upserting Wormhole EPI position ${positionLabel} with denomination USD?`,
+            message: `Confirm upserting Wormhole RPI position ${positionLabel} with denomination USD?`,
           },
-          (txSig) => `Wormhole EPI position upserted: ${txSig}`,
+          (txSig) => `Wormhole RPI position upserted: ${txSig}`,
         );
       },
     );
@@ -457,7 +457,7 @@ export function installEpiCommands(program: Command, context: CliContext) {
     .description("Create or update the generic Wormhole observation config")
     .argument(
       "<position>",
-      "tracked external position pubkey, UTF-8 string id, or 32-byte encoded position id",
+      "registered position pubkey, UTF-8 string id, or 32-byte encoded position id",
     )
     .option(
       "--emitter-chain <u16>",
@@ -506,7 +506,7 @@ export function installEpiCommands(program: Command, context: CliContext) {
 
       await executeTxWithErrorHandling(
         () =>
-          context.glamClient.epi.upsertExternalPositionWormholeConfig(
+          context.glamClient.rpi.upsertRegisteredPositionWormholeConfig(
             {
               positionId,
               emitterChain,
@@ -529,10 +529,10 @@ export function installEpiCommands(program: Command, context: CliContext) {
 
   program
     .command("remove-position")
-    .description("Remove a tracked external position from EPI")
+    .description("Remove a registered position from RPI")
     .argument(
       "<position>",
-      "tracked external position pubkey, UTF-8 string id, or 32-byte encoded position id",
+      "registered position pubkey, UTF-8 string id, or 32-byte encoded position id",
     )
     .option("-y, --yes", "Skip confirmation", false)
     .action(async (position: string, options: RemovePositionOptions) => {
@@ -540,15 +540,15 @@ export function installEpiCommands(program: Command, context: CliContext) {
 
       await executeTxWithErrorHandling(
         () =>
-          context.glamClient.epi.removeExternalPosition(
+          context.glamClient.rpi.removeRegisteredPosition(
             positionId,
             context.txOptions,
           ),
         {
           skip: options.yes,
-          message: `Confirm removing EPI position ${positionLabel}?`,
+          message: `Confirm removing RPI position ${positionLabel}?`,
         },
-        (txSig) => `EPI position removed: ${txSig}`,
+        (txSig) => `RPI position removed: ${txSig}`,
       );
     });
 
@@ -557,7 +557,7 @@ export function installEpiCommands(program: Command, context: CliContext) {
     .description("Create or update the Hyperliquid Wormhole payload config")
     .argument(
       "<position>",
-      "tracked external position pubkey, UTF-8 string id, or 32-byte encoded position id",
+      "registered position pubkey, UTF-8 string id, or 32-byte encoded position id",
     )
     .requiredOption(
       "--hyperliquid-account <address>",
@@ -591,7 +591,7 @@ export function installEpiCommands(program: Command, context: CliContext) {
 
         await executeTxWithErrorHandling(
           () =>
-            context.glamClient.epi.upsertExternalPositionWormholeHyperliquidConfig(
+            context.glamClient.rpi.upsertRegisteredPositionWormholeHyperliquidConfig(
               {
                 positionId,
                 hyperliquidAccount: parseBytes20(
@@ -622,12 +622,10 @@ export function installEpiCommands(program: Command, context: CliContext) {
 
   program
     .command("submit")
-    .description(
-      "Submit an observation for a tracked external position or transfer record PDA",
-    )
+    .description("Submit an observation for a registered position")
     .argument(
       "<position>",
-      "tracked external position pubkey, transfer record PDA, UTF-8 string id, or 32-byte encoded position id",
+      "registered position pubkey, UTF-8 string id, or 32-byte encoded position id",
     )
     .argument(
       "<amount>",
@@ -664,7 +662,7 @@ export function installEpiCommands(program: Command, context: CliContext) {
 
         await executeTxWithErrorHandling(
           () =>
-            context.glamClient.epi.submitExternalObservation(
+            context.glamClient.rpi.submitObservation(
               {
                 positionId,
                 amount: amountBn,
@@ -685,10 +683,10 @@ export function installEpiCommands(program: Command, context: CliContext) {
 
   program
     .command("submit-wormhole")
-    .description("Submit a Wormhole Guardian-verified external observation")
+    .description("Submit a Wormhole Guardian-verified registered observation")
     .argument(
       "<position>",
-      "tracked external position pubkey, UTF-8 string id, or 32-byte encoded position id",
+      "registered position pubkey, UTF-8 string id, or 32-byte encoded position id",
     )
     .argument("<signed-vaa>", "signed VAA as hex or base64")
     .option(
@@ -726,7 +724,7 @@ export function installEpiCommands(program: Command, context: CliContext) {
         await executeTxWithErrorHandling(
           async () => {
             const result =
-              await context.glamClient.epi.submitExternalObservationWormhole(
+              await context.glamClient.rpi.submitObservationWormhole(
                 {
                   positionId,
                   signedVaa: signedVaaBytes,
@@ -764,12 +762,10 @@ export function installEpiCommands(program: Command, context: CliContext) {
 
   program
     .command("validate")
-    .description(
-      "Validate a pending observation for a tracked external position",
-    )
+    .description("Validate a pending observation for a registered position")
     .argument(
       "<position>",
-      "tracked external position pubkey, transfer record PDA, UTF-8 string id, or 32-byte encoded position id",
+      "registered position pubkey, UTF-8 string id, or 32-byte encoded position id",
     )
     .option("-y, --yes", "Skip confirmation", false)
     .action(async (position: string, options: ValidateOptions) => {
@@ -777,7 +773,7 @@ export function installEpiCommands(program: Command, context: CliContext) {
 
       await executeTxWithErrorHandling(
         () =>
-          context.glamClient.epi.validateExternalObservation(
+          context.glamClient.rpi.validateObservation(
             positionId,
             context.txOptions,
           ),
