@@ -47,6 +47,7 @@ import { installPhoenixCommands } from "./cmds/phoenix";
 import { installOrcaCommands } from "./cmds/orca";
 import { installNeutralCommands } from "./cmds/neutral";
 import { installMarginfiCommands } from "./cmds/marginfi";
+import { installExponentCommands } from "./cmds/exponent";
 
 const context = {} as CliContext;
 
@@ -297,6 +298,7 @@ const stagingOnly = [
   ["loopscale-vault", "Loopscale vault", installLoopscaleVaultCommands],
   ["phoenix", "Phoenix perps", installPhoenixCommands],
   ["orca", "Orca whirlpools", installOrcaCommands],
+  ["exponent", "Exponent Core", installExponentCommands],
   ["marinade", "Marinade liquid staking", installMarinadeCommands],
   ["lst", "Liquid staking (SPL and Sanctum)", installLstCommands],
   ["stake", "Solana native staking", installStakeCommands],
