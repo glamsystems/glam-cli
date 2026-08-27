@@ -597,10 +597,16 @@ export function installLoopscaleLendCommands(
     .option("--liquidity-buffer-cbps <n>", "Liquidity buffer in cBPS", "0")
     .option("--interest-fee-cbps <n>", "Interest fee in cBPS", "0")
     .option("--origination-fee-cbps <n>", "Origination fee in cBPS", "0")
-    .option("--principal-fee-cbps <n>", "Principal fee in cBPS", "0")
+    .option(
+      "--principal-fee-cbps <n>",
+      "Principal fee in cBPS (the create API supports only 0 and silently ignores the field; use the direct onchain path for a nonzero fee)",
+      "0",
+    )
     .option("--enable-originations", "Enable new originations", false)
     .option("-y, --yes", "Skip confirmation prompt", false)
-    .description("Create and fund a Loopscale lender strategy")
+    .description(
+      "Create and fund a Loopscale lender strategy (deprecated: builds through the Tars API route)",
+    )
     .action(
       async (
         amount: string,
@@ -616,6 +622,15 @@ export function installLoopscaleLendCommands(
           yes: boolean;
         },
       ) => {
+        console.warn(
+          "Warning: create-strategy builds through the deprecated Tars API " +
+            "route; current API responses include lookup-table setup this " +
+            "CLI rejects before signing. A direct strategy-create command " +
+            "ships with the forthcoming kit CLI; this CLI has no direct " +
+            "create today (the SDK's txBuilder.createStrategyIx is the " +
+            "build-only route). update-strategy and deposit-strategy here " +
+            "handle lending terms and funding once a strategy exists.",
+        );
         const {
           market,
           enableOriginations,
@@ -648,6 +663,13 @@ export function installLoopscaleLendCommands(
           "origination-fee-cbps",
         );
         const principalFee = parseCbps(principalFeeCbps, "principal-fee-cbps");
+        if (!principalFee.isZero()) {
+          throw new Error(
+            "--principal-fee-cbps is not supported by the create-strategy API, " +
+              "which silently ignores the field; create the strategy with a " +
+              "principal fee via the direct onchain path instead",
+          );
+        }
 
         const collateralTerms = await parseCollateralTermUpdates(
           context,
@@ -671,7 +693,6 @@ export function installLoopscaleLendCommands(
                   liquidityBuffer,
                   interestFee,
                   originationFee,
-                  principalFee,
                   originationsEnabled: enableOriginations,
                   externalYieldSourceArgs: null,
                 },

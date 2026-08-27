@@ -21,8 +21,12 @@ export const PROGRAM_METADATA_PROGRAM_ID = new PublicKey(
 const MAX_IDL_BYTES = 16 * 1024 * 1024;
 
 /**
- * Anchor's hardcoded legacy IDL-account discriminator (not derived from the account-name
- * convention); verified against the live glam_protocol IDL account.
+ * Anchor's legacy IDL-account discriminator: the standard hash convention under the
+ * `internal:` namespace (`IdlAccount` is `#[account("internal")]`), i.e.
+ * sha256("internal:IdlAccount")[..8]. Verified against the live glam_protocol IDL
+ * account. Anchor's own legacy reader skips these bytes unchecked; enforcing them here
+ * is strictly more defensive, and a mismatch degrades to null and the program-metadata
+ * fallback.
  */
 const LEGACY_IDL_DISCRIMINATOR = Buffer.from([24, 70, 98, 191, 58, 144, 123, 158]);
 
