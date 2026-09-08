@@ -345,7 +345,9 @@ export function installVaultCommands(program: Command, context: CliContext) {
   program
     .command("unwrap")
     .option("-y, --yes", "Skip confirmation prompt", false)
-    .description("Unwrap wSOL")
+    .description(
+      "Unwrap all vault wSOL: the wrapped lamports return to the vault, the token account's rent goes to the signer",
+    )
     .action(async (options) => {
       await executeTxWithErrorHandling(
         () => context.glamClient.vault.unwrap(context.txOptions),
@@ -365,7 +367,9 @@ export function installVaultCommands(program: Command, context: CliContext) {
     )
     .option("--empty", "Close all empty (zero-balance) token accounts", false)
     .option("-y, --yes", "Skip confirmation prompt", false)
-    .description("Close vault token accounts")
+    .description(
+      "Close vault token accounts: each account's lamports go to the signer, except a wSOL account's wrapped lamports, which return to the vault",
+    )
     .action(async (tokens: string[], options) => {
       let tokenAccountPubkeys: PublicKey[] = [];
 
