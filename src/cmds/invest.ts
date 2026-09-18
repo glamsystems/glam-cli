@@ -24,6 +24,8 @@ export function installInvestCommands(invest: Command, context: CliContext) {
           provider: context.glamClient.provider,
           cluster: context.cliConfig.cluster,
           statePda: state,
+          // The same transaction version the session was started with.
+          transactionVersion: context.glamClient.transactionVersion,
         });
       }
 

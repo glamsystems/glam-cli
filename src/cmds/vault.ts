@@ -299,6 +299,8 @@ export function installVaultCommands(program: Command, context: CliContext) {
         provider: context.glamClient.provider,
         statePda,
         cluster: context.cliConfig.cluster,
+        // The same transaction version the session was started with.
+        transactionVersion: context.glamClient.transactionVersion,
       });
       const stateModel = await glamClient.fetchStateModel();
 

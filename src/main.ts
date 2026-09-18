@@ -131,6 +131,8 @@ async function initialize(
     cluster,
     statePda,
     useStaging,
+    // The Ledger app is not verified to sign a version 1 message.
+    transactionVersion: cliConfig.useLedger() ? 0 : undefined,
   });
 
   context.cliConfig = cliConfig;
