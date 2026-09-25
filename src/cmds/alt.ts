@@ -48,6 +48,9 @@ export function installAltCommands(alt: Command, context: CliContext) {
       const addresses = await collectVaultLookupTableAddresses(info);
       console.log(`Collected ${addresses.length} addresses for lookup table`);
 
+      // The slot is an input to the table address derivation and must be in the
+      // bank's SlotHashes when the transaction is simulated and sent. A confirmed
+      // slot may not be there yet, so the slot is read at finalized.
       const slot = await context.glamClient.connection.getSlot("finalized");
       const { createIx, lookupTableAddress, extendIxBatches } =
         buildCreateAltInstructions(
