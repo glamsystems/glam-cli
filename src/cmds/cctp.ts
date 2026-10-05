@@ -111,14 +111,13 @@ export function installCctpCommands(program: Command, context: CliContext) {
       parseNonNegativeInteger(value, "domain"),
     )
     .argument("<destination-address>", "Recipient EVM address")
-    .option("-d, --destination-caller <address>", "Destination caller address")
     .option(
       "-m, --max-fee-bps <bps>",
-      "Max fee in basis points (default 1)",
+      "Max fee in basis points (default 1, at most 100: the program refuses more)",
       (val) => {
         const parsed = parseNonNegativeInteger(val, "max-fee-bps");
-        if (parsed > 10_000) {
-          throw new Error("max-fee-bps must be at most 10000");
+        if (parsed > 100) {
+          throw new Error("max-fee-bps must be at most 100");
         }
         return parsed;
       },
@@ -133,17 +132,11 @@ export function installCctpCommands(program: Command, context: CliContext) {
         amount,
         domain,
         destinationAddress,
-        { destinationCaller, maxFeeBps, base58, fast, yes },
+        { maxFeeBps, base58, fast, yes },
       ) => {
         const destinationPubkey = base58
           ? new PublicKey(destinationAddress)
           : evmAddressToPublicKey(destinationAddress);
-        const destinationCallerPubkey = destinationCaller
-          ? base58
-            ? new PublicKey(destinationCaller)
-            : evmAddressToPublicKey(destinationCaller)
-          : undefined;
-
         const cctpPolicy = await context.glamClient.cctp.fetchPolicy();
         if (
           cctpPolicy &&
@@ -171,7 +164,6 @@ export function installCctpCommands(program: Command, context: CliContext) {
               {
                 maxFee,
                 minFinalityThreshold,
-                destinationCaller: destinationCallerPubkey,
               },
               context.txOptions,
             ),

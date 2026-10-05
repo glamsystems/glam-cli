@@ -58,7 +58,8 @@ export async function fetchRawLoopscalePolicyData(
   );
   return (
     integrationPolicy?.protocolPolicies?.find(
-      (policy) => policy.protocolBitflag === protocolBitflag,
+      (policy: { protocolBitflag: number; data: Buffer }) =>
+        policy.protocolBitflag === protocolBitflag,
     )?.data ?? null
   );
 }
