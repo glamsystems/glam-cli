@@ -24,27 +24,6 @@ export function installMarinadeCommands(
     });
 
   marinade
-    .command("stake-native")
-    .argument("<amount>", "UI amount of SOL to stake")
-    .option("-y, --yes", "Skip confirmation prompt", false)
-    .description("Stake SOL to Marinade Native")
-    .action(async (amount, options) => {
-      const amountBN = parsePositiveUiAmount(amount, 9, "amount");
-      await executeTxWithErrorHandling(
-        () =>
-          context.glamClient.marinade.depositNative(
-            amountBN,
-            context.txOptions,
-          ),
-        {
-          skip: options?.yes,
-          message: `Confirm staking ${amount} SOL to Marinade Native`,
-        },
-        (txSig) => `Staked ${amount} SOL to Marinade Native: ${txSig}`,
-      );
-    });
-
-  marinade
     .command("withdraw-stake")
     .argument("<amount>", "UI amount of mSOL")
     .option("-d, --deactivate", "Deactivate the stake account", false)
