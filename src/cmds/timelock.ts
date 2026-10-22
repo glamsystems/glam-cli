@@ -1,5 +1,6 @@
 import { type Command } from "commander";
 import { type CliContext, executeTxWithErrorHandling } from "../utils";
+import { stagedRouteChanges } from "./bridge";
 import { type PublicKey } from "@solana/web3.js";
 import { parseNonNegativeInteger } from "../parsing";
 import {
@@ -59,7 +60,7 @@ export function installTimelockCommands(program: Command, context: CliContext) {
               diff.removed.length === 0 &&
               diff.modified.length === 0
             ) {
-              console.log("  integrationAcls: No changes");
+              console.log("  integrationAcls: No changes to enabled protocols");
               continue;
             }
 
@@ -244,6 +245,15 @@ export function installTimelockCommands(program: Command, context: CliContext) {
         }
       } else {
         console.log("\nNo pending state updates.");
+      }
+
+      // The comparison above reads protocol bits only, and a staged route set changes a policy
+      // hash under the same bits, so the bridge routes are compared here.
+      if (stateModel.pendingStateUpdates?.integrationAcls) {
+        const routeLines = await stagedRouteChanges(context);
+        if (routeLines.length > 0) {
+          console.log(`\n${routeLines.join("\n")}`);
+        }
       }
     });
 
